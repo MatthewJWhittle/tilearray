@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README and example-sources: EA Lidar WCS CoverageId corrected to GetCapabilities value (not URL path slug)
+
 ### Added
 
 - WCS 2.0.1 coverage loading via `create_array` / `load_array` and `WCSService`

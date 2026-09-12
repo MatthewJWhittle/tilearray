@@ -1,3 +1,5 @@
+These are public example endpoints and thin config examples for testing service quirks — not a catalogue of first-class product integrations.
+
 Google Satellite Imagery (X,Y,Z)
 http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}
 Note: Google tiles are useful as a technical example but have usage restrictions; prefer open sources below for production.
@@ -12,8 +14,8 @@ EA Lidar Digital Terrain Model (WCS)
 URL:
 https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs
 Layer ID (CoverageId):
-lidar-composite-digital-terrain-model-dtm-1m
-Note: For other WCS endpoints, list coverages with GetCapabilities on the service URL and use the `CoverageId` from the response (often the final path segment of the service URL).
+13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m
+Note: For EA and many ArcGIS-style WCS endpoints, CoverageId comes from GetCapabilities (often UUID__LayerName); do not assume the URL path slug. List coverages with GetCapabilities on the service URL.
 
 
 VOM (WMS)

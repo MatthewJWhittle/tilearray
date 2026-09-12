@@ -13,6 +13,7 @@ Pull geospatial **coverage tiles** from remote map services into Python as lazy 
 - Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
 - Configures endpoints with `WCSConfig` or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
 - Lets you register other service backends later via a small service registry
+- Origin-aligned tile planning via `create_tile_grid` in `tilearray.tiles` (helper, not yet a public re-export)
 
 ## Install
 
@@ -43,7 +44,10 @@ wcs_url = (
     "https://environment.data.gov.uk/spatialdata/"
     "lidar-composite-digital-terrain-model-dtm-1m/wcs"
 )
-coverage_id = "lidar-composite-digital-terrain-model-dtm-1m"
+# EA Lidar CoverageId is UUID-style from GetCapabilities, not the URL path slug.
+coverage_id = (
+    "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m"
+)
 
 config = WCSConfig.from_url(
     wcs_url,
