@@ -3,44 +3,46 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 from pydantic import BaseModel, Field
+from requests import RequestException
 
 from ..types import CRS, Format, ServiceTypeEnum
 from .base import BaseService, get_service
-from requests import RequestException
 
 
 class ServiceConfig(BaseModel):
     """Serializable configuration describing how to build a service instance."""
 
     base_url: str = Field(..., description="Base endpoint URL for the service")
-    service_type: ServiceTypeEnum = Field(..., description="Type of service to instantiate")
-    crs: Optional[CRS] = Field(
+    service_type: ServiceTypeEnum = Field(
+        ..., description="Type of service to instantiate"
+    )
+    crs: CRS | None = Field(
         None, description="Preferred coordinate reference system for requests"
     )
-    output_format: Optional[Format] = Field(
+    output_format: Format | None = Field(
         None, description="Preferred data format for tile requests"
     )
-    headers: Dict[str, str] = Field(
+    headers: dict[str, str] = Field(
         default_factory=dict, description="Additional HTTP headers to include"
     )
-    params: Dict[str, Any] = Field(
+    params: dict[str, Any] = Field(
         default_factory=dict, description="Additional query parameters to include"
     )
-    chunk_size: Optional[Tuple[int, int]] = Field(
+    chunk_size: tuple[int, int] | None = Field(
         None,
         description="Default chunk size (width, height) to use when building arrays",
     )
-    grid_shape: Optional[Tuple[int, int]] = Field(
+    grid_shape: tuple[int, int] | None = Field(
         None,
         description="Default grid shape (rows, cols) to use when planning tiles",
     )
-    cache_dir: Optional[Union[str, Path]] = Field(
+    cache_dir: str | Path | None = Field(
         None, description="Optional cache directory for fetched tiles"
     )
-    resolution: Optional[Tuple[float, float]] = Field(
+    resolution: tuple[float, float] | None = Field(
         None,
         description="Native resolution of the service responses (units per pixel in X and Y)",
     )
@@ -57,10 +59,10 @@ class ServiceConfig(BaseModel):
     # ------------------------------------------------------------------
     # Helper accessors
     # ------------------------------------------------------------------
-    def service_kwargs(self) -> Dict[str, Any]:
+    def service_kwargs(self) -> dict[str, Any]:
         """Keyword arguments used when instantiating the service."""
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if self.crs is not None:
             kwargs["crs"] = self.crs
         if self.output_format is not None:
@@ -71,10 +73,10 @@ class ServiceConfig(BaseModel):
             kwargs["params"] = dict(self.params)
         return kwargs
 
-    def tile_kwargs(self) -> Dict[str, Any]:
+    def tile_kwargs(self) -> dict[str, Any]:
         """Keyword arguments provided to the tile request planner."""
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if self.crs is not None:
             kwargs["crs"] = self.crs
         if self.output_format is not None:
@@ -87,10 +89,10 @@ class ServiceConfig(BaseModel):
             kwargs["resolution"] = self.resolution
         return kwargs
 
-    def array_defaults(self) -> Dict[str, Any]:
+    def array_defaults(self) -> dict[str, Any]:
         """Default array-level configuration supplied by the service."""
 
-        defaults: Dict[str, Any] = {}
+        defaults: dict[str, Any] = {}
         if self.chunk_size is not None:
             defaults["chunk_size"] = self.chunk_size
         if self.grid_shape is not None:
@@ -112,7 +114,7 @@ class WCSConfig(ServiceConfig):
     )
 
     @classmethod
-    def from_url(cls, url: str, coverage_id: str, **kwargs: Any) -> "WCSConfig":
+    def from_url(cls, url: str, coverage_id: str, **kwargs: Any) -> WCSConfig:
         """Convenience constructor mirroring high-level usage patterns."""
 
         return cls(base_url=url, coverage_id=coverage_id, **kwargs)
@@ -140,13 +142,13 @@ class WCSConfig(ServiceConfig):
 
         return service
 
-    def service_kwargs(self) -> Dict[str, Any]:
+    def service_kwargs(self) -> dict[str, Any]:
         kwargs = super().service_kwargs()
         kwargs.setdefault("coverage_id", self.coverage_id)
         kwargs.setdefault("version", self.version)
         return kwargs
 
-    def tile_kwargs(self) -> Dict[str, Any]:
+    def tile_kwargs(self) -> dict[str, Any]:
         kwargs = super().tile_kwargs()
         kwargs["coverage_id"] = self.coverage_id
         return kwargs
@@ -162,7 +164,7 @@ class XYZConfig(ServiceConfig):
     )
 
     @classmethod
-    def from_url(cls, url: str, *, zoom: int, **kwargs: Any) -> "XYZConfig":
+    def from_url(cls, url: str, *, zoom: int, **kwargs: Any) -> XYZConfig:
         """Convenience constructor for XYZ tile templates."""
 
         return cls(base_url=url, zoom=zoom, **kwargs)
@@ -177,16 +179,14 @@ class XYZConfig(ServiceConfig):
         kwargs.setdefault("tile_size", self.tile_size)
         return XYZService(self.base_url, **kwargs)
 
-    def service_kwargs(self) -> Dict[str, Any]:
+    def service_kwargs(self) -> dict[str, Any]:
         kwargs = super().service_kwargs()
         kwargs.setdefault("zoom", self.zoom)
         kwargs.setdefault("tile_size", self.tile_size)
         return kwargs
 
-    def tile_kwargs(self) -> Dict[str, Any]:
+    def tile_kwargs(self) -> dict[str, Any]:
         kwargs = super().tile_kwargs()
         kwargs["zoom"] = self.zoom
         kwargs["tile_size"] = self.tile_size
         return kwargs
-
-

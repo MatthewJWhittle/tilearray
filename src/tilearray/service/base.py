@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import math
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, cast
+from abc import ABC, abstractmethod
+from collections.abc import Iterable
+from typing import Any, Callable, cast
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from ..types import BoundingBox, CRS, ServiceTypeEnum, TileRequest
+from ..types import CRS, BoundingBox, ServiceTypeEnum, TileRequest
 
 __all__ = [
     "TileGeometry",
@@ -26,16 +27,20 @@ class TileGeometry(BaseModel):
     bbox: BoundingBox = Field(..., description="Geographic extent that the tile covers")
     width: int = Field(..., gt=0, description="Tile width in output pixels")
     height: int = Field(..., gt=0, description="Tile height in output pixels")
-    crs: CRS = Field(default=CRS.EPSG_4326, description="CRS in which bounds are expressed")
-    tile_x: Optional[int] = Field(default=None, description="XYZ tile column index")
-    tile_y: Optional[int] = Field(default=None, description="XYZ tile row index")
-    zoom: Optional[int] = Field(default=None, description="XYZ zoom level")
+    crs: CRS = Field(
+        default=CRS.EPSG_4326, description="CRS in which bounds are expressed"
+    )
+    tile_x: int | None = Field(default=None, description="XYZ tile column index")
+    tile_y: int | None = Field(default=None, description="XYZ tile row index")
+    zoom: int | None = Field(default=None, description="XYZ zoom level")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator("bbox")
     @classmethod
-    def ensure_bbox_crs(cls, bbox: BoundingBox, info: ValidationInfo) -> BoundingBox:  # pragma: no cover - simple validation
+    def ensure_bbox_crs(
+        cls, bbox: BoundingBox, info: ValidationInfo
+    ) -> BoundingBox:  # pragma: no cover - simple validation
         crs = info.data.get("crs")
         if crs is not None and bbox.crs != crs:
             raise ValueError("TileGeometry bbox CRS must match the tile CRS")
@@ -52,7 +57,7 @@ class BaseService(ABC):
         self.config = config
 
     @classmethod
-    def from_url(cls, url: str, **config: object) -> "BaseService":
+    def from_url(cls, url: str, **config: object) -> BaseService:
         """Factory hook for constructing a service from a URL."""
 
         return cls(url, **config)
@@ -63,18 +68,20 @@ class BaseService(ABC):
     def generate_tile_requests(
         self,
         bbox: BoundingBox,
-        chunk_size: Tuple[int, int],
+        chunk_size: tuple[int, int],
         **options: object,
-    ) -> List[TileRequest]:
+    ) -> list[TileRequest]:
         """Generate concrete tile requests for the provided bounding box."""
 
         tile_geoms = list(self.plan_tiles(bbox, chunk_size, **options))
-        return [self.build_tile_request(tile_geom, **options) for tile_geom in tile_geoms]
+        return [
+            self.build_tile_request(tile_geom, **options) for tile_geom in tile_geoms
+        ]
 
     def plan_tiles(
         self,
         bbox: BoundingBox,
-        chunk_size: Tuple[int, int],
+        chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
         """Return the spatial layout of tiles for the requested area."""
@@ -83,7 +90,7 @@ class BaseService(ABC):
         resolution = options.get("resolution")
 
         if resolution:
-            res_x, res_y = cast(Tuple[float, float], resolution)
+            res_x, res_y = cast(tuple[float, float], resolution)
             if res_x <= 0 or res_y <= 0:
                 raise ValueError("resolution values must be positive")
 
@@ -125,7 +132,7 @@ class BaseService(ABC):
             rows, cols = 1, 1
         elif isinstance(grid_shape_option, tuple):
             try:
-                grid_tuple_raw = cast(Tuple[Any, Any], grid_shape_option)
+                grid_tuple_raw = cast(tuple[Any, Any], grid_shape_option)
                 row_raw, col_raw = grid_tuple_raw
             except ValueError as exc:  # pragma: no cover - guard
                 raise ValueError("grid_shape must be a tuple of two integers") from exc
@@ -144,10 +151,14 @@ class BaseService(ABC):
 
         for row in range(rows):
             min_y = float(bbox.min_y + row * step_y)
-            max_y = float(bbox.min_y + (row + 1) * step_y if row < rows - 1 else bbox.max_y)
+            max_y = float(
+                bbox.min_y + (row + 1) * step_y if row < rows - 1 else bbox.max_y
+            )
             for col in range(cols):
                 min_x = float(bbox.min_x + col * step_x)
-                max_x = float(bbox.min_x + (col + 1) * step_x if col < cols - 1 else bbox.max_x)
+                max_x = float(
+                    bbox.min_x + (col + 1) * step_x if col < cols - 1 else bbox.max_x
+                )
                 yield TileGeometry(
                     bbox=BoundingBox(
                         min_x=min_x,
@@ -174,13 +185,15 @@ class BaseService(ABC):
 # Service registry utilities
 # ----------------------------------------------------------------------
 
-_SERVICE_REGISTRY: Dict[ServiceTypeEnum, Type[BaseService]] = {}
+_SERVICE_REGISTRY: dict[ServiceTypeEnum, type[BaseService]] = {}
 
 
-def register_service(service_type: ServiceTypeEnum):
+def register_service(
+    service_type: ServiceTypeEnum,
+) -> Callable[[type[BaseService]], type[BaseService]]:
     """Decorator for registering service implementations."""
 
-    def decorator(cls: Type[BaseService]) -> Type[BaseService]:
+    def decorator(cls: type[BaseService]) -> type[BaseService]:
         _SERVICE_REGISTRY[service_type] = cls
         cls.service_type = service_type
         return cls
@@ -188,7 +201,9 @@ def register_service(service_type: ServiceTypeEnum):
     return decorator
 
 
-def detect_service_type(url: str, fallback: Optional[ServiceTypeEnum] = None) -> ServiceTypeEnum:
+def detect_service_type(
+    url: str, fallback: ServiceTypeEnum | None = None
+) -> ServiceTypeEnum:
     """Infer the service type from the URL or query string."""
 
     parsed = urlparse(url)
@@ -221,7 +236,7 @@ def detect_service_type(url: str, fallback: Optional[ServiceTypeEnum] = None) ->
 def get_service(
     url: str,
     *,
-    service_type: Optional[ServiceTypeEnum] = None,
+    service_type: ServiceTypeEnum | None = None,
     **config: object,
 ) -> BaseService:
     """Instantiate the appropriate service implementation for `url`."""

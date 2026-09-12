@@ -2,10 +2,9 @@
 
 """Integration tests for tilearray against real OGC services."""
 
-import pytest
-
 from typing import Any
 
+import pytest
 import xarray as xr
 
 from tilearray import array as array_module
@@ -43,7 +42,12 @@ class TestRealServiceIntegration:
         capabilities: Any = service.get_capabilities()  # type: ignore[attr-defined]
         coverage_id: Any = capabilities.coverages[0].identifier
 
-        bbox = (431900.0, 382700.0, 432700.0, 383500.0)  # 800 x 800 m tile in EPSG:27700 over England
+        bbox = (
+            431900.0,
+            382700.0,
+            432700.0,
+            383500.0,
+        )  # 800 x 800 m tile in EPSG:27700 over England
         config = WCSConfig.from_url(
             self.SERVICE_URL,
             coverage_id=coverage_id,
@@ -71,7 +75,7 @@ class TestRealServiceIntegration:
         coverage_id: Any = capabilities.coverages[0].identifier
 
         width = 128
-        xmin, ymin  = 431900.0, 382700.0
+        xmin, ymin = 431900.0, 382700.0
         xmax = xmin + width
         ymax = ymin + width
         bbox = (xmin, ymin, xmax, ymax)
@@ -101,4 +105,3 @@ class TestRealServiceIntegration:
         assert -1000 < mean_value < 1000
         # assert no missing values
         assert data.isnull().sum() == 0
-

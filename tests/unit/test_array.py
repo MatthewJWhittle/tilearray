@@ -1,10 +1,11 @@
-from pathlib import Path
-from typing import Any, Callable, List, Tuple, cast
-
 import base64
+from pathlib import Path
+from typing import Any, Callable, cast
+
 import numpy as np
 import pytest
 import xarray as xr
+from pytest import MonkeyPatch
 
 import tilearray.array as array_module
 from tilearray.array import (
@@ -14,10 +15,16 @@ from tilearray.array import (
     _read_geotiff_array,
     _resize_tile_array,
 )
-from pytest import MonkeyPatch
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
-from tilearray.types import BoundingBox, CRS, Format, ServiceTypeEnum, TileRequest, TileResponse
+from tilearray.types import (
+    CRS,
+    BoundingBox,
+    Format,
+    ServiceTypeEnum,
+    TileRequest,
+    TileResponse,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -37,9 +44,9 @@ class DummyService:
     def generate_tile_requests(
         self,
         bbox: BoundingBox,
-        chunk_size: Tuple[int, int],
+        chunk_size: tuple[int, int],
         **options: Any,
-    ) -> List[TileRequest]:
+    ) -> list[TileRequest]:
         width, height = chunk_size
         return [
             TileRequest(
@@ -102,9 +109,11 @@ def test_array_request_infers_grid_from_resolution() -> None:
     assert request.resolution == (1.0, 1.0)
 
 
-def test_create_array_with_custom_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_create_array_with_custom_decoder(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
     bbox = (-1.0, 50.0, -0.5, 50.5)
-    calls: List[TileRequest] = []
+    calls: list[TileRequest] = []
 
     def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
         return DummyService()
@@ -164,7 +173,9 @@ def test_create_array_without_decoder_raises(monkeypatch: MonkeyPatch) -> None:
         )
 
 
-def test_create_array_with_service_config(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_create_array_with_service_config(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
     config = WCSConfig.from_url(
         "http://example.com/wcs",
         coverage_id="dummy",
@@ -172,7 +183,7 @@ def test_create_array_with_service_config(monkeypatch: MonkeyPatch, tmp_path: Pa
         cache_dir=tmp_path,
     )
 
-    calls: List[TileRequest] = []
+    calls: list[TileRequest] = []
 
     def fake_build_service(self: WCSConfig) -> DummyService:
         return DummyService()
@@ -216,7 +227,9 @@ def test_create_array_with_service_config(monkeypatch: MonkeyPatch, tmp_path: Pa
     assert calls, "Expected fetch_tile to be called"
 
 
-def test_create_array_infers_decoder_from_service(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+def test_create_array_infers_decoder_from_service(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
     class DecoderService(DummyService):
         output_format = Format.GEOTIFF
 
@@ -270,9 +283,9 @@ def test_builtin_png_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         def generate_tile_requests(
             self,
             bbox: BoundingBox,
-            chunk_size: Tuple[int, int],
+            chunk_size: tuple[int, int],
             **options: Any,
-        ) -> List[TileRequest]:
+        ) -> list[TileRequest]:
             width, height = chunk_size
             return [
                 TileRequest(
@@ -323,7 +336,7 @@ def test_builtin_png_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 
 
 def test_plan_tiles_uses_resolution() -> None:
-    recorded: List[TileRequest] = []
+    recorded: list[TileRequest] = []
 
     class RecordingService(BaseService):
         service_type = ServiceTypeEnum.WCS
@@ -370,7 +383,9 @@ def test_organize_tiles_orders_by_bbox() -> None:
             params={},
             output_format=Format.GEOTIFF,
             crs=bbox.crs,
-            bbox=BoundingBox(min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, crs=bbox.crs),
+            bbox=BoundingBox(
+                min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, crs=bbox.crs
+            ),
             width=1,
             height=1,
         )
@@ -391,7 +406,12 @@ def test_organize_tiles_orders_by_bbox() -> None:
 
 @pytest.mark.unit
 def test_read_ea_lidar_geotiff_fixture() -> None:
-    fixture = Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "wcs_tiles"
+        / "ea_lidar_64x64.tif"
+    )
     data = _read_geotiff_array(str(fixture))
 
     assert data.shape == (64, 64)
@@ -402,7 +422,12 @@ def test_read_ea_lidar_geotiff_fixture() -> None:
 
 @pytest.mark.unit
 def test_decode_geotiff_handles_oversized_native_resolution_tile() -> None:
-    fixture = Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "wcs_tiles"
+        / "ea_lidar_64x64.tif"
+    )
     raw = fixture.read_bytes()
     response = TileResponse(
         data=raw,
@@ -440,7 +465,12 @@ def test_resize_tile_array_supports_non_divisible_downsample() -> None:
 def test_create_array_resamples_native_resolution_wcs_tile(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    fixture = Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "wcs_tiles"
+        / "ea_lidar_64x64.tif"
+    )
     raw = fixture.read_bytes()
     bbox = BoundingBox(min_x=0, min_y=0, max_x=64, max_y=64, crs=CRS.EPSG_27700)
 

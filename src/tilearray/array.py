@@ -10,17 +10,23 @@ import logging
 import math
 import tempfile
 import warnings
+from collections.abc import Sequence
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    cast,
+)
 
 import numpy as np
 import xarray as xr
-from dask.array import block as da_block  # type: ignore[attr-defined]
-from dask.array import from_delayed as da_from_delayed  # type: ignore[attr-defined]
-from dask.delayed import Delayed, delayed  # type: ignore[assignment]
-from geotiff import GeoTiff  # type: ignore[import]
-from geotiff.geotiff import TiffFile  # type: ignore[import]
+from dask.array import block as da_block
+from dask.array import from_delayed as da_from_delayed
+from dask.delayed import Delayed, delayed
+from geotiff import GeoTiff  # type: ignore[import-untyped]
+from geotiff.geotiff import TiffFile  # type: ignore[import-untyped]
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,15 +34,23 @@ from .service import get_service
 from .service.base import BaseService
 from .service.config import ServiceConfig as ServiceConfigModel
 from .tiles import fetch_tile
-from .types import BBoxTuple, BoundingBox, CRS, Format, ServiceTypeEnum, TileRequest, TileResponse
+from .types import (
+    CRS,
+    BBoxTuple,
+    BoundingBox,
+    Format,
+    ServiceTypeEnum,
+    TileRequest,
+    TileResponse,
+)
 
 try:  # pragma: no cover - optional dependency
-    from PIL import Image as _PILImage  # type: ignore[import]
+    from PIL import Image as _PILImage
 except ImportError:  # pragma: no cover - optional dependency
     _PILImage = None
 
 try:  # pragma: no cover - optional dependency
-    import imageio.v2 as _imageio  # type: ignore[import]
+    import imageio.v2 as _imageio  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - optional dependency
     _imageio = None
 
@@ -48,7 +62,7 @@ else:  # pragma: no cover - typing aid
 NDArrayFloat = NDArray[np.floating[Any]]
 TileDecoder = Callable[[TileResponse, TileRequest], NDArrayFloat]
 
-_DECODER_REGISTRY: Dict[Format, TileDecoder] = {}
+_DECODER_REGISTRY: dict[Format, TileDecoder] = {}
 
 
 def register_tile_decoder(fmt: Format, decoder: TileDecoder) -> None:
@@ -57,7 +71,7 @@ def register_tile_decoder(fmt: Format, decoder: TileDecoder) -> None:
     _DECODER_REGISTRY[fmt] = decoder
 
 
-def _decoder_for_format(fmt: Optional[Union[Format, str]]) -> Optional[TileDecoder]:
+def _decoder_for_format(fmt: Format | str | None) -> TileDecoder | None:
     if isinstance(fmt, Format):
         return _DECODER_REGISTRY.get(fmt)
     if isinstance(fmt, str):
@@ -70,16 +84,16 @@ def _decoder_for_format(fmt: Optional[Union[Format, str]]) -> Optional[TileDecod
 
 
 class ArrayRequest(BaseModel):
-    service_config: Optional[ServiceConfigModel] = None
+    service_config: ServiceConfigModel | None = None
     service_url: str
     bbox: BoundingBox
     target_crs: CRS
-    chunk_size: Tuple[int, int]
-    grid_shape: Tuple[int, int]
-    resolution: Optional[Tuple[float, float]] = None
-    output_format: Optional[Format] = None
-    cache_dir: Optional[Path] = None
-    service_options: Dict[str, Any] = Field(default_factory=dict)
+    chunk_size: tuple[int, int]
+    grid_shape: tuple[int, int]
+    resolution: tuple[float, float] | None = None
+    output_format: Format | None = None
+    cache_dir: Path | None = None
+    service_options: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -92,16 +106,16 @@ class ArrayRequest(BaseModel):
         return self.chunk_size[1]
 
     @property
-    def chunk_pixels(self) -> Tuple[int, int]:
+    def chunk_pixels(self) -> tuple[int, int]:
         return self.chunk_width, self.chunk_height
 
     @property
-    def cache_path(self) -> Optional[Path]:
+    def cache_path(self) -> Path | None:
         return self.cache_dir
 
     @property
-    def service_kwargs(self) -> Dict[str, Any]:
-        kwargs: Dict[str, Any] = {}
+    def service_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
         if self.service_config is not None:
             return kwargs
         kwargs.update(self.service_options)
@@ -115,15 +129,15 @@ class ArrayRequest(BaseModel):
         cls,
         *,
         service_url: str,
-        service_config: Optional[ServiceConfigModel],
-        bbox_input: Union[BoundingBox, BBoxTuple],
-        crs_input: Union[CRS, str, int],
-        chunk_size_input: Optional[Tuple[int, int]],
-        grid_shape_input: Optional[Tuple[int, int]],
-        output_format_input: Optional[Format],
-        cache_dir_input: Optional[Union[str, Path]],
-        service_options_input: Dict[str, Any],
-    ) -> "ArrayRequest":
+        service_config: ServiceConfigModel | None,
+        bbox_input: BoundingBox | BBoxTuple,
+        crs_input: CRS | str | int,
+        chunk_size_input: tuple[int, int] | None,
+        grid_shape_input: tuple[int, int] | None,
+        output_format_input: Format | None,
+        cache_dir_input: str | Path | None,
+        service_options_input: dict[str, Any],
+    ) -> ArrayRequest:
         target_crs = _coerce_crs(crs_input)
         normalized_bbox = _normalize_bbox(bbox_input, target_crs)
 
@@ -138,21 +152,39 @@ class ArrayRequest(BaseModel):
 
         fallback_grid = defaults.get("grid_shape")
         grid = _resolve_grid_shape(grid_shape_input, fallback_grid)
-        if grid_shape_input is None and fallback_grid is None and resolution is not None:
+        if (
+            grid_shape_input is None
+            and fallback_grid is None
+            and resolution is not None
+        ):
             res_x, res_y = resolution
             if res_x <= 0 or res_y <= 0:
                 raise ValueError("resolution values must be positive")
             span_x = normalized_bbox.max_x - normalized_bbox.min_x
             span_y = normalized_bbox.max_y - normalized_bbox.min_y
-            cols = max(1, int(math.ceil(span_x / (chunk_width * res_x)))) if chunk_width > 0 else 1
-            rows = max(1, int(math.ceil(span_y / (chunk_height * res_y)))) if chunk_height > 0 else 1
+            cols = (
+                max(1, int(math.ceil(span_x / (chunk_width * res_x))))
+                if chunk_width > 0
+                else 1
+            )
+            rows = (
+                max(1, int(math.ceil(span_y / (chunk_height * res_y))))
+                if chunk_height > 0
+                else 1
+            )
             grid = (rows, cols)
 
         cache_candidate = cache_dir_input or defaults.get("cache_dir")
-        cache_path = Path(cache_candidate).expanduser().resolve() if cache_candidate else None
+        cache_path = (
+            Path(cache_candidate).expanduser().resolve() if cache_candidate else None
+        )
 
         effective_format = output_format_input
-        if effective_format is None and service_config and service_config.output_format is not None:
+        if (
+            effective_format is None
+            and service_config
+            and service_config.output_format is not None
+        ):
             effective_format = service_config.output_format
 
         return cls(
@@ -168,12 +200,14 @@ class ArrayRequest(BaseModel):
             service_options=user_options,
         )
 
-    def build_service(self, service_type: Optional[ServiceTypeEnum]) -> BaseService:
+    def build_service(self, service_type: ServiceTypeEnum | None) -> BaseService:
         if self.service_config is not None:
             return self.service_config.build_service()
-        return get_service(self.service_url, service_type=service_type, **self.service_kwargs)
+        return get_service(
+            self.service_url, service_type=service_type, **self.service_kwargs
+        )
 
-    def effective_format(self, service: BaseService) -> Optional[Format]:
+    def effective_format(self, service: BaseService) -> Format | None:
         if self.output_format is not None:
             return self.output_format
         service_format = getattr(service, "output_format", None)
@@ -186,8 +220,8 @@ class ArrayRequest(BaseModel):
                 return None
         return None
 
-    def tile_options(self) -> Dict[str, Any]:
-        options: Dict[str, Any] = {}
+    def tile_options(self) -> dict[str, Any]:
+        options: dict[str, Any] = {}
         if self.service_config is not None:
             options.update(self.service_config.tile_kwargs())
         options.update(self.service_options)
@@ -199,7 +233,9 @@ class ArrayRequest(BaseModel):
             options.setdefault("resolution", self.resolution)
         return options
 
-    def plan_tile_requests(self, service: BaseService) -> Tuple[List[TileRequest], Dict[str, Any]]:
+    def plan_tile_requests(
+        self, service: BaseService
+    ) -> tuple[list[TileRequest], dict[str, Any]]:
         tile_options = self.tile_options()
         tile_requests_iter = service.generate_tile_requests(
             self.bbox,
@@ -221,23 +257,27 @@ class ArrayRequest(BaseModel):
     def array_attrs(
         self,
         service: BaseService,
-        tile_options: Dict[str, Any],
-        effective_format: Optional[Format],
-    ) -> Dict[str, Any]:
-        attrs: Dict[str, Any] = {
+        tile_options: dict[str, Any],
+        effective_format: Format | None,
+    ) -> dict[str, Any]:
+        attrs: dict[str, Any] = {
             "crs": self.target_crs.value,
             "service_url": self.service_url,
             "service_type": service.service_type.value,
         }
         if effective_format is not None:
             attrs["output_format"] = effective_format.value
-        coverage_id = tile_options.get("coverage_id") or getattr(service, "coverage_id", None)
+        coverage_id = tile_options.get("coverage_id") or getattr(
+            service, "coverage_id", None
+        )
         if coverage_id:
             attrs["coverage_id"] = coverage_id
         return attrs
 
 
-def _resolve_decoder(request: ArrayRequest, service: BaseService, explicit: Optional[TileDecoder]) -> TileDecoder:
+def _resolve_decoder(
+    request: ArrayRequest, service: BaseService, explicit: TileDecoder | None
+) -> TileDecoder:
     if explicit is not None:
         return explicit
 
@@ -262,13 +302,13 @@ def _organize_tiles(
     tile_requests: Sequence[TileRequest],
     rows: int,
     cols: int,
-) -> List[List[TileRequest]]:
+) -> list[list[TileRequest]]:
     if len(tile_requests) != rows * cols:
         raise ValueError(
             f"Service produced {len(tile_requests)} tile requests; expected {rows * cols}"
         )
 
-    annotated: List[Tuple[TileRequest, BoundingBox]] = []
+    annotated: list[tuple[TileRequest, BoundingBox]] = []
     for request in tile_requests:
         if request.bbox is None:
             raise ValueError("TileRequest is missing spatial metadata (bbox)")
@@ -282,10 +322,10 @@ def _organize_tiles(
         )
     ]
 
-    grid: List[List[TileRequest]] = []
+    grid: list[list[TileRequest]] = []
     idx = 0
     for _ in range(rows):
-        row_tiles: List[TileRequest] = []
+        row_tiles: list[TileRequest] = []
         for _ in range(cols):
             row_tiles.append(sorted_tiles[idx])
             idx += 1
@@ -294,18 +334,18 @@ def _organize_tiles(
 
 
 def create_array(
-    service_url: Union[str, ServiceConfigModel],
-    bbox: Union[BoundingBox, BBoxTuple],
-    crs: Union[CRS, str, int],
+    service_url: str | ServiceConfigModel,
+    bbox: BoundingBox | BBoxTuple,
+    crs: CRS | str | int,
     *,
-    service_type: Optional[ServiceTypeEnum] = None,
-    chunk_size: Optional[Tuple[int, int]] = None,
-    grid_shape: Optional[Tuple[int, int]] = None,
-    output_format: Optional[Format] = None,
-    cache_dir: Optional[Union[str, Path]] = None,
+    service_type: ServiceTypeEnum | None = None,
+    chunk_size: tuple[int, int] | None = None,
+    grid_shape: tuple[int, int] | None = None,
+    output_format: Format | None = None,
+    cache_dir: str | Path | None = None,
     compute: bool = False,
-    dtype: Union[str, np.dtype[Any]] = np.dtype("float32"),
-    tile_decoder: Optional[TileDecoder] = None,
+    dtype: str | np.dtype[Any] = np.dtype("float32"),
+    tile_decoder: TileDecoder | None = None,
     **service_options: Any,
 ) -> xr.DataArray:
     """Create an xarray ``DataArray`` backed by Dask from a remote service."""
@@ -313,8 +353,12 @@ def create_array(
     target_crs = _coerce_crs(crs)
     normalized_bbox = _normalize_bbox(bbox, target_crs)
 
-    service_config = service_url if isinstance(service_url, ServiceConfigModel) else None
-    base_service_url = service_config.base_url if service_config else cast(str, service_url)
+    service_config = (
+        service_url if isinstance(service_url, ServiceConfigModel) else None
+    )
+    base_service_url = (
+        service_config.base_url if service_config else cast(str, service_url)
+    )
 
     if (
         service_config
@@ -349,9 +393,9 @@ def create_array(
     chunk_height, chunk_width = request.chunk_size
     dtype_np = np.dtype(dtype)
 
-    blocks: List[List[DaskArray]] = []
+    blocks: list[list[DaskArray]] = []
     for row_tiles in tile_grid:
-        row_blocks: List[DaskArray] = []
+        row_blocks: list[DaskArray] = []
         for tile_request in row_tiles:
             height = tile_request.height or chunk_height
             width = tile_request.width or chunk_width
@@ -401,25 +445,29 @@ def load_array(*args: Any, compute: bool = True, **kwargs: Any) -> xr.DataArray:
     return array
 
 
-def _coerce_crs(crs: Union[CRS, str, int]) -> CRS:
+def _coerce_crs(crs: CRS | str | int) -> CRS:
     if isinstance(crs, CRS):
         return crs
     if isinstance(crs, str):
         crs_upper = crs.upper()
-        return CRS.from_epsg(crs_upper) if crs_upper.startswith("EPSG:") else CRS.from_integer(int(crs))
+        return (
+            CRS.from_epsg(crs_upper)
+            if crs_upper.startswith("EPSG:")
+            else CRS.from_integer(int(crs))
+        )
     return CRS.from_integer(crs)
 
 
-def _normalize_bbox(bbox: Union[BoundingBox, BBoxTuple], crs: CRS) -> BoundingBox:
+def _normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
     if isinstance(bbox, BoundingBox):
         return bbox if bbox.crs == crs else bbox.to_crs(crs)
     return BoundingBox.from_tuple(bbox, crs)
 
 
 def _resolve_grid_shape(
-    explicit: Optional[Tuple[int, int]],
-    fallback: Optional[Tuple[int, int]],
-) -> Tuple[int, int]:
+    explicit: tuple[int, int] | None,
+    fallback: tuple[int, int] | None,
+) -> tuple[int, int]:
     if explicit is not None:
         return _validate_grid_shape(explicit)
     if fallback is not None:
@@ -427,21 +475,23 @@ def _resolve_grid_shape(
     return (1, 1)
 
 
-def _validate_grid_shape(grid: Tuple[int, int]) -> Tuple[int, int]:
+def _validate_grid_shape(grid: tuple[int, int]) -> tuple[int, int]:
     rows, cols = grid
     if rows <= 0 or cols <= 0:
         raise ValueError("grid_shape must contain positive integers")
     return rows, cols
 
 
-def _validate_chunk_size(chunk_size: Tuple[int, int]) -> Tuple[int, int]:
+def _validate_chunk_size(chunk_size: tuple[int, int]) -> tuple[int, int]:
     width, height = chunk_size
     if width <= 0 or height <= 0:
         raise ValueError("chunk_size dimensions must be positive integers")
     return height, width
 
 
-def _resize_tile_array(array: NDArrayFloat, target_height: int, target_width: int) -> NDArrayFloat:
+def _resize_tile_array(
+    array: NDArrayFloat, target_height: int, target_width: int
+) -> NDArrayFloat:
     actual_height, actual_width = array.shape
 
     if actual_height == target_height and actual_width == target_width:
@@ -455,10 +505,7 @@ def _resize_tile_array(array: NDArrayFloat, target_height: int, target_width: in
             f"Decoded tile has shape {(actual_height, actual_width)}, expected at least {(target_height, target_width)}"
         )
 
-    if (
-        actual_height % target_height == 0
-        and actual_width % target_width == 0
-    ):
+    if actual_height % target_height == 0 and actual_width % target_width == 0:
         factor_y = actual_height // target_height
         factor_x = actual_width // target_width
         reshaped = array.reshape(target_height, factor_y, target_width, factor_x)
@@ -478,12 +525,12 @@ def _resize_tile_array(array: NDArrayFloat, target_height: int, target_width: in
             x_start, x_end = x_edges[col], x_edges[col + 1]
             block = array[y_start:y_end, x_start:x_end]
             resized[row, col] = np.nanmean(block) if block.size else np.nan
-    return cast(NDArrayFloat, resized)
+    return resized
 
 
 def _load_tile_array(
     request: TileRequest,
-    cache_dir: Optional[Path],
+    cache_dir: Path | None,
     decoder: TileDecoder,
     dtype: np.dtype[Any],
 ) -> NDArrayFloat:
@@ -505,13 +552,15 @@ def _load_tile_array(
     return np.asarray(array, dtype=dtype)
 
 
-def _fetch_with_cache(request: TileRequest, cache_dir: Optional[Path]) -> TileResponse:
+def _fetch_with_cache(request: TileRequest, cache_dir: Path | None) -> TileResponse:
     if cache_dir is not None:
         cached = _read_cache(cache_dir, request)
         if cached is not None:
             return TileResponse(
                 data=cached,
-                content_type=request.output_format.value if request.output_format else "",
+                content_type=request.output_format.value
+                if request.output_format
+                else "",
                 status_code=200,
                 headers={},
                 url=request.url,
@@ -540,7 +589,7 @@ def _cache_key(request: TileRequest) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def _read_cache(cache_dir: Path, request: TileRequest) -> Optional[bytes]:
+def _read_cache(cache_dir: Path, request: TileRequest) -> bytes | None:
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = cache_dir / f"{_cache_key(request)}.tile"
     return path.read_bytes() if path.exists() else None
@@ -608,7 +657,7 @@ def _decode_geotiff(response: TileResponse, request: TileRequest) -> NDArrayFloa
 
 def _decode_raster_image(response: TileResponse, request: TileRequest) -> NDArrayFloat:
     raw_bytes = bytes(response.data)
-    data: Optional[NDArrayFloat] = None
+    data: NDArrayFloat | None = None
 
     if _PILImage is not None:  # pragma: no cover - depends on optional library
         with BytesIO(raw_bytes) as bio:
@@ -635,4 +684,3 @@ register_tile_decoder(Format.GEOTIFF, _decode_geotiff)
 if _PILImage is not None or _imageio is not None:  # pragma: no cover - registration
     register_tile_decoder(Format.PNG, _decode_raster_image)
     register_tile_decoder(Format.JPEG, _decode_raster_image)
-

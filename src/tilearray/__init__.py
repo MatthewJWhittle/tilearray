@@ -17,17 +17,17 @@ from .service import (
 )
 from .service.wcs import WCSParser, WCSService
 from .types import (
+    CRS,
     BBoxTuple,
     BoundingBox,
     CoverageDescription,
-    CRS,
     Format,
     ServiceCapabilities,
     ServiceTypeEnum,
     SpatialExtent,
+    TemporalExtent,
     TileRequest,
     TileResponse,
-    TemporalExtent,
     WCSResponse,
 )
 

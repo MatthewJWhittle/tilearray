@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from tilearray.service.wcs import WCSService
-from tilearray.types import BoundingBox, CRS, Format
+from tilearray.types import CRS, BoundingBox, Format
 
 # Public EA Lidar DTM WCS — see example-sources.md
 EA_LIDAR_WCS_URL = (
@@ -48,9 +48,7 @@ class TestEALidarWCSContract:
         coverage_ids = {c.identifier for c in capabilities.coverages}
         assert ELEVATION_COVERAGE_ID in coverage_ids
         assert any(
-            "Hillshade" in cid
-            for cid in coverage_ids
-            if cid != ELEVATION_COVERAGE_ID
+            "Hillshade" in cid for cid in coverage_ids if cid != ELEVATION_COVERAGE_ID
         )
 
     def test_describe_coverage(self):

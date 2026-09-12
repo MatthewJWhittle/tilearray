@@ -11,8 +11,14 @@ from tilearray.array import create_array
 from tilearray.service.base import TileGeometry, detect_service_type
 from tilearray.service.config import XYZConfig
 from tilearray.service.xyz import XYZService, _tile_bounds, _tile_range_for_bbox
-from tilearray.types import BoundingBox, CRS, Format, ServiceTypeEnum, TileRequest, TileResponse
-
+from tilearray.types import (
+    CRS,
+    BoundingBox,
+    Format,
+    ServiceTypeEnum,
+    TileRequest,
+    TileResponse,
+)
 
 OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 

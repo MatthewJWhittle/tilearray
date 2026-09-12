@@ -2,15 +2,14 @@
 Shared test configuration, fixtures, and markers for tilearray tests.
 """
 
-import pytest
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock
+
 import httpx
+import pytest
 import respx
 from pytest_httpserver import HTTPServer
-import vcr
 
 
 def pytest_configure(config):
@@ -55,11 +54,11 @@ def respx_mock():
 def tile_coords():
     """Hypothesis strategy for valid tile coordinates."""
     from hypothesis import strategies as st
-    
+
     return st.tuples(
         st.integers(min_value=0, max_value=20),  # z
-        st.integers(min_value=0, max_value=2**20-1),  # x
-        st.integers(min_value=0, max_value=2**20-1)   # y
+        st.integers(min_value=0, max_value=2**20 - 1),  # x
+        st.integers(min_value=0, max_value=2**20 - 1),  # y
     )
 
 
@@ -90,5 +89,3 @@ def vcr_config():
 
 
 # Import all test modules to ensure fixtures are available
-import tilearray
-from tilearray.types import BoundingBox, CRS, Format
