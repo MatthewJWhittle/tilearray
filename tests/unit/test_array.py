@@ -1,4 +1,7 @@
 import base64
+import os
+import threading
+import time
 from pathlib import Path
 from typing import Any, Callable, cast
 
@@ -14,7 +17,9 @@ from tilearray.array import (
     _organize_tiles,
     _read_geotiff_array,
     _resize_tile_array,
+    compute_thread_pool_size,
 )
+from tilearray.fetch import FetchPolicy
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
 from tilearray.types import (
@@ -613,3 +618,108 @@ def test_create_array_downsamples_oversized_tiles(monkeypatch: MonkeyPatch) -> N
     computed = result.compute()
     assert computed.shape == (256, 256)
     assert float(computed.mean()) == 1.0
+
+
+def test_compute_thread_pool_size_at_least_fetch_ceiling() -> None:
+    policy = FetchPolicy(max_concurrent=32)
+    assert compute_thread_pool_size(policy) >= 32
+    assert compute_thread_pool_size(policy) >= (os.cpu_count() or 1)
+    assert compute_thread_pool_size(policy, override=4) == 4
+
+
+def test_create_array_compute_exceeds_cpu_count_inflight(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    cpu = os.cpu_count() or 1
+    rows, cols = 4, 4
+    tile_count = rows * cols
+    max_concurrent = cpu + 8
+
+    inflight = 0
+    peak = 0
+    lock = threading.Lock()
+
+    class GridTileService(DummyService):
+        def generate_tile_requests(
+            self,
+            bbox: BoundingBox,
+            chunk_size: tuple[int, int],
+            **options: Any,
+        ) -> list[TileRequest]:
+            width, height = chunk_size
+            grid_rows, grid_cols = options.get("grid_shape", (1, 1))
+            span_x = (bbox.max_x - bbox.min_x) / grid_cols
+            span_y = (bbox.max_y - bbox.min_y) / grid_rows
+            tiles: list[TileRequest] = []
+            for row in range(grid_rows):
+                for col in range(grid_cols):
+                    min_x = bbox.min_x + col * span_x
+                    max_x = min_x + span_x
+                    min_y = bbox.min_y + (grid_rows - 1 - row) * span_y
+                    max_y = min_y + span_y
+                    tile_bbox = BoundingBox(
+                        min_x=min_x,
+                        min_y=min_y,
+                        max_x=max_x,
+                        max_y=max_y,
+                        crs=bbox.crs,
+                    )
+                    tiles.append(
+                        TileRequest(
+                            url=f"http://example.com/wcs/{row}/{col}",
+                            params={"tile": f"{row}-{col}"},
+                            output_format=Format.GEOTIFF,
+                            crs=bbox.crs,
+                            bbox=tile_bbox,
+                            width=width,
+                            height=height,
+                        )
+                    )
+            return tiles
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> GridTileService:
+        return GridTileService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        nonlocal inflight, peak
+        with lock:
+            inflight += 1
+            peak = max(peak, inflight)
+        time.sleep(0.05)
+        with lock:
+            inflight -= 1
+        width = request.width or 1
+        height = request.height or 1
+        return TileResponse(
+            data=b"\x00" * (width * height),
+            content_type="application/octet-stream",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
+        height = request.height or 1
+        width = request.width or 1
+        return np.ones((height, width), dtype=np.float32)
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=4, max_y=4, crs=CRS.EPSG_4326)
+    array_module.create_array(
+        service_url="http://example.com/wcs",
+        bbox=bbox,
+        crs=CRS.EPSG_4326,
+        chunk_size=(2, 2),
+        grid_shape=(rows, cols),
+        compute=True,
+        max_concurrent_requests=max_concurrent,
+        rate_limit_per_second=None,
+    )
+
+    assert peak > cpu
+    assert peak >= min(tile_count, max_concurrent) // 2
