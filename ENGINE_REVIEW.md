@@ -18,6 +18,8 @@
 | Wire fetcher into `_load_tile_array` / `fetch_tile` | **Implemented** |
 | Move `respx` to dev dependencies | **Implemented** |
 | Fake-server unit tests (429, 503, concurrency, rate limit, progress) | **Implemented** (`tests/unit/test_fetch.py`) |
+| OSM / EA fetch presets (`XYZConfig.for_openstreetmap`, `WCSConfig.for_ea_dsp`) | **Implemented** |
+| Before/after offline bench (wall time, max inflight, retries) | **Implemented** (`scripts/bench_fetch_engine.py`) |
 
 ### Deferred (explicitly out of scope)
 

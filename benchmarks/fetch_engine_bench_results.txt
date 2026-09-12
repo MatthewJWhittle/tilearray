@@ -1,0 +1,16 @@
+=== tilearray TileFetcher bench (offline mock) ===
+tiles=4  mock_latency=0.03s  server_max_concurrent=2
+
+Scenario A — overload-sensitive mock (server max concurrent = 2, 4 tiles)
+Legacy (unbounded)            wall= 0.050s  max_inflight=3  http_attempts=8  retries=4
+TileFetcher + EA preset       wall= 3.034s  max_inflight=1  http_attempts=4  retries=0
+TileFetcher + OSM preset      wall= 1.533s  max_inflight=1  http_attempts=4  retries=0
+
+Win: max_inflight capped, HTTP attempts and retry storms reduced (8→4 attempts, 4→0 retries for EA preset). Presets trade raw speed for polite, rate-limit-safe behaviour on public hosts.
+
+Scenario B — EA fixture offline (ea_lidar_64x64.tif, 4 tiles, 429 + Retry-After)
+  bbox reference (OSGB): (431900.0, 382700.0, 431964.0, 382764.0)
+TileFetcher + EA preset       wall= 7.033s  max_inflight=1  http_attempts=8  retries=4
+  fixture bytes/tile=16803  successful_retries=4
+
+Re-run: uv run python scripts/bench_fetch_engine.py

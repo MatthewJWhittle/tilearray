@@ -73,6 +73,41 @@ class RetryableHTTPError(Exception):
         super().__init__(f"HTTP {response.status_code}")
 
 
+@dataclass
+class FetchStats:
+    """Runtime counters observed by :class:`TileFetcher` (for tests and benches)."""
+
+    max_inflight: int = 0
+    request_count: int = 0
+    retry_count: int = 0
+    _current_inflight: int = field(default=0, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def reset(self) -> None:
+        with self._lock:
+            self.max_inflight = 0
+            self.request_count = 0
+            self.retry_count = 0
+            self._current_inflight = 0
+
+    def _enter_inflight(self) -> None:
+        with self._lock:
+            self._current_inflight += 1
+            self.max_inflight = max(self.max_inflight, self._current_inflight)
+
+    def _leave_inflight(self) -> None:
+        with self._lock:
+            self._current_inflight -= 1
+
+    def _record_request(self) -> None:
+        with self._lock:
+            self.request_count += 1
+
+    def _record_retry(self) -> None:
+        with self._lock:
+            self.retry_count += 1
+
+
 @dataclass(frozen=True)
 class FetchPolicy:
     """Configuration for :class:`TileFetcher`."""
@@ -170,6 +205,7 @@ class TileFetcher:
 
     def __init__(self, policy: FetchPolicy | None = None) -> None:
         self._policy = policy or FetchPolicy()
+        self.stats = FetchStats()
         max_connections = self._policy.max_connections or self._policy.max_concurrent
         self._client = httpx.Client(
             limits=httpx.Limits(
@@ -222,21 +258,30 @@ class TileFetcher:
         host = urlparse(request.url).netloc or request.url
         attempts = max(request.retries, self._policy.retries) + 1
 
+        def _before_sleep(retry_state: RetryCallState) -> None:
+            self.stats._record_retry()
+
         @retry(
             retry=retry_if_exception_type((httpx.TransportError, RetryableHTTPError)),
             wait=_retry_wait,
             stop=stop_after_attempt(attempts),
             reraise=True,
+            before_sleep=_before_sleep,
         )
         def _perform_get() -> httpx.Response:
             self._rate_limiter.before_request(host)
             with self._semaphore:
-                logger.debug("Fetching tile: %s", request.url)
-                response = self._client.get(
-                    request.url,
-                    params=request.params or None,
-                    headers=headers,
-                )
+                self.stats._enter_inflight()
+                try:
+                    self.stats._record_request()
+                    logger.debug("Fetching tile: %s", request.url)
+                    response = self._client.get(
+                        request.url,
+                        params=request.params or None,
+                        headers=headers,
+                    )
+                finally:
+                    self.stats._leave_inflight()
             if response.status_code in _RETRYABLE_STATUS_CODES:
                 raise RetryableHTTPError(response, _parse_retry_after(response))
             return response

@@ -165,6 +165,26 @@ class WCSConfig(ServiceConfig):
 
         return cls(base_url=url, coverage_id=coverage_id, **kwargs)
 
+    @classmethod
+    def for_ea_dsp(
+        cls,
+        url: str,
+        coverage_id: str,
+        **kwargs: Any,
+    ) -> WCSConfig:
+        """
+        WCS preset for Environment Agency Data Service Platform endpoints.
+
+        Applies conservative concurrency, slower per-host rate limiting, and
+        extra retries suited to Retry-After / 429 / 503 behaviour.
+        """
+
+        from ..fetch_presets import ea_dsp_fetch_defaults
+
+        defaults = ea_dsp_fetch_defaults()
+        defaults.update(kwargs)
+        return cls.from_url(url, coverage_id=coverage_id, **defaults)
+
     def build_service(self) -> BaseService:
         """Construct a ``WCSService`` instance from this configuration."""
 
@@ -214,6 +234,30 @@ class XYZConfig(ServiceConfig):
         """Convenience constructor for XYZ tile templates."""
 
         return cls(base_url=url, zoom=zoom, **kwargs)
+
+    @classmethod
+    def for_openstreetmap(
+        cls,
+        *,
+        zoom: int,
+        user_agent: str | None = None,
+        contact_url: str | None = None,
+        **kwargs: Any,
+    ) -> XYZConfig:
+        """
+        XYZ preset for OpenStreetMap raster tiles (OSMF tile usage policy).
+
+        Sets an identifiable User-Agent and polite concurrency / rate limits.
+        """
+
+        from ..fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
+
+        defaults = osm_fetch_defaults(
+            user_agent=user_agent,
+            contact_url=contact_url or "https://github.com/MatthewJWhittle/tilearray/issues",
+        )
+        defaults.update(kwargs)
+        return cls.from_url(OSM_TILE_TEMPLATE, zoom=zoom, **defaults)
 
     def build_service(self) -> BaseService:
         """Construct an ``XYZService`` instance from this configuration."""
