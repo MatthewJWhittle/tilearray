@@ -2,8 +2,8 @@
 
 from ._version import __version__
 
-__author__ = "Your Name"
-__email__ = "your.email@example.com"
+__author__ = "Matthew Whittle"
+__email__ = "47574804+MatthewJWhittle@users.noreply.github.com"
 
 from .array import create_array, load_array
 from .service import (

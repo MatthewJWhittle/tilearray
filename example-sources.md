@@ -11,8 +11,9 @@ Open data; include © OpenStreetMap contributors attribution when displaying.
 EA Lidar Digital Terrain Model (WCS)
 URL:
 https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs
-Layer ID: 
+Layer ID (CoverageId):
 lidar-composite-digital-terrain-model-dtm-1m
+Note: For other WCS endpoints, list coverages with GetCapabilities on the service URL and use the `CoverageId` from the response (often the final path segment of the service URL).
 
 
 VOM (WMS)

@@ -175,3 +175,7 @@ cython_debug/
 
 # uv
 .uv/
+
+# Local artifacts and tool caches
+artifacts/
+.ruff_cache/
