@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[int, int, TileRequest, TileResponse], None]
 
-_RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
+# Gateway throttling (403), rate limits (429), client timeout (408), upstream 5xx.
+_RETRYABLE_STATUS_CODES = frozenset({403, 408, 429, 502, 503, 504})
 _DEFAULT_MAX_CONCURRENT = 3
 _DEFAULT_INITIAL_CONCURRENT = 2
 _DEFAULT_MIN_CONCURRENT = 1

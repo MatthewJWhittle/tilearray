@@ -31,6 +31,7 @@ from geotiff.geotiff import TiffFile  # type: ignore[import-untyped]
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field
 
+from .errors import NetworkError
 from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .service import get_service
 from .service.base import BaseService
@@ -501,18 +502,10 @@ def create_array(
         num_workers = compute_thread_pool_size(
             fetch_policy, override=compute_num_workers
         )
-        computed = data_array.compute(
+        return data_array.compute(
             scheduler="threads",
             num_workers=num_workers,
         )
-        if progress.errors:
-            warnings.warn(
-                f"{len(progress.errors)} tile fetch(es) failed; "
-                "failed regions are filled with NaN. "
-                f"First error: {progress.errors[0]}",
-                stacklevel=2,
-            )
-        return computed
     return data_array
 
 
@@ -617,9 +610,8 @@ def _load_tile_array(
     if progress is not None:
         progress.tick(request, response)
     if not response.success:
-        height = request.height or 0
-        width = request.width or 0
-        return np.full((height, width), np.nan, dtype=dtype)
+        message = response.error_message or f"HTTP {response.status_code}"
+        raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
 
     array = decoder(response, request)
     if array.ndim != 2:
