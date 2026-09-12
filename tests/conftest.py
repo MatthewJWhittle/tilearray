@@ -72,21 +72,21 @@ def performance_budget():
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def vcr_config():
-    """Global cassette rules for VCR."""
+    """Global cassette rules for VCR (pytest-vcr)."""
     return {
         "record_mode": "once",
-        "match_on": ["method", "path", "query"],
-        "filter_headers": ["authorization", "x-api-key", "x-auth-token"],
-        "normalize_headers": True,
+        "match_on": ["method", "scheme", "host", "port", "path", "query"],
+        "filter_headers": [
+            "authorization",
+            "x-api-key",
+            "x-auth-token",
+            "cookie",
+            "set-cookie",
+        ],
+        "decode_compressed_response": True,
     }
-
-
-@pytest.fixture
-def vcr_cassette_path():
-    """Get VCR cassette path for current test."""
-    return Path("tests/contract/cassettes")
 
 
 # Import all test modules to ensure fixtures are available
