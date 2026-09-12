@@ -12,7 +12,7 @@ Pull geospatial **coverage tiles** from remote map services into Python as lazy 
 - Talks to a **WCS 2.0.1** endpoint and fetches GeoTIFF tiles, or fetches **XYZ** PNG tiles from a URL template
 - Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
 - Configures endpoints with `WCSConfig` or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
-- Fetches tiles through a shared HTTP engine with bounded concurrency, retries, and optional rate limits — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS)
+- Fetches tiles through a shared HTTP engine with bounded concurrency, retries, optional rate limits, and **adaptive concurrency (AIMD)** where enabled — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS)
 - Lets you register other service backends later via a small service registry
 
 ## Install
@@ -92,16 +92,16 @@ print(da.shape, da.attrs["service_type"])  # (256, 256) 'XYZ' — backed by Dask
 
 ## Fetch presets
 
-Tile fetches go through a shared engine with bounded concurrency, retries, and optional rate limits. That keeps **Dask** lazy for mosaic assembly: tiles are only pulled over HTTP when you actually compute.
+Tile fetches go through a shared engine with bounded concurrency, retries, and optional per-host rate limits. **Dask** stays lazy for mosaic assembly: tiles are only pulled over HTTP when you actually compute.
 
 Two thin presets exist because public hosts want **different** behaviour — not because we catalogue every coverage id:
 
-- **`XYZConfig.for_openstreetmap()`** — [OpenStreetMap Foundation (OSMF)](https://operations.osmfoundation.org/policies/tiles/) tile policy: identifiable User-Agent, polite concurrency (max 2 in-flight, ~2 requests per second).
-- **`WCSConfig.for_ea_dsp()`** — [Environment Agency Data Service Platform (EA DSP)](https://environment.data.gov.uk/) WCS: slower rate (~1 request per second), more retries and a longer timeout, honours HTTP 429 `Retry-After`.
+- **`WCSConfig.for_ea_dsp()`** — [Environment Agency Data Service Platform (EA DSP)](https://environment.data.gov.uk/) WCS. Uses **AIMD** (*additive increase, multiplicative decrease*): a sensible default start (2 in-flight), ramps while the host is happy (up to 16), and backs off on 429/`Retry-After`/503/timeouts (×0.5, floor 1). No fixed requests-per-second cap — you do not set the limit on every call. Four retries, 60 s timeout; `Retry-After` is still honoured by `TileFetcher`.
+- **`XYZConfig.for_openstreetmap()`** — [OpenStreetMap Foundation (OSMF)](https://operations.osmfoundation.org/policies/tiles/) tile policy: identifiable User-Agent, **fixed** polite limits (max 2 in-flight, ~2 requests per second). Not AIMD — OSMF policy wants low, steady load rather than ramping concurrency.
 
-These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields.
+These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields (`adaptive_concurrency`, `initial_concurrent_requests`, `min_concurrent_requests`, `max_concurrent_requests`, `rate_limit_per_second`, and so on).
 
-Offline before/after bench: `uv run python scripts/bench_fetch_engine.py` (results in `benchmarks/fetch_engine_bench_results.txt`).
+Offline before/after bench: `uv run python scripts/bench_fetch_engine.py` (results in `benchmarks/fetch_engine_bench_results.txt`). On a live Skipton-scale EA mosaic (~16 tiles), the AIMD preset is typically ~14 s versus ~25 s for the old fixed cap of 2 at 1 req/s; legacy unbounded was ~10–13 s when the host stayed healthy — stability under 429 still matters.
 
 See [example-sources.md](example-sources.md) for additional public endpoints.
 
