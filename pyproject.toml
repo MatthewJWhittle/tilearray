@@ -23,6 +23,7 @@ classifiers = [
 ]
 requires-python = ">=3.9"
 dependencies = [
+    "eval-type-backport>=0.2.0; python_version < '3.10'",
     "dask>=2024.8.0",
     "geotiff>=0.2.10",
     "httpx>=0.28.1",
@@ -125,6 +126,10 @@ disallow_untyped_defs = false
 module = "tilearray.array"
 disable_error_code = ["unreachable", "assignment"]
 
+[[tool.mypy.overrides]]
+module = ["requests", "requests.*"]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 source = ["src/tilearray"]
 branch = true
@@ -155,7 +160,6 @@ exclude_lines = [
 dev = [
     "mypy>=1.0.0",
     "ruff>=0.1.0",
-    "types-requests>=2.32.0",
     "coverage>=7.10.7",
     "hypothesis>=6.141.1",
     "ipykernel>=6.31.0",
