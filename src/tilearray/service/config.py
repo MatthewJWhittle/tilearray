@@ -195,7 +195,7 @@ class WCSConfig(ServiceConfig):
         """
         WCS preset for Environment Agency Data Service Platform endpoints.
 
-        Enables per-host AIMD concurrency (starts at 2, ceiling 8) plus extra
+        Enables per-host AIMD concurrency (starts at 8, ceiling 16) plus extra
         retries for Retry-After / 429 / 503 behaviour.
         """
 

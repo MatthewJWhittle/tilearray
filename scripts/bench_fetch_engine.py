@@ -231,7 +231,7 @@ def run_overload_scenario() -> list[str]:
         "Win: max_inflight capped, HTTP attempts and retry storms reduced "
         f"({legacy_stats.http_attempts}→{fetcher.stats.request_count} attempts, "
         f"{legacy_stats.retries}→{fetcher.stats.retry_count} retries for EA preset). "
-        "EA preset uses AIMD concurrency (starts at 2, backs off on pressure)."
+        "EA preset uses AIMD concurrency (starts at 8, backs off on pressure)."
     )
     return lines
 

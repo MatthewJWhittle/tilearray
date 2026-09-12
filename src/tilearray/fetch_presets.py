@@ -63,7 +63,7 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
 
     return {
         "max_concurrent_requests": 16,
-        "initial_concurrent_requests": 2,
+        "initial_concurrent_requests": 8,
         "min_concurrent_requests": 1,
         "adaptive_concurrency": True,
         "rate_limit_per_second": None,

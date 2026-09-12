@@ -16,7 +16,7 @@ URL:
 https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs
 Layer ID (CoverageId):
 13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m
-Prefer `WCSConfig.for_ea_dsp(...)` with this coverage id. The CoverageId comes from GetCapabilities (often `UUID__LayerName`) — never assume the URL path slug is the id. The preset uses AIMD concurrency (starts at 2 in-flight, ceiling 16, no fixed req/s cap) rather than a fixed 1 req/s throttle.
+Prefer `WCSConfig.for_ea_dsp(...)` with this coverage id. The CoverageId comes from GetCapabilities (often `UUID__LayerName`) — never assume the URL path slug is the id. The preset uses AIMD concurrency (starts at 8 in-flight, ceiling 16, remembers last good limit in-process, no fixed req/s cap) rather than a fixed 1 req/s throttle.
 
 
 VOM (WMS)

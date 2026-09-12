@@ -244,6 +244,60 @@ def test_aimd_increases_limit_after_successes() -> None:
 
 
 @respx.mock
+def test_aimd_ea_preset_starts_at_eight() -> None:
+    from tilearray.fetch_presets import ea_dsp_fetch_defaults
+
+    defaults = ea_dsp_fetch_defaults()
+    policy = FetchPolicy(
+        max_concurrent=defaults["max_concurrent_requests"],
+        initial_concurrent=defaults["initial_concurrent_requests"],
+        min_concurrent=defaults["min_concurrent_requests"],
+        adaptive_concurrency=defaults["adaptive_concurrency"],
+        rate_limit_per_second=defaults["rate_limit_per_second"],
+    )
+    fetcher = TileFetcher.for_policy(policy)
+    gate = fetcher._adaptive_gate
+    assert gate is not None
+    assert gate.current_limit("example.com") == 8
+
+
+@respx.mock
+def test_aimd_remembers_limit_across_fetch_batches() -> None:
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(200, content=b"x")
+    )
+    base = {
+        "max_concurrent": 16,
+        "initial_concurrent": 8,
+        "min_concurrent": 1,
+        "adaptive_concurrency": True,
+        "rate_limit_per_second": None,
+    }
+    policy_a = FetchPolicy(**base, timeout=60.0)
+    policy_b = FetchPolicy(**base, timeout=61.0)
+    request = _tile_request(retries=0)
+
+    fetcher_a = TileFetcher.for_policy(policy_a)
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futures = [pool.submit(fetcher_a.fetch, request) for _ in range(16)]
+        for future in futures:
+            future.result()
+
+    gate = fetcher_a._adaptive_gate
+    assert gate is not None
+    remembered = gate.current_limit("example.com")
+    assert remembered >= 14
+
+    fetcher_b = TileFetcher.for_policy(policy_b)
+    assert fetcher_b._adaptive_gate is gate
+    assert gate.current_limit("example.com") == remembered
+
+    with gate._map_lock:
+        del gate._hosts["example.com"]
+    assert gate.current_limit("example.com") == remembered
+
+
+@respx.mock
 def test_aimd_decreases_limit_on_429() -> None:
     route = respx.get("https://example.com/tile")
     route.side_effect = [
