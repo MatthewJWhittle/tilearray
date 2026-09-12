@@ -147,12 +147,29 @@ class AdaptiveConcurrencyGate:
         self._map_lock = threading.Lock()
         self.decrease_count = 0
         self.peak_limit = initial
+        self._policy_key: tuple[Any, ...] | None = None
+
+    def _remembered_limit(self, host: str) -> int | None:
+        if self._policy_key is None:
+            return None
+        return _HOST_REMEMBERED_LIMITS.get(self._policy_key, {}).get(host)
+
+    def _remember_limit(self, host: str, limit: int) -> None:
+        if self._policy_key is None:
+            return
+        _HOST_REMEMBERED_LIMITS.setdefault(self._policy_key, {})[host] = limit
+
+    def _seed_limit(self, host: str) -> int:
+        remembered = self._remembered_limit(host)
+        if remembered is not None:
+            return max(self._minimum, min(self._maximum, remembered))
+        return self._initial
 
     def _state_for(self, host: str) -> _HostConcurrencyState:
         with self._map_lock:
             state = self._hosts.get(host)
             if state is None:
-                state = _HostConcurrencyState(limit=self._initial)
+                state = _HostConcurrencyState(limit=self._seed_limit(host))
                 self._hosts[host] = state
             return state
 
@@ -163,7 +180,7 @@ class AdaptiveConcurrencyGate:
                 state.condition.wait(timeout=0.05)
             state.inflight += 1
 
-    def _increase_limit(self, state: _HostConcurrencyState) -> None:
+    def _increase_limit(self, host: str, state: _HostConcurrencyState) -> None:
         if state.limit >= self._maximum:
             return
         state.limit = min(
@@ -172,6 +189,7 @@ class AdaptiveConcurrencyGate:
         )
         state.peak_limit = max(state.peak_limit, state.limit)
         self.peak_limit = max(self.peak_limit, state.limit)
+        self._remember_limit(host, state.limit)
 
     def finish_success(self, host: str) -> None:
         """Release a slot and apply per-success AIMD increase."""
@@ -179,7 +197,7 @@ class AdaptiveConcurrencyGate:
         state = self._state_for(host)
         with state.condition:
             state.inflight -= 1
-            self._increase_limit(state)
+            self._increase_limit(host, state)
             state.condition.notify_all()
 
     def finish_pressure(self, host: str) -> None:
@@ -195,12 +213,13 @@ class AdaptiveConcurrencyGate:
             if new_limit < state.limit:
                 state.limit = new_limit
                 self.decrease_count += 1
+                self._remember_limit(host, state.limit)
             state.condition.notify_all()
 
     def record_success(self, host: str) -> None:
         state = self._state_for(host)
         with state.condition:
-            self._increase_limit(state)
+            self._increase_limit(host, state)
             state.condition.notify_all()
 
     def record_pressure(self, host: str) -> None:
@@ -213,6 +232,7 @@ class AdaptiveConcurrencyGate:
             if new_limit < state.limit:
                 state.limit = new_limit
                 self.decrease_count += 1
+                self._remember_limit(host, state.limit)
             state.condition.notify_all()
 
     def current_limit(self, host: str) -> int:
@@ -222,12 +242,14 @@ class AdaptiveConcurrencyGate:
 
 
 _ADAPTIVE_GATES: dict[tuple[Any, ...], AdaptiveConcurrencyGate] = {}
+_HOST_REMEMBERED_LIMITS: dict[tuple[Any, ...], dict[str, int]] = {}
 _ADAPTIVE_GATES_LOCK = threading.Lock()
 
 
 def _adaptive_gate_key(policy: FetchPolicy) -> tuple[Any, ...]:
+    """Stable key for sharing AIMD state (initial seed is not part of identity)."""
+
     return (
-        policy.initial_concurrent,
         policy.min_concurrent,
         policy.max_concurrent,
         policy.multiplicative_decrease,
@@ -247,6 +269,7 @@ def _shared_adaptive_gate(policy: FetchPolicy) -> AdaptiveConcurrencyGate:
                 additive_increase=policy.additive_increase,
                 multiplicative_decrease=policy.multiplicative_decrease,
             )
+            gate._policy_key = key
             _ADAPTIVE_GATES[key] = gate
         return gate
 
@@ -256,6 +279,7 @@ def reset_adaptive_gates() -> None:
 
     with _ADAPTIVE_GATES_LOCK:
         _ADAPTIVE_GATES.clear()
+        _HOST_REMEMBERED_LIMITS.clear()
 
 
 class RetryableHTTPError(Exception):
