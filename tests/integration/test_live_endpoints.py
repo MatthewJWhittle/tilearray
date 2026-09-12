@@ -16,6 +16,7 @@ from tilearray.types import CRS, Format
 
 @pytest.mark.integration
 @pytest.mark.slow
+@pytest.mark.net
 class TestRealServiceIntegration:
     """Smoke tests against live WCS endpoints."""
 
