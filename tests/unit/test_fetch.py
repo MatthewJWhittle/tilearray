@@ -200,6 +200,26 @@ def test_builtin_rate_limiter_delays_requests() -> None:
     assert elapsed >= 0.05
 
 
+@respx.mock
+def test_token_bucket_allows_initial_burst() -> None:
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(200, content=b"x")
+    )
+    policy = FetchPolicy(max_concurrent=2, rate_limit_per_second=1.0)
+    fetcher = TileFetcher.for_policy(policy)
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(fetcher.fetch, _tile_request(retries=0)) for _ in range(2)
+        ]
+        for future in futures:
+            future.result()
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.5
+
+
 def test_fetch_progress_callback_records_failures() -> None:
     events: list[tuple[int, int, bool]] = []
 

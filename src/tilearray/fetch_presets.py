@@ -55,13 +55,14 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
     """
     Fetch defaults for Environment Agency Data Service Platform WCS endpoints.
 
-    Tuned for classic HTTP behaviour: conservative concurrency, slower request
-    rate, and extra retries to honour Retry-After / transient 429/503 responses.
+    Uses a modest in-flight cap to avoid overload retry storms on busy hosts,
+    while leaving the healthy path unconstrained by a fixed per-second throttle
+    (429/503 and ``Retry-After`` are handled by :class:`~tilearray.fetch.TileFetcher`).
     """
 
     return {
         "max_concurrent_requests": 2,
-        "rate_limit_per_second": 1.0,
+        "rate_limit_per_second": None,
         "fetch_retries": 4,
         "fetch_timeout": 60.0,
     }

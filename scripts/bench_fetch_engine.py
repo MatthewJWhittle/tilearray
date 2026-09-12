@@ -35,6 +35,7 @@ from tilearray.fetch_presets import (  # noqa: E402
 from tilearray.types import TileRequest  # noqa: E402
 
 TILE_COUNT = 4
+HEALTHY_TILE_COUNT = 16
 
 
 def _policy_from_service_defaults(defaults: dict[str, object]) -> FetchPolicy:
@@ -90,6 +91,17 @@ class OverloadMockServer:
         time.sleep(MOCK_LATENCY_S)
         with self._lock:
             self._current -= 1
+        return httpx.Response(200, content=b"tile-bytes")
+
+
+class HealthyMockServer:
+    """Mock origin with fixed latency and no overload ceiling."""
+
+    def __init__(self, latency_s: float) -> None:
+        self.latency_s = latency_s
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        time.sleep(self.latency_s)
         return httpx.Response(200, content=b"tile-bytes")
 
 
@@ -212,7 +224,68 @@ def run_overload_scenario() -> list[str]:
         "Win: max_inflight capped, HTTP attempts and retry storms reduced "
         f"({legacy_stats.http_attempts}→{fetcher.stats.request_count} attempts, "
         f"{legacy_stats.retries}→{fetcher.stats.retry_count} retries for EA preset). "
-        "Presets trade raw speed for polite, rate-limit-safe behaviour on public hosts."
+        "EA preset keeps a modest in-flight cap without a fixed per-second throttle."
+    )
+    return lines
+
+
+def run_healthy_scenario() -> list[str]:
+    lines: list[str] = []
+    server = HealthyMockServer(MOCK_LATENCY_S)
+    tiles = _tile_requests(HEALTHY_TILE_COUNT)
+
+    with respx.mock:
+        respx.route(url__startswith=BASE_URL).mock(side_effect=server.handle)
+
+        legacy_wall, legacy_stats = _run_legacy(tiles)
+
+        ea_policy = _policy_from_service_defaults(ea_dsp_fetch_defaults())
+        ea_wall, ea_fetcher = _run_tile_fetcher(ea_policy, tiles)
+
+        old_ea_policy = FetchPolicy(
+            max_concurrent=2,
+            retries=4,
+            timeout=60.0,
+            rate_limit_per_second=1.0,
+        )
+        old_ea_wall, old_ea_fetcher = _run_tile_fetcher(old_ea_policy, tiles)
+
+    lines.append("")
+    lines.append(
+        f"Scenario C — healthy mock ({HEALTHY_TILE_COUNT} tiles, "
+        f"{MOCK_LATENCY_S}s latency, no server overload cap)"
+    )
+    lines.append(
+        _format_row(
+            "Legacy (unbounded)",
+            legacy_wall,
+            legacy_stats.max_inflight,
+            legacy_stats.http_attempts,
+            legacy_stats.retries,
+        )
+    )
+    lines.append(
+        _format_row(
+            "TileFetcher + old EA (1 req/s)",
+            old_ea_wall,
+            old_ea_fetcher.stats.max_inflight,
+            old_ea_fetcher.stats.request_count,
+            old_ea_fetcher.stats.retry_count,
+        )
+    )
+    lines.append(
+        _format_row(
+            "TileFetcher + EA preset",
+            ea_wall,
+            ea_fetcher.stats.max_inflight,
+            ea_fetcher.stats.request_count,
+            ea_fetcher.stats.retry_count,
+        )
+    )
+    lines.append(
+        "Win: healthy-path wall time drops when the fixed 1 req/s throttle is removed "
+        f"({old_ea_wall:.3f}s → {ea_wall:.3f}s on this mock; "
+        f"legacy reference {legacy_wall:.3f}s)."
     )
     return lines
 
@@ -279,6 +352,7 @@ def main() -> int:
         "",
     ]
     lines.extend(run_overload_scenario())
+    lines.extend(run_healthy_scenario())
     lines.extend(run_ea_fixture_scenario())
     lines.append("")
     lines.append("Re-run: uv run python scripts/bench_fetch_engine.py")

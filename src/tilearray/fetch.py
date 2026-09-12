@@ -64,6 +64,43 @@ class PerHostRateLimiter:
             self._last_request[host] = time.monotonic()
 
 
+class TokenBucketRateLimiter:
+    """Burst-friendly per-host limiter keyed by request host."""
+
+    def __init__(self, rate_per_second: float, *, burst: int) -> None:
+        if rate_per_second <= 0:
+            raise ValueError("rate_per_second must be positive")
+        if burst <= 0:
+            raise ValueError("burst must be positive")
+        self._rate_per_second = rate_per_second
+        self._burst = float(burst)
+        self._tokens: dict[str, float] = {}
+        self._last_refill: dict[str, float] = {}
+        self._lock = threading.Lock()
+
+    def before_request(self, host: str) -> None:
+        with self._lock:
+            now = time.monotonic()
+            last = self._last_refill.get(host, now)
+            tokens = min(
+                self._burst,
+                self._tokens.get(host, self._burst)
+                + (now - last) * self._rate_per_second,
+            )
+            if tokens < 1.0:
+                sleep_for = (1.0 - tokens) / self._rate_per_second
+                time.sleep(sleep_for)
+                now = time.monotonic()
+                last = self._last_refill.get(host, now)
+                tokens = min(
+                    self._burst,
+                    self._tokens.get(host, self._burst)
+                    + (now - last) * self._rate_per_second,
+                )
+            self._tokens[host] = tokens - 1.0
+            self._last_refill[host] = now
+
+
 class RetryableHTTPError(Exception):
     """Raised internally to trigger tenacity retries for retryable HTTP codes."""
 
@@ -218,7 +255,10 @@ class TileFetcher:
         if self._policy.rate_limiter is not None:
             self._rate_limiter: HostRateLimiter = self._policy.rate_limiter
         elif self._policy.rate_limit_per_second is not None:
-            self._rate_limiter = PerHostRateLimiter(self._policy.rate_limit_per_second)
+            self._rate_limiter = TokenBucketRateLimiter(
+                self._policy.rate_limit_per_second,
+                burst=self._policy.max_concurrent,
+            )
         else:
             self._rate_limiter = NoOpRateLimiter()
 
@@ -269,8 +309,8 @@ class TileFetcher:
             before_sleep=_before_sleep,
         )
         def _perform_get() -> httpx.Response:
-            self._rate_limiter.before_request(host)
             with self._semaphore:
+                self._rate_limiter.before_request(host)
                 self.stats._enter_inflight()
                 try:
                     self.stats._record_request()

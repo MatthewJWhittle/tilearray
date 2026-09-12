@@ -27,5 +27,6 @@ def test_bench_script_runs_offline() -> None:
     assert "Legacy (unbounded)" in output
     assert "TileFetcher + EA preset" in output
     assert "TileFetcher + OSM preset" in output
+    assert "Scenario C — healthy mock" in output
     assert "max_inflight=2" in output or "max_inflight=1" in output
     assert RESULTS.is_file()

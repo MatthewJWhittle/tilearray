@@ -175,8 +175,8 @@ class WCSConfig(ServiceConfig):
         """
         WCS preset for Environment Agency Data Service Platform endpoints.
 
-        Applies conservative concurrency, slower per-host rate limiting, and
-        extra retries suited to Retry-After / 429 / 503 behaviour.
+        Applies a modest in-flight cap plus extra retries for Retry-After /
+        429 / 503 behaviour. No fixed per-second throttle on the healthy path.
         """
 
         from ..fetch_presets import ea_dsp_fetch_defaults

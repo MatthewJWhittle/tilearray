@@ -28,7 +28,7 @@ def test_osm_fetch_defaults_include_user_agent() -> None:
 def test_ea_dsp_fetch_defaults_are_conservative() -> None:
     defaults = ea_dsp_fetch_defaults()
     assert defaults["max_concurrent_requests"] == 2
-    assert defaults["rate_limit_per_second"] == 1.0
+    assert defaults["rate_limit_per_second"] is None
     assert defaults["fetch_retries"] == 4
     assert defaults["fetch_timeout"] == 60.0
 
@@ -51,7 +51,7 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
     )
     assert config.max_concurrent_requests == 2
     assert config.fetch_retries == 4
-    assert config.rate_limit_per_second == 1.0
+    assert config.rate_limit_per_second is None
     policy = config.fetch_policy()
     assert isinstance(policy, FetchPolicy)
     assert policy.retries == 4
