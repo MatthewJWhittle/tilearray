@@ -19,14 +19,13 @@ test-cov: ## Run tests with coverage
 	uv run pytest --cov=src/tilearray --cov-report=html --cov-report=term-missing
 
 lint: ## Run linting
-	uv run black --check .
-	uv run isort --check-only .
-	uv run flake8 .
+	uv run ruff format --check src tests
+	uv run ruff check src tests
 	uv run mypy src/tilearray
 
 format: ## Format code
-	uv run black .
-	uv run isort .
+	uv run ruff format src tests
+	uv run ruff check --fix src tests
 
 clean: ## Clean build artifacts
 	rm -rf build/

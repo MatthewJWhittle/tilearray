@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Iterable, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any
 
+from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
-from ..types import BoundingBox, CRS, Format, ServiceTypeEnum, TileRequest
 
 
 @register_service(ServiceTypeEnum.XYZ)
 class XYZService(BaseService):
     """Client for XYZ / slippy-map tile endpoints."""
 
-    inferred_grid_shape: Optional[Tuple[int, int]] = None
+    inferred_grid_shape: tuple[int, int] | None = None
 
     def __init__(
         self,
@@ -21,8 +22,8 @@ class XYZService(BaseService):
         *,
         zoom: int,
         tile_size: int = 256,
-        output_format: Optional[Format] = Format.PNG,
-        crs: Optional[CRS] = CRS.EPSG_4326,
+        output_format: Format | None = Format.PNG,
+        crs: CRS | None = CRS.EPSG_4326,
         **config: Any,
     ) -> None:
         super().__init__(base_url, zoom=zoom, tile_size=tile_size, **config)
@@ -37,7 +38,7 @@ class XYZService(BaseService):
         self.native_crs = crs or CRS.EPSG_4326
 
     @classmethod
-    def from_url(cls, url: str, **config: Any) -> "XYZService":
+    def from_url(cls, url: str, **config: Any) -> XYZService:
         zoom = config.get("zoom")
         if zoom is None:
             raise ValueError("XYZ services require a zoom level")
@@ -46,11 +47,17 @@ class XYZService(BaseService):
     def plan_tiles(
         self,
         bbox: BoundingBox,
-        chunk_size: Tuple[int, int],
+        chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
-        zoom = int(options.get("zoom", self.zoom))
-        tile_size = int(options.get("tile_size", self.tile_size))
+        zoom_value = options.get("zoom", self.zoom)
+        tile_size_value = options.get("tile_size", self.tile_size)
+        zoom = int(zoom_value) if isinstance(zoom_value, (int, str)) else self.zoom
+        tile_size = (
+            int(tile_size_value)
+            if isinstance(tile_size_value, (int, str))
+            else self.tile_size
+        )
         target_crs = options.get("crs", self.native_crs)
         if not isinstance(target_crs, CRS):
             target_crs = self.native_crs
@@ -78,7 +85,9 @@ class XYZService(BaseService):
     def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
         tile_x = _require_tile_index(tile.tile_x, options.get("x"))
         tile_y = _require_tile_index(tile.tile_y, options.get("y"))
-        zoom = int(options.get("zoom", tile.zoom if tile.zoom is not None else self.zoom))
+        zoom = int(
+            options.get("zoom", tile.zoom if tile.zoom is not None else self.zoom)
+        )
 
         url = self.url_template.format(x=tile_x, y=tile_y, z=zoom)
         fmt = options.get("output_format") or self.output_format
@@ -86,7 +95,9 @@ class XYZService(BaseService):
             fmt = Format(fmt)
 
         extra_params = options.get("params")
-        params: Dict[str, Any] = dict(extra_params) if isinstance(extra_params, dict) else {}
+        params: dict[str, Any] = (
+            dict(extra_params) if isinstance(extra_params, dict) else {}
+        )
 
         return TileRequest(
             url=url,
@@ -99,14 +110,14 @@ class XYZService(BaseService):
         )
 
 
-def _require_tile_index(tile_index: Optional[int], override: Optional[int]) -> int:
+def _require_tile_index(tile_index: int | None, override: int | None) -> int:
     value = override if override is not None else tile_index
     if value is None:
         raise ValueError("XYZ tile indices are required")
     return int(value)
 
 
-def _tile_range_for_bbox(bbox: BoundingBox, zoom: int) -> Tuple[int, int, int, int]:
+def _tile_range_for_bbox(bbox: BoundingBox, zoom: int) -> tuple[int, int, int, int]:
     x_min = _lon_to_tile_x(bbox.min_x, zoom)
     x_max = _lon_to_tile_x(bbox.max_x, zoom)
     y_min = _lat_to_tile_y(bbox.max_y, zoom)
@@ -133,5 +144,7 @@ def _tile_bounds(x: int, y: int, zoom: int, crs: CRS) -> BoundingBox:
     max_x = (x + 1) / scale * 360.0 - 180.0
     max_y = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / scale))))
     min_y = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / scale))))
-    bbox = BoundingBox(min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, crs=CRS.EPSG_4326)
+    bbox = BoundingBox(
+        min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, crs=CRS.EPSG_4326
+    )
     return bbox if crs == CRS.EPSG_4326 else bbox.to_crs(crs)

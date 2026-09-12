@@ -3,25 +3,25 @@
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, cast
 
 import requests
-import xml.etree.ElementTree as ET
 
-from .base import BaseService, TileGeometry, register_service
 from ..types import (
-    BoundingBox,
     CRS,
+    BoundingBox,
     CoverageDescription,
     Format,
     ServiceCapabilities,
     ServiceTypeEnum,
     SpatialExtent,
-    TileRequest,
     TemporalExtent,
+    TileRequest,
     WCSResponse,
 )
+from .base import BaseService, TileGeometry, register_service
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +42,22 @@ class WCSParser:
         try:
             root = ET.fromstring(xml_content)
 
-            service_title = self._get_text(root, ".//ows:ServiceIdentification/ows:Title")
-            service_abstract = self._get_text(root, ".//ows:ServiceIdentification/ows:Abstract")
+            service_title = self._get_text(
+                root, ".//ows:ServiceIdentification/ows:Title"
+            )
+            service_abstract = self._get_text(
+                root, ".//ows:ServiceIdentification/ows:Abstract"
+            )
             service_keywords = self._get_keywords(root)
-            service_provider = self._get_text(root, ".//ows:ServiceProvider/ows:ProviderName")
+            service_provider = self._get_text(
+                root, ".//ows:ServiceProvider/ows:ProviderName"
+            )
             service_contact = self._get_text(
                 root,
                 ".//ows:ServiceProvider/ows:ServiceContact/ows:ContactInfo/ows:ContactPersonPrimary/ows:ContactPerson",
             )
 
-            operations: List[str] = []
+            operations: list[str] = []
             for op in root.findall(".//ows:Operation", self.namespaces):
                 op_name = op.get("name")
                 if op_name:
@@ -81,7 +87,9 @@ class WCSParser:
             root = ET.fromstring(xml_content)
 
             coverage_elem = root.find(".//wcs:CoverageDescription", self.namespaces)
-            if coverage_elem is None and root.tag.lower().endswith("coveragedescription"):
+            if coverage_elem is None and root.tag.lower().endswith(
+                "coveragedescription"
+            ):
                 coverage_elem = root
             if coverage_elem is None:
                 raise ValueError("No coverage description found in XML")
@@ -116,19 +124,19 @@ class WCSParser:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-    def _get_text(self, element: ET.Element, xpath: str) -> Optional[str]:
+    def _get_text(self, element: ET.Element, xpath: str) -> str | None:
         elem = element.find(xpath, self.namespaces)
         return elem.text.strip() if elem is not None and elem.text else None
 
-    def _get_keywords(self, element: ET.Element) -> List[str]:
-        keywords: List[str] = []
+    def _get_keywords(self, element: ET.Element) -> list[str]:
+        keywords: list[str] = []
         for kw_elem in element.findall(".//ows:Keywords/ows:Keyword", self.namespaces):
             if kw_elem.text:
                 keywords.append(kw_elem.text.strip())
         return keywords
 
-    def _parse_supported_formats(self, root: ET.Element) -> List[Format]:
-        formats: List[Format] = []
+    def _parse_supported_formats(self, root: ET.Element) -> list[Format]:
+        formats: list[Format] = []
         for format_elem in root.findall(".//wcs:SupportedFormat", self.namespaces):
             if format_elem.text:
                 text = format_elem.text.strip()
@@ -138,8 +146,8 @@ class WCSParser:
                     logger.debug("Skipping unsupported WCS format '%s'", text)
         return formats
 
-    def _parse_supported_crs(self, root: ET.Element) -> List[CRS]:
-        crs_list: List[CRS] = []
+    def _parse_supported_crs(self, root: ET.Element) -> list[CRS]:
+        crs_list: list[CRS] = []
         for crs_elem in root.findall(".//wcs:SupportedCRS", self.namespaces):
             if crs_elem.text:
                 text = crs_elem.text.strip()
@@ -149,9 +157,11 @@ class WCSParser:
                     logger.debug("Skipping unsupported CRS '%s'", text)
         return crs_list
 
-    def _parse_coverages(self, root: ET.Element) -> List[CoverageDescription]:
-        coverages: List[CoverageDescription] = []
-        for coverage_elem in root.findall(".//wcs:Contents/wcs:CoverageSummary", self.namespaces):
+    def _parse_coverages(self, root: ET.Element) -> list[CoverageDescription]:
+        coverages: list[CoverageDescription] = []
+        for coverage_elem in root.findall(
+            ".//wcs:Contents/wcs:CoverageSummary", self.namespaces
+        ):
             identifier = self._get_text(coverage_elem, ".//wcs:Identifier")
             if not identifier:
                 identifier = self._get_text(coverage_elem, ".//wcs:CoverageId")
@@ -166,8 +176,8 @@ class WCSParser:
                 )
         return coverages
 
-    def _parse_coverage_crs(self, coverage_elem: ET.Element) -> List[CRS]:
-        crs_list: List[CRS] = []
+    def _parse_coverage_crs(self, coverage_elem: ET.Element) -> list[CRS]:
+        crs_list: list[CRS] = []
         for crs_elem in coverage_elem.findall(".//wcs:SupportedCRS", self.namespaces):
             if crs_elem.text:
                 text = crs_elem.text.strip()
@@ -177,9 +187,11 @@ class WCSParser:
                     logger.debug("Skipping unsupported CRS '%s'", text)
         return crs_list
 
-    def _parse_coverage_formats(self, coverage_elem: ET.Element) -> List[Format]:
-        formats: List[Format] = []
-        for format_elem in coverage_elem.findall(".//wcs:SupportedFormat", self.namespaces):
+    def _parse_coverage_formats(self, coverage_elem: ET.Element) -> list[Format]:
+        formats: list[Format] = []
+        for format_elem in coverage_elem.findall(
+            ".//wcs:SupportedFormat", self.namespaces
+        ):
             if format_elem.text:
                 text = format_elem.text.strip()
                 try:
@@ -188,7 +200,7 @@ class WCSParser:
                     logger.debug("Skipping unsupported format '%s'", text)
         return formats
 
-    def _parse_spatial_extent(self, coverage_elem: ET.Element) -> Optional[SpatialExtent]:
+    def _parse_spatial_extent(self, coverage_elem: ET.Element) -> SpatialExtent | None:
         bbox_elem = coverage_elem.find(".//gml:Envelope", self.namespaces)
         if bbox_elem is None:
             return None
@@ -221,7 +233,9 @@ class WCSParser:
         )
         return SpatialExtent(bbox=bbox, dimensions=None)
 
-    def _parse_temporal_extent(self, coverage_elem: ET.Element) -> Optional[TemporalExtent]:
+    def _parse_temporal_extent(
+        self, coverage_elem: ET.Element
+    ) -> TemporalExtent | None:
         time_elem = coverage_elem.find(".//gml:TimePeriod", self.namespaces)
         if time_elem is None:
             return None
@@ -229,14 +243,16 @@ class WCSParser:
         begin_elem = time_elem.find(".//gml:beginPosition", self.namespaces)
         end_elem = time_elem.find(".//gml:endPosition", self.namespaces)
 
-        start_time = self._parse_datetime(begin_elem.text if begin_elem is not None else None)
+        start_time = self._parse_datetime(
+            begin_elem.text if begin_elem is not None else None
+        )
         end_time = self._parse_datetime(end_elem.text if end_elem is not None else None)
 
         if start_time or end_time:
             return TemporalExtent(start_time=start_time, end_time=end_time)
         return None
 
-    def _parse_datetime(self, value: Optional[str]) -> Optional[datetime]:
+    def _parse_datetime(self, value: str | None) -> datetime | None:
         if not value:
             return None
         try:
@@ -264,10 +280,10 @@ class WCSService(BaseService):
         base_url: str,
         *,
         version: str = "2.0.1",
-        session: Optional[requests.Session] = None,
-        coverage_id: Optional[str] = None,
-        output_format: Optional[Format] = None,
-        crs: Optional[CRS] = None,
+        session: requests.Session | None = None,
+        coverage_id: str | None = None,
+        output_format: Format | None = None,
+        crs: CRS | None = None,
         **config: Any,
     ) -> None:
         super().__init__(base_url, version=version, **config)
@@ -275,11 +291,15 @@ class WCSService(BaseService):
         self.version = version
         self.coverage_id = coverage_id or config.get("layer_id")
         self.parser = WCSParser(self.base_url)
-        self.output_format = self._coerce_format(output_format or config.get("format") or Format.GEOTIFF)
-        self.subsetting_crs = self._coerce_crs(crs or config.get("crs") or CRS.EPSG_4326)
+        self.output_format = self._coerce_format(
+            output_format or config.get("format") or Format.GEOTIFF
+        )
+        self.subsetting_crs = self._coerce_crs(
+            crs or config.get("crs") or CRS.EPSG_4326
+        )
 
     @classmethod
-    def from_url(cls, url: str, **config: Any) -> "WCSService":
+    def from_url(cls, url: str, **config: Any) -> WCSService:
         return cls(url, **config)
 
     # ------------------------------------------------------------------
@@ -288,12 +308,19 @@ class WCSService(BaseService):
     def get_capabilities(self, **params: Any) -> ServiceCapabilities:
         response = self.session.get(
             self.base_url,
-            params={"service": "WCS", "version": self.version, "request": "GetCapabilities", **params},
+            params={
+                "service": "WCS",
+                "version": self.version,
+                "request": "GetCapabilities",
+                **params,
+            },
         )
         response.raise_for_status()
         return self.parser.parse_get_capabilities(response.text)
 
-    def describe_coverage(self, coverage_id: Optional[str] = None, **params: Any) -> CoverageDescription:
+    def describe_coverage(
+        self, coverage_id: str | None = None, **params: Any
+    ) -> CoverageDescription:
         coverage = coverage_id or self._require_coverage_id()
         response = self.session.get(
             self.base_url,
@@ -310,13 +337,13 @@ class WCSService(BaseService):
 
     def get_coverage(
         self,
-        coverage_id: Optional[str],
+        coverage_id: str | None,
         bbox: BoundingBox,
         width: int,
         height: int,
         *,
-        output_format: Optional[Format] = None,
-        crs: Optional[CRS] = None,
+        output_format: Format | None = None,
+        crs: CRS | None = None,
         **params: Any,
     ) -> WCSResponse:
         coverage = coverage_id or self._require_coverage_id()
@@ -340,11 +367,21 @@ class WCSService(BaseService):
         try:
             response = self.session.get(self.base_url, params=request_params)
             response.raise_for_status()
-            return WCSResponse(success=True, data=response.content, error_message=None, status_code=response.status_code)
+            return WCSResponse(
+                success=True,
+                data=response.content,
+                error_message=None,
+                status_code=response.status_code,
+            )
         except requests.RequestException as exc:
             logger.debug("WCS GetCoverage failed: %s", exc, exc_info=True)
             status_code = exc.response.status_code if exc.response is not None else None
-            return WCSResponse(success=False, data=None, error_message=str(exc), status_code=status_code)
+            return WCSResponse(
+                success=False,
+                data=None,
+                error_message=str(exc),
+                status_code=status_code,
+            )
 
     # ------------------------------------------------------------------
     # BaseService overrides
@@ -358,7 +395,7 @@ class WCSService(BaseService):
         crs = self._coerce_crs(options.get("crs") or tile.crs)
         subset_parts = self._format_subset(tile.bbox, crs)
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "service": "WCS",
             "version": self.version,
             "request": "GetCoverage",
@@ -372,7 +409,7 @@ class WCSService(BaseService):
 
         extra_params = options.get("params")
         if isinstance(extra_params, dict):
-            params.update(cast(Dict[str, Any], extra_params))
+            params.update(cast(dict[str, Any], extra_params))
 
         return TileRequest(
             url=self.base_url,
@@ -406,19 +443,23 @@ class WCSService(BaseService):
         if isinstance(crs, CRS):
             return crs
         if isinstance(crs, str):
-            return CRS.from_epsg(crs) if crs.upper().startswith("EPSG:") else CRS.from_integer(int(crs))
+            return (
+                CRS.from_epsg(crs)
+                if crs.upper().startswith("EPSG:")
+                else CRS.from_integer(int(crs))
+            )
         if isinstance(crs, int):
             return CRS.from_integer(crs)
         raise ValueError(f"Invalid CRS value: {crs!r}")
 
-    def _subset_axes(self, crs: CRS) -> Tuple[str, str]:
+    def _subset_axes(self, crs: CRS) -> tuple[str, str]:
         if crs == CRS.EPSG_27700:
             return ("E", "N")
         if crs == CRS.EPSG_3857:
             return ("X", "Y")
         return ("Long", "Lat")
 
-    def _format_subset(self, bbox: BoundingBox, crs: CRS) -> List[str]:
+    def _format_subset(self, bbox: BoundingBox, crs: CRS) -> list[str]:
         axis_x, axis_y = self._subset_axes(crs)
         return [
             f"{axis_x}({bbox.min_x},{bbox.max_x})",

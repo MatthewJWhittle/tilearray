@@ -58,17 +58,13 @@ jobs:
       run: |
         uv sync --dev
 
-    - name: Run black
+    - name: Run ruff format check
       run: |
-        uv run black --check .
+        uv run ruff format --check src tests
 
-    - name: Run isort
+    - name: Run ruff lint
       run: |
-        uv run isort --check-only .
-
-    - name: Run flake8
-      run: |
-        uv run flake8 .
+        uv run ruff check src tests
 
     - name: Run mypy
       run: |
