@@ -1,38 +1,36 @@
 # tilearray
 
-Load geospatial tiles from remote OGC-style services into lazy **xarray** / **dask** arrays.
+Pull geospatial **coverage tiles** from remote map services into Python as lazy **xarray** / **dask** arrays — so you can work with big rasters without downloading everything up front.
 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
 
-> **Alpha status.** The API and behaviour may change. Only **Web Coverage Service (WCS)** is implemented today. WMS, WMTS, and XYZ appear in type definitions and configuration but are not yet supported.
+> **Alpha.** The API may change. Today only **Web Coverage Service (WCS)** — the Open Geospatial Consortium protocol that returns the actual raster values (not just a picture) — is implemented. **Web Map Service (WMS)**, **Web Map Tile Service (WMTS)**, and XYZ tile URLs show up in types/config but are **not supported yet**.
 
-## Features
+## What it does
 
-- **WCS support** — fetch GeoTIFF coverage tiles from WCS 2.0.1 endpoints
-- **Lazy arrays** — `create_array` returns a Dask-backed `xarray.DataArray` you can compute when ready
-- **Service configuration** — `WCSConfig` / `ServiceConfig` describe endpoints, CRS, chunking, and caching
-- **Extensible services** — register custom service implementations via the service registry
+- Talks to a **WCS 2.0.1** endpoint and fetches GeoTIFF tiles
+- Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
+- Configures endpoints with `WCSConfig` (coordinate reference system, chunk size, cache, etc.)
+- Lets you register other service backends later via a small service registry
 
-## Installation
+## Install
 
-### Using uv (recommended)
+Python **3.9+**. Prefer [uv](https://github.com/astral-sh/uv):
 
 ```bash
 uv add tilearray
 ```
 
-### Using pip
+or:
 
 ```bash
 pip install tilearray
 ```
 
-Requires Python 3.9 or later.
-
 ## Quick start
 
-This example uses the public [Environment Agency Lidar DTM WCS](https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs) (see [example-sources.md](example-sources.md) for the URL and coverage id).
+Public [Environment Agency Lidar digital terrain model (DTM) WCS](https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs) — full URL and coverage id are also in [example-sources.md](example-sources.md).
 
 ```python
 from tilearray import create_array
@@ -48,13 +46,13 @@ coverage_id = "lidar-composite-digital-terrain-model-dtm-1m"
 config = WCSConfig.from_url(
     wcs_url,
     coverage_id=coverage_id,
-    crs=CRS.EPSG_27700,
+    crs=CRS.EPSG_27700,  # British National Grid
     output_format=Format.GEOTIFF,
     chunk_size=(800, 800),
     grid_shape=(1, 1),
 )
 
-# 800 m × 800 m tile in British National Grid (EPSG:27700)
+# 800 m × 800 m window in British National Grid (EPSG:27700)
 bbox = (431900.0, 382700.0, 432700.0, 383500.0)
 
 da = create_array(
@@ -63,30 +61,25 @@ da = create_array(
     crs=CRS.EPSG_27700,
 )
 
-# Lazy until you call .compute() or .load()
+# Still lazy until you compute
 elevation = da.compute()
 print(elevation.shape, float(elevation.mean()))
 ```
 
+> **Note:** the live Environment Agency Lidar path still has known rough edges (nodata / chunk sizing). Milestone 2 is fixing that so the mosaic looks right in a visual check.
+
 ### Public API
 
-| Export | Description |
-|--------|-------------|
-| `create_array`, `load_array` | Build lazy or eager xarray arrays from a service |
-| `WCSService`, `WCSParser` | Low-level WCS client and capabilities parser |
-| `WCSConfig`, `ServiceConfig` | Typed configuration for service endpoints |
-| `get_service`, `register_service`, `detect_service_type` | Service registry helpers |
+| Export | Role |
+|--------|------|
+| `create_array`, `load_array` | Lazy or eager xarray from a service |
+| `WCSService`, `WCSParser` | Low-level WCS client + capabilities |
+| `WCSConfig`, `ServiceConfig` | Endpoint / CRS / chunk config |
+| `get_service`, `register_service`, `detect_service_type` | Service registry |
 
-Import service types from `tilearray.service` (for example `from tilearray.service import WCSConfig`).
+Service types live under `tilearray.service` (e.g. `from tilearray.service import WCSConfig`).
 
 ## Development
-
-### Prerequisites
-
-- Python 3.9+
-- [uv](https://github.com/astral-sh/uv) for dependency management
-
-### Setup
 
 ```bash
 git clone https://github.com/MatthewJWhittle/tilearray.git
@@ -95,22 +88,13 @@ uv sync --dev
 make pre-commit
 ```
 
-### Running tests
-
 ```bash
-# Unit tests (default)
-make test
-
-# With coverage report
-make test-cov
-
-# Integration tests against live WCS endpoints (slow)
-uv run pytest -m integration
+make test          # unit tests
+make test-cov      # with coverage
+uv run pytest -m integration   # live WCS (slow)
 ```
 
-See [guidelines.md](guidelines.md) for project conventions and [TEST_IMPROVEMENT_PLAN.md](TEST_IMPROVEMENT_PLAN.md) for testing notes.
-
-### Code quality
+Conventions: [guidelines.md](guidelines.md). Testing notes: [TEST_IMPROVEMENT_PLAN.md](TEST_IMPROVEMENT_PLAN.md).
 
 ```bash
 make lint
@@ -118,14 +102,14 @@ make format
 make pre-commit-run
 ```
 
-## Project structure
+## Layout
 
 ```
 tilearray/
-├── src/tilearray/          # Library source
+├── src/tilearray/          # library
 │   ├── array.py            # create_array / load_array
-│   ├── service/            # WCS and service registry
-│   └── types.py            # CRS, Format, bounding boxes, etc.
+│   ├── service/            # WCS + registry
+│   └── types.py
 ├── tests/
 │   ├── unit/
 │   └── integration/
@@ -136,10 +120,10 @@ tilearray/
 
 ## Contributing
 
-1. Fork the repository and create a feature branch.
-2. Make your changes and run `make test && make lint`.
-3. Open a pull request against `main`.
+1. Fork and branch from `main`.
+2. Change code; run `make test && make lint`.
+3. Open a pull request.
 
 ## License
 
-This project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE).
