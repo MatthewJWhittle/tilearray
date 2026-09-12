@@ -1,3 +1,6 @@
+Public example endpoints and thin fetch presets for testing host quirks — not first-class product integrations. Prefer the presets in README quick start where they apply; use `from_url` for everything else.
+
+
 Google Satellite Imagery (X,Y,Z)
 http://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}
 Note: Google tiles are useful as a technical example but have usage restrictions; prefer open sources below for production.
@@ -5,15 +8,15 @@ Note: Google tiles are useful as a technical example but have usage restrictions
 
 OpenStreetMap raster tiles (XYZ)
 https://tile.openstreetmap.org/{z}/{x}/{y}.png
-Open data; include © OpenStreetMap contributors attribution when displaying.
+Prefer `XYZConfig.for_openstreetmap(zoom=...)`. The OpenStreetMap Foundation (OSMF) wants an identifiable User-Agent and polite use — the preset applies those defaults. Open data; include © OpenStreetMap contributors attribution when displaying.
 
 
 EA Lidar Digital Terrain Model (WCS)
 URL:
 https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs
 Layer ID (CoverageId):
-lidar-composite-digital-terrain-model-dtm-1m
-Note: For other WCS endpoints, list coverages with GetCapabilities on the service URL and use the `CoverageId` from the response (often the final path segment of the service URL).
+13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m
+Prefer `WCSConfig.for_ea_dsp(...)` with this coverage id. The CoverageId comes from GetCapabilities (often `UUID__LayerName`) — never assume the URL path slug is the id.
 
 
 VOM (WMS)
