@@ -12,6 +12,7 @@ import pytest
 import respx
 
 from tilearray.fetch import (
+    AdaptiveConcurrencyGate,
     FetchPolicy,
     FetchProgress,
     PerHostRateLimiter,
@@ -198,6 +199,178 @@ def test_builtin_rate_limiter_delays_requests() -> None:
     elapsed = time.monotonic() - started
 
     assert elapsed >= 0.05
+
+
+@respx.mock
+def test_token_bucket_allows_initial_burst() -> None:
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(200, content=b"x")
+    )
+    policy = FetchPolicy(max_concurrent=2, rate_limit_per_second=1.0)
+    fetcher = TileFetcher.for_policy(policy)
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [
+            pool.submit(fetcher.fetch, _tile_request(retries=0)) for _ in range(2)
+        ]
+        for future in futures:
+            future.result()
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.5
+
+
+@respx.mock
+def test_aimd_increases_limit_after_successes() -> None:
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(200, content=b"x")
+    )
+    policy = FetchPolicy(
+        max_concurrent=4,
+        initial_concurrent=1,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+    request = _tile_request(retries=0)
+
+    for _ in range(3):
+        response = fetcher.fetch(request)
+        assert response.success is True
+
+    assert fetcher.stats.peak_concurrency_limit >= 3
+
+
+@respx.mock
+def test_aimd_decreases_limit_on_429() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(429, headers={"Retry-After": "0"}),
+        httpx.Response(200, content=b"ok"),
+    ]
+    policy = FetchPolicy(
+        max_concurrent=8,
+        initial_concurrent=4,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+        retries=1,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    response = fetcher.fetch(_tile_request(retries=1))
+    gate = fetcher._adaptive_gate
+    assert gate is not None
+
+    assert response.success is True
+    assert fetcher.stats.concurrency_decreases >= 1
+
+
+@respx.mock
+def test_aimd_decreases_limit_on_timeout() -> None:
+    respx.get("https://example.com/tile").mock(
+        side_effect=httpx.ReadTimeout("timed out")
+    )
+    policy = FetchPolicy(
+        max_concurrent=8,
+        initial_concurrent=4,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+        retries=0,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    response = fetcher.fetch(_tile_request(retries=0))
+    gate = fetcher._adaptive_gate
+    assert gate is not None
+
+    assert response.success is False
+    assert fetcher.stats.concurrency_decreases >= 1
+    assert gate.current_limit("example.com") <= 2
+
+
+def test_adaptive_gate_ramps_with_queued_waiters() -> None:
+    """Per-success increase is required: queued tiles keep inflight > 0 mid-batch."""
+
+    gate = AdaptiveConcurrencyGate(initial=2, minimum=1, maximum=16)
+    release = threading.Event()
+
+    def worker() -> None:
+        gate.acquire("host")
+        release.wait(timeout=1)
+        time.sleep(0.01)
+        gate.finish_success("host")
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(worker) for _ in range(3)]
+        time.sleep(0.05)
+        release.set()
+        for future in futures:
+            future.result()
+
+    assert gate.current_limit("host") >= 3
+
+
+def test_adaptive_gate_slow_start_then_additive() -> None:
+    gate = AdaptiveConcurrencyGate(initial=2, minimum=1, maximum=16)
+
+    gate.record_success("host")
+    assert gate.current_limit("host") == 4
+
+    gate.record_success("host")
+    assert gate.current_limit("host") == 6
+
+    gate.record_pressure("host")
+    assert gate.current_limit("host") == 3
+    assert gate.decrease_count == 1
+
+
+@respx.mock
+def test_aimd_realistic_latency_skipton_scale() -> None:
+    tile_latency_s = 0.08
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        time.sleep(tile_latency_s)
+        return httpx.Response(200, content=b"x")
+
+    respx.get("https://example.com/tile").mock(side_effect=handler)
+    policy = FetchPolicy(
+        max_concurrent=16,
+        initial_concurrent=2,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+    request = _tile_request(retries=0)
+
+    fixed_policy = FetchPolicy(
+        max_concurrent=2,
+        adaptive_concurrency=False,
+        rate_limit_per_second=None,
+    )
+    fixed_fetcher = TileFetcher.for_policy(fixed_policy)
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futures = [pool.submit(fetcher.fetch, request) for _ in range(16)]
+        for future in futures:
+            future.result()
+    aimd_elapsed = time.monotonic() - started
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futures = [pool.submit(fixed_fetcher.fetch, request) for _ in range(16)]
+        for future in futures:
+            future.result()
+    fixed_elapsed = time.monotonic() - started
+
+    assert fetcher.stats.peak_concurrency_limit >= 8
+    assert fetcher.stats.max_inflight >= 8
+    assert aimd_elapsed < fixed_elapsed * 0.75
 
 
 def test_fetch_progress_callback_records_failures() -> None:

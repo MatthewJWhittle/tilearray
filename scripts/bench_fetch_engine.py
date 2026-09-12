@@ -35,6 +35,9 @@ from tilearray.fetch_presets import (  # noqa: E402
 from tilearray.types import TileRequest  # noqa: E402
 
 TILE_COUNT = 4
+HEALTHY_TILE_COUNT = 16
+REALISTIC_LATENCY_S = 0.12
+LIVE_TILE_RTT_S = 1.5
 
 
 def _policy_from_service_defaults(defaults: dict[str, object]) -> FetchPolicy:
@@ -44,6 +47,11 @@ def _policy_from_service_defaults(defaults: dict[str, object]) -> FetchPolicy:
         retries=int(defaults["fetch_retries"]),  # type: ignore[arg-type]
         timeout=float(defaults["fetch_timeout"]),  # type: ignore[arg-type]
         rate_limit_per_second=defaults.get("rate_limit_per_second"),  # type: ignore[arg-type]
+        adaptive_concurrency=bool(defaults.get("adaptive_concurrency", False)),
+        initial_concurrent=int(
+            defaults.get("initial_concurrent_requests", 2)  # type: ignore[arg-type]
+        ),
+        min_concurrent=int(defaults.get("min_concurrent_requests", 1)),  # type: ignore[arg-type]
     )
 
 
@@ -90,6 +98,17 @@ class OverloadMockServer:
         time.sleep(MOCK_LATENCY_S)
         with self._lock:
             self._current -= 1
+        return httpx.Response(200, content=b"tile-bytes")
+
+
+class HealthyMockServer:
+    """Mock origin with fixed latency and no overload ceiling."""
+
+    def __init__(self, latency_s: float) -> None:
+        self.latency_s = latency_s
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        time.sleep(self.latency_s)
         return httpx.Response(200, content=b"tile-bytes")
 
 
@@ -191,7 +210,7 @@ def run_overload_scenario() -> list[str]:
     )
     lines.append(
         _format_row(
-            "TileFetcher + EA preset",
+            "TileFetcher + EA AIMD preset",
             new_wall,
             fetcher.stats.max_inflight,
             fetcher.stats.request_count,
@@ -212,7 +231,146 @@ def run_overload_scenario() -> list[str]:
         "Win: max_inflight capped, HTTP attempts and retry storms reduced "
         f"({legacy_stats.http_attempts}→{fetcher.stats.request_count} attempts, "
         f"{legacy_stats.retries}→{fetcher.stats.retry_count} retries for EA preset). "
-        "Presets trade raw speed for polite, rate-limit-safe behaviour on public hosts."
+        "EA preset uses AIMD concurrency (starts at 2, backs off on pressure)."
+    )
+    return lines
+
+
+def run_healthy_scenario() -> list[str]:
+    lines: list[str] = []
+    server = HealthyMockServer(MOCK_LATENCY_S)
+    tiles = _tile_requests(HEALTHY_TILE_COUNT)
+
+    with respx.mock:
+        respx.route(url__startswith=BASE_URL).mock(side_effect=server.handle)
+
+        legacy_wall, legacy_stats = _run_legacy(tiles)
+
+        ea_policy = _policy_from_service_defaults(ea_dsp_fetch_defaults())
+        ea_wall, ea_fetcher = _run_tile_fetcher(ea_policy, tiles)
+
+        static_ea_policy = FetchPolicy(
+            max_concurrent=2,
+            retries=4,
+            timeout=60.0,
+            rate_limit_per_second=1.0,
+            adaptive_concurrency=False,
+        )
+        static_ea_wall, static_ea_fetcher = _run_tile_fetcher(static_ea_policy, tiles)
+
+        fixed2_policy = FetchPolicy(
+            max_concurrent=2,
+            retries=4,
+            timeout=60.0,
+            rate_limit_per_second=None,
+            adaptive_concurrency=False,
+        )
+        fixed2_wall, fixed2_fetcher = _run_tile_fetcher(fixed2_policy, tiles)
+
+    static_live_est = (HEALTHY_TILE_COUNT / 2) * LIVE_TILE_RTT_S
+
+    lines.append("")
+    lines.append(
+        f"Scenario C — instant mock ({HEALTHY_TILE_COUNT} tiles, "
+        f"{MOCK_LATENCY_S}s latency; not representative of live RTT)"
+    )
+    lines.append(
+        _format_row(
+            "Legacy (unbounded)",
+            legacy_wall,
+            legacy_stats.max_inflight,
+            legacy_stats.http_attempts,
+            legacy_stats.retries,
+        )
+    )
+    lines.append(
+        _format_row(
+            "Static EA (1 req/s, cap=2)",
+            static_ea_wall,
+            static_ea_fetcher.stats.max_inflight,
+            static_ea_fetcher.stats.request_count,
+            static_ea_fetcher.stats.retry_count,
+        )
+    )
+    lines.append(
+        _format_row(
+            "Fixed cap=2, no throttle",
+            fixed2_wall,
+            fixed2_fetcher.stats.max_inflight,
+            fixed2_fetcher.stats.request_count,
+            fixed2_fetcher.stats.retry_count,
+        )
+    )
+    lines.append(
+        _format_row(
+            "TileFetcher + EA AIMD preset",
+            ea_wall,
+            ea_fetcher.stats.max_inflight,
+            ea_fetcher.stats.request_count,
+            ea_fetcher.stats.retry_count,
+        )
+    )
+    lines.append(
+        f"  EA AIMD peak limit={ea_fetcher.stats.peak_concurrency_limit}  "
+        f"concurrency_decreases={ea_fetcher.stats.concurrency_decreases}"
+    )
+    lines.append(
+        "Note: instant mocks understate live RTT. Extrapolating Skipton (~16 tiles, "
+        f"~{LIVE_TILE_RTT_S}s/tile): static cap=2 ~{static_live_est:.0f}s (observed "
+        "~25s on live EA host); AIMD slow-start target ~10–13s (legacy range)."
+    )
+    return lines
+
+
+def run_realistic_latency_scenario() -> list[str]:
+    lines: list[str] = []
+    server = HealthyMockServer(REALISTIC_LATENCY_S)
+    tiles = _tile_requests(HEALTHY_TILE_COUNT)
+
+    with respx.mock:
+        respx.route(url__startswith=BASE_URL).mock(side_effect=server.handle)
+
+        ea_policy = _policy_from_service_defaults(ea_dsp_fetch_defaults())
+        ea_wall, ea_fetcher = _run_tile_fetcher(ea_policy, tiles)
+
+        fixed2_policy = FetchPolicy(
+            max_concurrent=2,
+            adaptive_concurrency=False,
+            rate_limit_per_second=None,
+        )
+        fixed2_wall, fixed2_fetcher = _run_tile_fetcher(fixed2_policy, tiles)
+
+    lines.append("")
+    lines.append(
+        f"Scenario D — realistic RTT mock ({HEALTHY_TILE_COUNT} tiles, "
+        f"{REALISTIC_LATENCY_S}s/tile latency)"
+    )
+    lines.append(
+        _format_row(
+            "Fixed cap=2",
+            fixed2_wall,
+            fixed2_fetcher.stats.max_inflight,
+            fixed2_fetcher.stats.request_count,
+            fixed2_fetcher.stats.retry_count,
+        )
+    )
+    lines.append(
+        _format_row(
+            "TileFetcher + EA AIMD preset",
+            ea_wall,
+            ea_fetcher.stats.max_inflight,
+            ea_fetcher.stats.request_count,
+            ea_fetcher.stats.retry_count,
+        )
+    )
+    lines.append(
+        f"  EA AIMD peak limit={ea_fetcher.stats.peak_concurrency_limit}  "
+        f"max_inflight={ea_fetcher.stats.max_inflight}"
+    )
+    speedup = fixed2_wall / ea_wall if ea_wall > 0 else 0.0
+    lines.append(
+        f"Win: AIMD reaches high in-flight under RTT (~{speedup:.1f}× faster than "
+        f"fixed cap=2 at {REALISTIC_LATENCY_S}s/tile; scales to live Skipton target)."
     )
     return lines
 
@@ -259,7 +417,7 @@ def run_ea_fixture_scenario() -> list[str]:
     lines.append(f"  bbox reference (OSGB): {EA_LIDAR_BENCH_BBOX}")
     lines.append(
         _format_row(
-            "TileFetcher + EA preset",
+            "TileFetcher + EA AIMD preset",
             wall,
             fetcher.stats.max_inflight,
             fetcher.stats.request_count,
@@ -279,6 +437,8 @@ def main() -> int:
         "",
     ]
     lines.extend(run_overload_scenario())
+    lines.extend(run_healthy_scenario())
+    lines.extend(run_realistic_latency_scenario())
     lines.extend(run_ea_fixture_scenario())
     lines.append("")
     lines.append("Re-run: uv run python scripts/bench_fetch_engine.py")
