@@ -1,164 +1,145 @@
-# OGC Array
+# tilearray
 
-A Python library for OGC (Open Geospatial Consortium) array operations.
+Load geospatial tiles from remote OGC-style services into lazy **xarray** / **dask** arrays.
 
-[![Tests](https://github.com/yourusername/ogc-array/workflows/Test/badge.svg)](https://github.com/yourusername/ogc-array/actions)
-[![Build](https://github.com/yourusername/ogc-array/workflows/Build%20and%20Publish/badge.svg)](https://github.com/yourusername/ogc-array/actions)
-[![codecov](https://codecov.io/gh/yourusername/ogc-array/branch/main/graph/badge.svg)](https://codecov.io/gh/yourusername/ogc-array)
-[![PyPI version](https://badge.fury.io/py/ogc-array.svg)](https://badge.fury.io/py/ogc-array)
-[![Python versions](https://img.shields.io/pypi/pyversions/ogc-array.svg)](https://pypi.org/project/ogc-array/)
+[![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
+[![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
+
+> **Alpha status.** The API and behaviour may change. Only **Web Coverage Service (WCS)** is implemented today. WMS, WMTS, and XYZ appear in type definitions and configuration but are not yet supported.
 
 ## Features
 
-- **Array Processing**: Efficient processing of OGC array data structures
-- **NumPy Integration**: Built on top of NumPy for high-performance operations
-- **Type Safety**: Full type hints and mypy support
-- **Testing**: Comprehensive test suite with pytest
-- **CI/CD**: Automated testing and building with GitHub Actions
+- **WCS support** — fetch GeoTIFF coverage tiles from WCS 2.0.1 endpoints
+- **Lazy arrays** — `create_array` returns a Dask-backed `xarray.DataArray` you can compute when ready
+- **Service configuration** — `WCSConfig` / `ServiceConfig` describe endpoints, CRS, chunking, and caching
+- **Extensible services** — register custom service implementations via the service registry
 
 ## Installation
 
-### Using uv (Recommended)
+### Using uv (recommended)
 
 ```bash
-uv add ogc-array
+uv add tilearray
 ```
 
 ### Using pip
 
 ```bash
-pip install ogc-array
+pip install tilearray
 ```
 
-## Quick Start
+Requires Python 3.9 or later.
+
+## Quick start
+
+This example uses the public [Environment Agency Lidar DTM WCS](https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs) (see [example-sources.md](example-sources.md) for the URL and coverage id).
 
 ```python
-import numpy as np
-from ogc_array import ArrayProcessor
+from tilearray import create_array
+from tilearray.service import WCSConfig
+from tilearray.types import CRS, Format
 
-# Create a processor
-processor = ArrayProcessor()
+wcs_url = (
+    "https://environment.data.gov.uk/spatialdata/"
+    "lidar-composite-digital-terrain-model-dtm-1m/wcs"
+)
+coverage_id = "lidar-composite-digital-terrain-model-dtm-1m"
 
-# Set some data
-data = np.array([1, 2, 3, 4, 5])
-processor.set_data(data)
+config = WCSConfig.from_url(
+    wcs_url,
+    coverage_id=coverage_id,
+    crs=CRS.EPSG_27700,
+    output_format=Format.GEOTIFF,
+    chunk_size=(800, 800),
+    grid_shape=(1, 1),
+)
 
-# Process the data
-mean_value = processor.process("mean")
-print(f"Mean: {mean_value}")  # Output: Mean: 3.0
+# 800 m × 800 m tile in British National Grid (EPSG:27700)
+bbox = (431900.0, 382700.0, 432700.0, 383500.0)
 
-# Get array information
-print(f"Shape: {processor.get_shape()}")  # Output: Shape: (5,)
-print(f"Data type: {processor.get_dtype()}")  # Output: Data type: int64
+da = create_array(
+    service_url=config,
+    bbox=bbox,
+    crs=CRS.EPSG_27700,
+)
+
+# Lazy until you call .compute() or .load()
+elevation = da.compute()
+print(elevation.shape, float(elevation.mean()))
 ```
+
+### Public API
+
+| Export | Description |
+|--------|-------------|
+| `create_array`, `load_array` | Build lazy or eager xarray arrays from a service |
+| `WCSService`, `WCSParser` | Low-level WCS client and capabilities parser |
+| `WCSConfig`, `ServiceConfig` | Typed configuration for service endpoints |
+| `get_service`, `register_service`, `detect_service_type` | Service registry helpers |
+
+Import service types from `tilearray.service` (for example `from tilearray.service import WCSConfig`).
 
 ## Development
 
 ### Prerequisites
 
-- Python 3.8+
-- [uv](https://github.com/astral-sh/uv) for package management
+- Python 3.9+
+- [uv](https://github.com/astral-sh/uv) for dependency management
 
 ### Setup
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/ogc-array.git
-cd ogc-array
-```
-
-2. Install dependencies:
-```bash
+git clone https://github.com/MatthewJWhittle/tilearray.git
+cd tilearray
 uv sync --dev
-```
-
-3. Install pre-commit hooks:
-```bash
 make pre-commit
 ```
 
-### Running Tests
+### Running tests
 
 ```bash
-# Run all tests
+# Unit tests (default)
 make test
 
-# Run tests with coverage
+# With coverage report
 make test-cov
 
-# Run specific test file
-uv run pytest tests/test_core.py
+# Integration tests against live WCS endpoints (slow)
+uv run pytest -m integration
 ```
 
-### Code Quality
+See [guidelines.md](guidelines.md) for project conventions and [TEST_IMPROVEMENT_PLAN.md](TEST_IMPROVEMENT_PLAN.md) for testing notes.
+
+### Code quality
 
 ```bash
-# Run linting
 make lint
-
-# Format code
 make format
-
-# Run pre-commit on all files
 make pre-commit-run
 ```
 
-### Building
-
-```bash
-# Build the package
-make build
-
-# Clean build artifacts
-make clean
-```
-
-## Project Structure
+## Project structure
 
 ```
-ogc-array/
-├── ogc_array/
-│   ├── __init__.py
-│   └── core.py
+tilearray/
+├── src/tilearray/          # Library source
+│   ├── array.py            # create_array / load_array
+│   ├── service/            # WCS and service registry
+│   └── types.py            # CRS, Format, bounding boxes, etc.
 ├── tests/
-│   ├── __init__.py
-│   ├── conftest.py
-│   └── test_core.py
-├── notebooks/
-│   ├── examples/
-│   │   └── basic_usage.ipynb
-│   └── README.md
-├── .github/
-│   └── workflows/
-│       ├── test.yml
-│       └── build.yml
-├── pyproject.toml
-├── Makefile
-├── tox.ini
-├── .pre-commit-config.yaml
-└── README.md
+│   ├── unit/
+│   └── integration/
+├── notebooks/examples/
+├── guidelines.md
+└── example-sources.md
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests and linting (`make test && make lint`)
-5. Commit your changes (`git commit -m 'Add some amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+1. Fork the repository and create a feature branch.
+2. Make your changes and run `make test && make lint`.
+3. Open a pull request against `main`.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Changelog
-
-### 0.1.0 (2024-01-XX)
-
-- Initial release
-- Basic ArrayProcessor class
-- NumPy integration
-- Comprehensive test suite
-- CI/CD pipeline setup
+This project is licensed under the Apache License 2.0 — see [LICENSE](LICENSE).

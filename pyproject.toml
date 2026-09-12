@@ -9,12 +9,12 @@ description = "A Python library for loading geospatial data from remote tile ser
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"},
+    {name = "Matthew Whittle"},
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -52,10 +52,10 @@ docs = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/ogc-array"
-Repository = "https://github.com/yourusername/ogc-array"
-Documentation = "https://ogc-array.readthedocs.io"
-"Bug Tracker" = "https://github.com/yourusername/ogc-array/issues"
+Homepage = "https://github.com/MatthewJWhittle/tilearray"
+Repository = "https://github.com/MatthewJWhittle/tilearray"
+Documentation = "https://github.com/MatthewJWhittle/tilearray#readme"
+"Bug Tracker" = "https://github.com/MatthewJWhittle/tilearray/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/tilearray"]
