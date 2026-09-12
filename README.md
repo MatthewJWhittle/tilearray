@@ -12,7 +12,7 @@ Pull geospatial **coverage tiles** from remote map services into Python as lazy 
 - Talks to a **WCS 2.0.1** endpoint and fetches GeoTIFF tiles, or fetches **XYZ** PNG tiles from a URL template
 - Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
 - Configures endpoints with `WCSConfig` or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
-- Fetches tiles through a shared HTTP engine with bounded concurrency, retries, optional rate limits, and **adaptive concurrency (AIMD)** where enabled — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS)
+- Fetches tiles through a shared HTTP engine with bounded concurrency, retries (including gateway **403** / **408**), optional rate limits, and **adaptive concurrency (AIMD)** where enabled — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS). Failed tiles after retries raise `NetworkError` rather than leaving silent NaN holes.
 - Lets you register other service backends later via a small service registry
 
 ## Install
@@ -98,6 +98,14 @@ Two thin presets exist because public hosts want **different** behaviour — not
 
 - **`WCSConfig.for_ea_dsp()`** — [Environment Agency Data Service Platform (EA DSP)](https://environment.data.gov.uk/) WCS. Uses **AIMD** (*additive increase, multiplicative decrease*): starts at 8 in-flight (warm), ramps while the host is happy (up to 32), remembers the last good per-host limit in-process for later mosaics, and backs off on 403/408/429/`Retry-After`/503/timeouts (×0.5, floor 1). No fixed requests-per-second cap — you do not set the limit on every call. Four retries, 60 s timeout; `Retry-After` is still honoured by `TileFetcher`. Failed tiles after retries raise `NetworkError` (no silent NaN holes).
 - **`XYZConfig.for_openstreetmap()`** — [OpenStreetMap Foundation (OSMF)](https://operations.osmfoundation.org/policies/tiles/) tile policy: identifiable User-Agent, **fixed** polite limits (max 2 in-flight, ~2 requests per second). Not AIMD — OSMF policy wants low, steady load rather than ramping concurrency.
+
+**Retries / gateway pressure**
+
+- Retryable HTTP codes: **403, 408, 429, 502, 503, 504** (Azure Application Gateway often returns **403** for throttle/WAF pressure, not only 429).
+- EA preset: **4** retries; wait = `Retry-After` if present, else exponential backoff + jitter.
+- Those codes also trigger AIMD **pressure** (×0.5 in-flight).
+- If a tile still fails after retries: raises `NetworkError` — mosaics do **not** succeed with silent NaN holes.
+- Live 256-tile EA stress: previously ~18% holes at ~27 s; after fix `finite_frac=1.0` with ~40 retries (~49 s).
 
 These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields (`adaptive_concurrency`, `initial_concurrent_requests`, `min_concurrent_requests`, `max_concurrent_requests`, `rate_limit_per_second`, and so on). The EA preset ceiling of 32 is a safety max AIMD tunes under (`max_concurrent_requests`) — it only helps if Dask can run that many tile fetches in parallel (`create_array(..., compute=True)` sets `num_workers=max(cpu_count, max_concurrent)` automatically; for manual `.compute()`, pass the same or use `compute_thread_pool_size(fetch_policy)`).
 

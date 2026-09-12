@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- README Fetch presets: retries / gateway pressure note (403/408, AIMD pressure, fail-loud mosaics)
 - `load_array` / `create_array` raise `NetworkError` when a tile fetch fails after retries instead of silently filling failed regions with NaN
 - README Fetch presets: live 64-tile (~5 km) bench (~20 s at ceiling 16 / `max_inflight` 8 → ~14.7 s at ceiling 32 with aligned Dask workers); `compute_thread_pool_size` noted in Public API table
 - README Fetch presets: honest Skipton warm-start timings and note that EA ceiling 32 is a tunable safety max
