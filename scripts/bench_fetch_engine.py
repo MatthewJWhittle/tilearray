@@ -45,6 +45,11 @@ def _policy_from_service_defaults(defaults: dict[str, object]) -> FetchPolicy:
         retries=int(defaults["fetch_retries"]),  # type: ignore[arg-type]
         timeout=float(defaults["fetch_timeout"]),  # type: ignore[arg-type]
         rate_limit_per_second=defaults.get("rate_limit_per_second"),  # type: ignore[arg-type]
+        adaptive_concurrency=bool(defaults.get("adaptive_concurrency", False)),
+        initial_concurrent=int(
+            defaults.get("initial_concurrent_requests", 2)  # type: ignore[arg-type]
+        ),
+        min_concurrent=int(defaults.get("min_concurrent_requests", 1)),  # type: ignore[arg-type]
     )
 
 
@@ -203,7 +208,7 @@ def run_overload_scenario() -> list[str]:
     )
     lines.append(
         _format_row(
-            "TileFetcher + EA preset",
+            "TileFetcher + EA AIMD preset",
             new_wall,
             fetcher.stats.max_inflight,
             fetcher.stats.request_count,
@@ -224,7 +229,7 @@ def run_overload_scenario() -> list[str]:
         "Win: max_inflight capped, HTTP attempts and retry storms reduced "
         f"({legacy_stats.http_attempts}→{fetcher.stats.request_count} attempts, "
         f"{legacy_stats.retries}→{fetcher.stats.retry_count} retries for EA preset). "
-        "EA preset keeps a modest in-flight cap without a fixed per-second throttle."
+        "EA preset uses AIMD concurrency (starts at 2, backs off on pressure)."
     )
     return lines
 
@@ -247,6 +252,7 @@ def run_healthy_scenario() -> list[str]:
             retries=4,
             timeout=60.0,
             rate_limit_per_second=1.0,
+            adaptive_concurrency=False,
         )
         old_ea_wall, old_ea_fetcher = _run_tile_fetcher(old_ea_policy, tiles)
 
@@ -275,7 +281,7 @@ def run_healthy_scenario() -> list[str]:
     )
     lines.append(
         _format_row(
-            "TileFetcher + EA preset",
+            "TileFetcher + EA AIMD preset",
             ea_wall,
             ea_fetcher.stats.max_inflight,
             ea_fetcher.stats.request_count,
@@ -283,9 +289,13 @@ def run_healthy_scenario() -> list[str]:
         )
     )
     lines.append(
-        "Win: healthy-path wall time drops when the fixed 1 req/s throttle is removed "
-        f"({old_ea_wall:.3f}s → {ea_wall:.3f}s on this mock; "
-        f"legacy reference {legacy_wall:.3f}s)."
+        f"  EA AIMD peak limit={ea_fetcher.stats.peak_concurrency_limit}  "
+        f"concurrency_decreases={ea_fetcher.stats.concurrency_decreases}"
+    )
+    lines.append(
+        "Win: Skipton-scale (~16 tiles) healthy path — static 1 req/s EA baseline "
+        f"~{old_ea_wall:.1f}s on mock (~25s live) → AIMD ~{ea_wall:.3f}s on mock "
+        f"(target ~10–13s live; legacy reference {legacy_wall:.3f}s on mock)."
     )
     return lines
 
@@ -332,7 +342,7 @@ def run_ea_fixture_scenario() -> list[str]:
     lines.append(f"  bbox reference (OSGB): {EA_LIDAR_BENCH_BBOX}")
     lines.append(
         _format_row(
-            "TileFetcher + EA preset",
+            "TileFetcher + EA AIMD preset",
             wall,
             fetcher.stats.max_inflight,
             fetcher.stats.request_count,

@@ -54,6 +54,23 @@ class ServiceConfig(BaseModel):
         ge=1,
         description="Maximum in-flight tile HTTP requests for this service",
     )
+    initial_concurrent_requests: int = Field(
+        default=2,
+        ge=1,
+        description="Starting in-flight limit when adaptive_concurrency is enabled",
+    )
+    min_concurrent_requests: int = Field(
+        default=1,
+        ge=1,
+        description="Floor in-flight limit after AIMD multiplicative decrease",
+    )
+    adaptive_concurrency: bool = Field(
+        default=False,
+        description=(
+            "Enable per-host AIMD concurrency (additive increase on success, "
+            "multiplicative decrease on 429/timeouts)"
+        ),
+    )
     max_connections: int | None = Field(
         default=None,
         ge=1,
@@ -103,6 +120,9 @@ class ServiceConfig(BaseModel):
             timeout=self.fetch_timeout,
             rate_limit_per_second=self.rate_limit_per_second,
             rate_limiter=self.rate_limiter,
+            adaptive_concurrency=self.adaptive_concurrency,
+            initial_concurrent=self.initial_concurrent_requests,
+            min_concurrent=self.min_concurrent_requests,
         )
 
     def service_kwargs(self) -> dict[str, Any]:
@@ -175,8 +195,8 @@ class WCSConfig(ServiceConfig):
         """
         WCS preset for Environment Agency Data Service Platform endpoints.
 
-        Applies a modest in-flight cap plus extra retries for Retry-After /
-        429 / 503 behaviour. No fixed per-second throttle on the healthy path.
+        Enables per-host AIMD concurrency (starts at 2, ceiling 8) plus extra
+        retries for Retry-After / 429 / 503 behaviour.
         """
 
         from ..fetch_presets import ea_dsp_fetch_defaults

@@ -42,6 +42,7 @@ def osm_fetch_defaults(
 
     return {
         "max_concurrent_requests": 2,
+        "adaptive_concurrency": False,
         "rate_limit_per_second": 2.0,
         "fetch_retries": 2,
         "fetch_timeout": 30.0,
@@ -55,13 +56,16 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
     """
     Fetch defaults for Environment Agency Data Service Platform WCS endpoints.
 
-    Uses a modest in-flight cap to avoid overload retry storms on busy hosts,
-    while leaving the healthy path unconstrained by a fixed per-second throttle
-    (429/503 and ``Retry-After`` are handled by :class:`~tilearray.fetch.TileFetcher`).
+    Uses in-process AIMD concurrency (starts modest, ramps on success, backs off
+    hard on 429 / timeouts) with a bounded ceiling. No fixed per-second throttle;
+    ``Retry-After`` and transient 429/503 are handled by :class:`~tilearray.fetch.TileFetcher`.
     """
 
     return {
-        "max_concurrent_requests": 2,
+        "max_concurrent_requests": 8,
+        "initial_concurrent_requests": 2,
+        "min_concurrent_requests": 1,
+        "adaptive_concurrency": True,
         "rate_limit_per_second": None,
         "fetch_retries": 4,
         "fetch_timeout": 60.0,

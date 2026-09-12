@@ -20,14 +20,18 @@ pytestmark = pytest.mark.unit
 def test_osm_fetch_defaults_include_user_agent() -> None:
     defaults = osm_fetch_defaults()
     assert defaults["max_concurrent_requests"] == 2
+    assert defaults["adaptive_concurrency"] is False
     assert defaults["rate_limit_per_second"] == 2.0
     assert "User-Agent" in defaults["headers"]
     assert "tilearray/" in defaults["headers"]["User-Agent"]
 
 
-def test_ea_dsp_fetch_defaults_are_conservative() -> None:
+def test_ea_dsp_fetch_defaults_use_aimd() -> None:
     defaults = ea_dsp_fetch_defaults()
-    assert defaults["max_concurrent_requests"] == 2
+    assert defaults["max_concurrent_requests"] == 8
+    assert defaults["initial_concurrent_requests"] == 2
+    assert defaults["min_concurrent_requests"] == 1
+    assert defaults["adaptive_concurrency"] is True
     assert defaults["rate_limit_per_second"] is None
     assert defaults["fetch_retries"] == 4
     assert defaults["fetch_timeout"] == 60.0
@@ -37,10 +41,12 @@ def test_xyz_config_for_openstreetmap_applies_preset() -> None:
     config = XYZConfig.for_openstreetmap(zoom=16, output_format=Format.PNG)
     assert config.base_url == OSM_TILE_TEMPLATE
     assert config.max_concurrent_requests == 2
+    assert config.adaptive_concurrency is False
     assert config.rate_limit_per_second == 2.0
     assert "User-Agent" in config.headers
     policy = config.fetch_policy()
     assert policy.max_concurrent == 2
+    assert policy.adaptive_concurrency is False
     assert policy.rate_limit_per_second == 2.0
 
 
@@ -49,12 +55,17 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
         "https://environment.data.gov.uk/example/wcs",
         coverage_id="test-coverage",
     )
-    assert config.max_concurrent_requests == 2
+    assert config.max_concurrent_requests == 8
+    assert config.initial_concurrent_requests == 2
+    assert config.adaptive_concurrency is True
     assert config.fetch_retries == 4
     assert config.rate_limit_per_second is None
     policy = config.fetch_policy()
     assert isinstance(policy, FetchPolicy)
     assert policy.retries == 4
+    assert policy.adaptive_concurrency is True
+    assert policy.initial_concurrent == 2
+    assert policy.max_concurrent == 8
 
 
 def test_custom_osm_user_agent() -> None:

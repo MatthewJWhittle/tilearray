@@ -352,6 +352,15 @@ def _resolve_fetch_policy(
             "rate_limit_per_second", base.rate_limit_per_second
         ),
         rate_limiter=service_options.pop("rate_limiter", base.rate_limiter),
+        adaptive_concurrency=service_options.pop(
+            "adaptive_concurrency", base.adaptive_concurrency
+        ),
+        initial_concurrent=service_options.pop(
+            "initial_concurrent_requests", base.initial_concurrent
+        ),
+        min_concurrent=service_options.pop(
+            "min_concurrent_requests", base.min_concurrent
+        ),
     )
 
 
