@@ -152,3 +152,41 @@ class WCSConfig(ServiceConfig):
         return kwargs
 
 
+class XYZConfig(ServiceConfig):
+    """Configuration helper for XYZ / slippy-map tile templates."""
+
+    zoom: int = Field(..., ge=0, description="Fixed zoom level for tile requests")
+    tile_size: int = Field(default=256, gt=0, description="Tile edge length in pixels")
+    service_type: ServiceTypeEnum = Field(
+        default=ServiceTypeEnum.XYZ, init=False, description="Service type constant"
+    )
+
+    @classmethod
+    def from_url(cls, url: str, *, zoom: int, **kwargs: Any) -> "XYZConfig":
+        """Convenience constructor for XYZ tile templates."""
+
+        return cls(base_url=url, zoom=zoom, **kwargs)
+
+    def build_service(self) -> BaseService:
+        """Construct an ``XYZService`` instance from this configuration."""
+
+        from .xyz import XYZService
+
+        kwargs = self.service_kwargs()
+        kwargs.setdefault("zoom", self.zoom)
+        kwargs.setdefault("tile_size", self.tile_size)
+        return XYZService(self.base_url, **kwargs)
+
+    def service_kwargs(self) -> Dict[str, Any]:
+        kwargs = super().service_kwargs()
+        kwargs.setdefault("zoom", self.zoom)
+        kwargs.setdefault("tile_size", self.tile_size)
+        return kwargs
+
+    def tile_kwargs(self) -> Dict[str, Any]:
+        kwargs = super().tile_kwargs()
+        kwargs["zoom"] = self.zoom
+        kwargs["tile_size"] = self.tile_size
+        return kwargs
+
+

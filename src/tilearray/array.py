@@ -207,6 +207,15 @@ class ArrayRequest(BaseModel):
             **dict(tile_options),
         )
         tile_requests = list(tile_requests_iter)
+
+        inferred_grid = getattr(service, "inferred_grid_shape", None)
+        if (
+            inferred_grid is not None
+            and self.grid_shape == (1, 1)
+            and len(tile_requests) > 1
+        ):
+            self.grid_shape = inferred_grid
+
         return tile_requests, tile_options
 
     def array_attrs(

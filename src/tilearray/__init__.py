@@ -6,7 +6,15 @@ __author__ = "Your Name"
 __email__ = "your.email@example.com"
 
 from .array import create_array, load_array
-from .service import BaseService, TileGeometry, detect_service_type, get_service, register_service
+from .service import (
+    BaseService,
+    TileGeometry,
+    XYZConfig,
+    XYZService,
+    detect_service_type,
+    get_service,
+    register_service,
+)
 from .service.wcs import WCSParser, WCSService
 from .types import (
     BBoxTuple,
@@ -34,6 +42,8 @@ __all__ = [
     "detect_service_type",
     "get_service",
     "register_service",
+    "XYZConfig",
+    "XYZService",
     "WCSParser",
     "WCSService",
     "BBoxTuple",

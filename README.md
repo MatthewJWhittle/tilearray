@@ -5,13 +5,13 @@ Pull geospatial **coverage tiles** from remote map services into Python as lazy 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
 
-> **Alpha.** The API may change. Today only **Web Coverage Service (WCS)** — the Open Geospatial Consortium protocol that returns the actual raster values (not just a picture) — is implemented. **Web Map Service (WMS)**, **Web Map Tile Service (WMTS)**, and XYZ tile URLs show up in types/config but are **not supported yet**.
+> **Alpha.** The API may change. Today **Web Coverage Service (WCS)** — the Open Geospatial Consortium protocol that returns the actual raster values (not just a picture) — and **XYZ slippy-map tile URLs** are implemented. **Web Map Service (WMS)** and **Web Map Tile Service (WMTS)** show up in types/config but are **not supported yet**.
 
 ## What it does
 
-- Talks to a **WCS 2.0.1** endpoint and fetches GeoTIFF tiles
+- Talks to a **WCS 2.0.1** endpoint and fetches GeoTIFF tiles, or fetches **XYZ** PNG tiles from a URL template
 - Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
-- Configures endpoints with `WCSConfig` (coordinate reference system, chunk size, cache, etc.)
+- Configures endpoints with `WCSConfig` or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
 - Lets you register other service backends later via a small service registry
 
 ## Install
@@ -31,6 +31,8 @@ pip install tilearray
 ## Quick start
 
 Public [Environment Agency Lidar digital terrain model (DTM) WCS](https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs) — full URL and coverage id are also in [example-sources.md](example-sources.md).
+
+### WCS coverage
 
 ```python
 from tilearray import create_array
@@ -66,7 +68,28 @@ elevation = da.compute()
 print(elevation.shape, float(elevation.mean()))
 ```
 
-> **Note:** the live Environment Agency Lidar path still has known rough edges (nodata / chunk sizing). Milestone 2 is fixing that so the mosaic looks right in a visual check.
+### XYZ slippy-map tiles
+
+```python
+from tilearray import XYZConfig, create_array
+from tilearray.types import CRS, Format
+
+config = XYZConfig.from_url(
+    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    zoom=16,
+    output_format=Format.PNG,
+    chunk_size=(256, 256),
+)
+
+da = create_array(
+    config,
+    bbox=(-0.005, 51.495, 0.005, 51.505),  # small bbox near central London
+    crs=CRS.EPSG_4326,
+)
+print(da.shape, da.attrs["service_type"])  # (256, 256) 'XYZ' — backed by Dask until computed
+```
+
+See `example-sources.md` for additional public endpoints.
 
 ### Public API
 
@@ -74,10 +97,11 @@ print(elevation.shape, float(elevation.mean()))
 |--------|------|
 | `create_array`, `load_array` | Lazy or eager xarray from a service |
 | `WCSService`, `WCSParser` | Low-level WCS client + capabilities |
-| `WCSConfig`, `ServiceConfig` | Endpoint / CRS / chunk config |
+| `XYZService` | XYZ tile URL template client |
+| `WCSConfig`, `XYZConfig`, `ServiceConfig` | Endpoint / CRS / chunk config |
 | `get_service`, `register_service`, `detect_service_type` | Service registry |
 
-Service types live under `tilearray.service` (e.g. `from tilearray.service import WCSConfig`).
+Service types live under `tilearray.service` (e.g. `from tilearray.service import WCSConfig, XYZConfig`).
 
 ## Development
 
@@ -108,7 +132,7 @@ make pre-commit-run
 tilearray/
 ├── src/tilearray/          # library
 │   ├── array.py            # create_array / load_array
-│   ├── service/            # WCS + registry
+│   ├── service/            # WCS, XYZ + registry
 │   └── types.py
 ├── tests/
 │   ├── unit/

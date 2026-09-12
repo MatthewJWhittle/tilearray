@@ -188,3 +188,4 @@ class ServiceTypeEnum(str, Enum):
     WCS = "WCS"
     WMS = "WMS"
     WMTS = "WMTS"
+    XYZ = "XYZ"
