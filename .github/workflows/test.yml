@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
 
     - name: Run tests
       run: |
-        uv run pytest --cov=ogc_array --cov-report=xml
+        uv run pytest --cov=src/tilearray --cov-report=xml
 
     - name: Upload coverage to Codecov
       if: matrix.python-version == '3.11'
@@ -72,4 +72,4 @@ jobs:
 
     - name: Run mypy
       run: |
-        uv run mypy ogc_array
+        uv run mypy src/tilearray

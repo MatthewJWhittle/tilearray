@@ -16,13 +16,13 @@ test: ## Run tests
 	uv run pytest
 
 test-cov: ## Run tests with coverage
-	uv run pytest --cov=src/ogc_array --cov-report=html --cov-report=term-missing
+	uv run pytest --cov=src/tilearray --cov-report=html --cov-report=term-missing
 
 lint: ## Run linting
 	uv run black --check .
 	uv run isort --check-only .
 	uv run flake8 .
-	uv run mypy ogc_array
+	uv run mypy src/tilearray
 
 format: ## Format code
 	uv run black .
