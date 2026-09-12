@@ -118,7 +118,7 @@ def test_create_array_with_custom_decoder(
     def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
         return DummyService()
 
-    def fake_fetch_tile(request: TileRequest) -> TileResponse:
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
         calls.append(request)
         width = request.width or 1
         height = request.height or 1
@@ -188,7 +188,7 @@ def test_create_array_with_service_config(
     def fake_build_service(self: WCSConfig) -> DummyService:
         return DummyService()
 
-    def fake_fetch_tile(request: TileRequest) -> TileResponse:
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
         calls.append(request)
         width = request.width or 1
         height = request.height or 1
@@ -236,7 +236,7 @@ def test_create_array_infers_decoder_from_service(
     def fake_get_service(*args: Any, **kwargs: Any) -> DecoderService:
         return DecoderService()
 
-    def fake_fetch_tile(request: TileRequest) -> TileResponse:
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
         width = request.width or 1
         height = request.height or 1
         return TileResponse(
@@ -309,7 +309,7 @@ def test_builtin_png_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     def fake_get_service(*args: Any, **kwargs: Any) -> PNGService:
         return PNGService()
 
-    def fake_fetch_tile(request: TileRequest) -> TileResponse:
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
         return TileResponse(
             data=png_data,
             content_type="image/png",
@@ -497,7 +497,7 @@ def test_create_array_resamples_native_resolution_wcs_tile(
     def fake_get_service(*args: Any, **kwargs: Any) -> NativeResolutionService:
         return service
 
-    def fake_fetch_tile(request: TileRequest) -> TileResponse:
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
         return TileResponse(
             data=raw,
             content_type="image/tiff",
@@ -524,13 +524,65 @@ def test_create_array_resamples_native_resolution_wcs_tile(
     assert np.isfinite(computed).all()
 
 
+def test_create_array_on_progress_callback(monkeypatch: MonkeyPatch) -> None:
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326)
+    progress_events: list[tuple[int, int]] = []
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
+        return DummyService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        width = request.width or 1
+        height = request.height or 1
+        return TileResponse(
+            data=b"\x00" * (width * height),
+            content_type="application/octet-stream",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    def on_progress(
+        done: int,
+        total: int,
+        request: TileRequest,
+        response: TileResponse,
+    ) -> None:
+        progress_events.append((done, total))
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+
+    def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
+        height = request.height or 1
+        width = request.width or 1
+        return np.ones((height, width), dtype=np.float32)
+
+    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+
+    result = array_module.create_array(
+        service_url="http://example.com/wcs",
+        bbox=bbox,
+        crs=CRS.EPSG_4326,
+        chunk_size=(4, 4),
+        compute=True,
+        on_progress=on_progress,
+        rate_limit_per_second=None,
+    )
+
+    assert result.shape == (4, 4)
+    assert progress_events == [(1, 1)]
+
+
 def test_create_array_downsamples_oversized_tiles(monkeypatch: MonkeyPatch) -> None:
     bbox = BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326)
 
     def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
         return DummyService()
 
-    def fake_fetch_tile(request: TileRequest) -> TileResponse:
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
         return TileResponse(
             data=b"",
             content_type="image/tiff",

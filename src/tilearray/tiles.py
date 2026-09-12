@@ -2,111 +2,52 @@
 Generic tile fetching functionality for geospatial services.
 """
 
+from __future__ import annotations
+
 import logging
 import math
 from pathlib import Path
-from typing import Union
 
 import numpy as np
-import requests
 
+from .fetch import FetchPolicy, TileFetcher, fetch_tile_with_policy, get_fetcher
 from .types import BoundingBox, TileRequest, TileResponse
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "FetchPolicy",
+    "TileFetcher",
+    "create_tile_grid",
+    "fetch_tile",
+    "get_fetcher",
+    "save_tile",
+]
 
-def fetch_tile(request: TileRequest) -> TileResponse:
+
+def fetch_tile(
+    request: TileRequest,
+    *,
+    policy: FetchPolicy | None = None,
+    fetcher: TileFetcher | None = None,
+) -> TileResponse:
     """
-    Generic function to fetch a tile from any geospatial service.
+    Fetch a tile from any geospatial service.
 
     Args:
         request: Tile request parameters
+        policy: Optional fetch policy (concurrency, retries, rate limits)
+        fetcher: Optional explicit fetcher instance
 
     Returns:
         Tile response with data or error information
-
-    Raises:
-        requests.RequestException: For network-related errors
-        ValueError: For invalid request parameters
     """
-    if not request.url:
-        raise ValueError("URL is required")
-
-    # Prepare headers
-    headers = request.headers or {}
-    if request.output_format:
-        headers.setdefault("Accept", request.output_format.value)
-
-    # Make the request with retries
-    last_exception = None
-    for attempt in range(request.retries + 1):
-        try:
-            logger.debug(
-                f"Fetching tile (attempt {attempt + 1}/{request.retries + 1}): {request.url}"
-            )
-
-            response = requests.get(
-                request.url,
-                params=request.params or None,
-                headers=headers,
-                timeout=request.timeout,
-                stream=True,  # For large tiles
-            )
-
-            # Check if request was successful
-            if response.status_code == 200:
-                data = response.content
-                return TileResponse(
-                    data=data,
-                    content_type=response.headers.get("content-type", ""),
-                    status_code=response.status_code,
-                    headers=dict(response.headers),
-                    url=response.url,
-                    success=True,
-                )
-            else:
-                error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
-                logger.warning(f"Tile request failed: {error_msg}")
-
-                if attempt == request.retries:  # Last attempt
-                    return TileResponse(
-                        data=b"",
-                        content_type=response.headers.get("content-type", ""),
-                        status_code=response.status_code,
-                        headers=dict(response.headers),
-                        url=response.url,
-                        success=False,
-                        error_message=error_msg,
-                    )
-
-        except requests.RequestException as e:
-            last_exception = e
-            logger.warning(f"Tile request attempt {attempt + 1} failed: {e}")
-
-            if attempt == request.retries:  # Last attempt
-                return TileResponse(
-                    data=b"",
-                    content_type="",
-                    status_code=0,
-                    headers={},
-                    url=request.url,
-                    success=False,
-                    error_message=f"Network error: {str(e)}",
-                )
-
-    # This should never be reached, but just in case
-    return TileResponse(
-        data=b"",
-        content_type="",
-        status_code=0,
-        headers={},
-        url=request.url,
-        success=False,
-        error_message=f"All retry attempts failed: {str(last_exception)}",
-    )
+    if fetcher is not None:
+        return fetcher.fetch(request)
+    return fetch_tile_with_policy(request, policy)
 
 
-def save_tile(tile_response: TileResponse, output_path: Union[str, Path]) -> bool:
+def save_tile(tile_response: TileResponse, output_path: str | Path) -> bool:
     """
     Save tile data to file.
 
@@ -136,7 +77,6 @@ def save_tile(tile_response: TileResponse, output_path: Union[str, Path]) -> boo
         return False
 
 
-# Tile Operations
 def create_tile_grid(
     bbox: BoundingBox,
     tile_size: tuple[int, int],

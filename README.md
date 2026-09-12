@@ -12,6 +12,7 @@ Pull geospatial **coverage tiles** from remote map services into Python as lazy 
 - Talks to a **WCS 2.0.1** endpoint and fetches GeoTIFF tiles, or fetches **XYZ** PNG tiles from a URL template
 - Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
 - Configures endpoints with `WCSConfig` or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
+- Fetches tiles through a shared HTTP engine with bounded concurrency, retries, and optional rate limits — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS)
 - Lets you register other service backends later via a small service registry
 
 ## Install
@@ -43,9 +44,12 @@ wcs_url = (
     "https://environment.data.gov.uk/spatialdata/"
     "lidar-composite-digital-terrain-model-dtm-1m/wcs"
 )
-coverage_id = "lidar-composite-digital-terrain-model-dtm-1m"
+# EA Lidar CoverageId is UUID-style from GetCapabilities — not the URL path slug
+coverage_id = (
+    "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m"
+)
 
-config = WCSConfig.from_url(
+config = WCSConfig.for_ea_dsp(
     wcs_url,
     coverage_id=coverage_id,
     crs=CRS.EPSG_27700,  # British National Grid
@@ -72,14 +76,9 @@ print(elevation.shape, float(elevation.mean()))
 
 ```python
 from tilearray import XYZConfig, create_array
-from tilearray.types import CRS, Format
+from tilearray.types import CRS
 
-config = XYZConfig.from_url(
-    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    zoom=16,
-    output_format=Format.PNG,
-    chunk_size=(256, 256),
-)
+config = XYZConfig.for_openstreetmap(zoom=16)
 
 da = create_array(
     config,
@@ -89,7 +88,22 @@ da = create_array(
 print(da.shape, da.attrs["service_type"])  # (256, 256) 'XYZ' — backed by Dask until computed
 ```
 
-See `example-sources.md` for additional public endpoints.
+`WCSConfig.from_url` and `XYZConfig.from_url` still work for custom endpoints — see [example-sources.md](example-sources.md) for URLs and coverage ids.
+
+## Fetch presets
+
+Tile fetches go through a shared engine with bounded concurrency, retries, and optional rate limits. That keeps **Dask** lazy for mosaic assembly: tiles are only pulled over HTTP when you actually compute.
+
+Two thin presets exist because public hosts want **different** behaviour — not because we catalogue every coverage id:
+
+- **`XYZConfig.for_openstreetmap()`** — [OpenStreetMap Foundation (OSMF)](https://operations.osmfoundation.org/policies/tiles/) tile policy: identifiable User-Agent, polite concurrency (max 2 in-flight, ~2 requests per second).
+- **`WCSConfig.for_ea_dsp()`** — [Environment Agency Data Service Platform (EA DSP)](https://environment.data.gov.uk/) WCS: slower rate (~1 request per second), more retries and a longer timeout, honours HTTP 429 `Retry-After`.
+
+These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields.
+
+Offline before/after bench: `uv run python scripts/bench_fetch_engine.py` (results in `benchmarks/fetch_engine_bench_results.txt`).
+
+See [example-sources.md](example-sources.md) for additional public endpoints.
 
 ### Public API
 
@@ -98,7 +112,7 @@ See `example-sources.md` for additional public endpoints.
 | `create_array`, `load_array` | Lazy or eager xarray from a service |
 | `WCSService`, `WCSParser` | Low-level WCS client + capabilities |
 | `XYZService` | XYZ tile URL template client |
-| `WCSConfig`, `XYZConfig`, `ServiceConfig` | Endpoint / CRS / chunk config |
+| `WCSConfig`, `XYZConfig`, `ServiceConfig` | Endpoint / CRS / chunk config; presets `for_openstreetmap()` / `for_ea_dsp()` |
 | `get_service`, `register_service`, `detect_service_type` | Service registry |
 
 Service types live under `tilearray.service` (e.g. `from tilearray.service import WCSConfig, XYZConfig`).
