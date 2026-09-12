@@ -7,7 +7,13 @@ import pytest
 import xarray as xr
 
 import tilearray.array as array_module
-from tilearray.array import ArrayRequest, _organize_tiles
+from tilearray.array import (
+    ArrayRequest,
+    _decode_geotiff,
+    _organize_tiles,
+    _read_geotiff_array,
+    _resize_tile_array,
+)
 from pytest import MonkeyPatch
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
@@ -381,6 +387,111 @@ def test_organize_tiles_orders_by_bbox() -> None:
     assert grid[1][0].bbox.min_y == 0  # bottom row second
     assert grid[0][0].bbox.min_x == 0  # left-to-right within row
     assert grid[0][1].bbox.min_x == 1
+
+
+@pytest.mark.unit
+def test_read_ea_lidar_geotiff_fixture() -> None:
+    fixture = Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+    data = _read_geotiff_array(str(fixture))
+
+    assert data.shape == (64, 64)
+    assert data.dtype == np.float32
+    assert np.isfinite(data).all()
+    assert 100 < float(np.nanmean(data)) < 300
+
+
+@pytest.mark.unit
+def test_decode_geotiff_handles_oversized_native_resolution_tile() -> None:
+    fixture = Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+    raw = fixture.read_bytes()
+    response = TileResponse(
+        data=raw,
+        content_type="image/tiff",
+        status_code=200,
+        headers={},
+        url="http://example.com/wcs",
+        success=True,
+        error_message=None,
+    )
+    request = TileRequest(
+        url="http://example.com/wcs",
+        params={},
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_27700,
+        bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_27700),
+        width=13,
+        height=13,
+    )
+
+    decoded = _decode_geotiff(response, request)
+    assert decoded.shape == (64, 64)
+
+
+@pytest.mark.unit
+def test_resize_tile_array_supports_non_divisible_downsample() -> None:
+    source = np.arange(64 * 64, dtype=np.float32).reshape(64, 64)
+    resized = _resize_tile_array(source, 13, 13)
+
+    assert resized.shape == (13, 13)
+    assert np.isfinite(resized).all()
+
+
+@pytest.mark.unit
+def test_create_array_resamples_native_resolution_wcs_tile(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    fixture = Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+    raw = fixture.read_bytes()
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=64, max_y=64, crs=CRS.EPSG_27700)
+
+    class NativeResolutionService(BaseService):
+        service_type = ServiceTypeEnum.WCS
+
+        def __init__(self) -> None:
+            super().__init__("http://example.com/wcs")
+            self.output_format = Format.GEOTIFF
+
+        def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
+            return TileRequest(
+                url="http://example.com/wcs",
+                params={},
+                output_format=Format.GEOTIFF,
+                crs=tile.crs,
+                bbox=tile.bbox,
+                width=tile.width,
+                height=tile.height,
+            )
+
+    service = NativeResolutionService()
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> NativeResolutionService:
+        return service
+
+    def fake_fetch_tile(request: TileRequest) -> TileResponse:
+        return TileResponse(
+            data=raw,
+            content_type="image/tiff",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+
+    result = array_module.create_array(
+        service_url="http://example.com/wcs",
+        bbox=bbox,
+        crs=CRS.EPSG_27700,
+        chunk_size=(64, 64),
+        resolution=(5.0, 5.0),
+    )
+
+    computed = result.compute()
+    assert computed.shape == (13, 13)
+    assert np.isfinite(computed).all()
 
 
 def test_create_array_downsamples_oversized_tiles(monkeypatch: MonkeyPatch) -> None:

@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import tempfile
+import warnings
 from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast
@@ -430,7 +432,7 @@ def _validate_chunk_size(chunk_size: Tuple[int, int]) -> Tuple[int, int]:
     return height, width
 
 
-def _downsample_array(array: NDArrayFloat, target_height: int, target_width: int) -> NDArrayFloat:
+def _resize_tile_array(array: NDArrayFloat, target_height: int, target_width: int) -> NDArrayFloat:
     actual_height, actual_width = array.shape
 
     if actual_height == target_height and actual_width == target_width:
@@ -444,16 +446,30 @@ def _downsample_array(array: NDArrayFloat, target_height: int, target_width: int
             f"Decoded tile has shape {(actual_height, actual_width)}, expected at least {(target_height, target_width)}"
         )
 
-    if actual_height % target_height != 0 or actual_width % target_width != 0:
-        raise ValueError(
-            "Decoded tile dimensions are not evenly divisible by requested chunk size"
-        )
+    if (
+        actual_height % target_height == 0
+        and actual_width % target_width == 0
+    ):
+        factor_y = actual_height // target_height
+        factor_x = actual_width // target_width
+        reshaped = array.reshape(target_height, factor_y, target_width, factor_x)
+        return cast(NDArrayFloat, np.nanmean(reshaped, axis=(1, 3)))
 
-    factor_y = actual_height // target_height
-    factor_x = actual_width // target_width
+    y_edges = np.linspace(0, actual_height, target_height + 1, dtype=int)
+    x_edges = np.linspace(0, actual_width, target_width + 1, dtype=int)
+    y_edges[0] = 0
+    y_edges[-1] = actual_height
+    x_edges[0] = 0
+    x_edges[-1] = actual_width
 
-    reshaped = array.reshape(target_height, factor_y, target_width, factor_x)
-    return cast(NDArrayFloat, reshaped.mean(axis=(1, 3)))
+    resized = np.empty((target_height, target_width), dtype=array.dtype)
+    for row in range(target_height):
+        y_start, y_end = y_edges[row], y_edges[row + 1]
+        for col in range(target_width):
+            x_start, x_end = x_edges[col], x_edges[col + 1]
+            block = array[y_start:y_end, x_start:x_end]
+            resized[row, col] = np.nanmean(block) if block.size else np.nan
+    return cast(NDArrayFloat, resized)
 
 
 def _load_tile_array(
@@ -475,7 +491,7 @@ def _load_tile_array(
     target_height = request.height or array.shape[0]
     target_width = request.width or array.shape[1]
 
-    array = _downsample_array(array, target_height, target_width)
+    array = _resize_tile_array(array, target_height, target_width)
 
     return np.asarray(array, dtype=dtype)
 
@@ -527,28 +543,58 @@ def _write_cache(cache_dir: Path, request: TileRequest, data: bytes) -> None:
     path.write_bytes(data)
 
 
-def _decode_geotiff(response: TileResponse, request: TileRequest) -> NDArrayFloat:
-    raw_bytes = bytes(response.data)
-    with tempfile.NamedTemporaryFile(suffix=".tif") as tmp:
-        tmp.write(raw_bytes)
-        tmp.flush()
-        try:
-            tif = GeoTiff(tmp.name, as_crs=None)
-            data = cast(NDArrayFloat, np.asarray(tif.read(), dtype=np.float32))
-        except Exception:  # pragma: no cover - fallback path
-            with TiffFile(tmp.name) as tif_file:
-                data = cast(NDArrayFloat, np.asarray(tif_file.asarray(), dtype=np.float32))
+def _read_geotiff_array(path: str) -> NDArrayFloat:
+    """Read raster values from a GeoTIFF file on disk."""
+
+    tifffile_logger = logging.getLogger("tifffile")
+    previous_level = tifffile_logger.level
+    tifffile_logger.setLevel(logging.ERROR)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            with TiffFile(path) as tif_file:
+                data = np.asarray(tif_file.asarray(), dtype=np.float64)
+                page = tif_file.pages[0]
+                nodata_tag = page.tags.get("GDAL_NODATA")
+                if nodata_tag is not None:
+                    try:
+                        nodata = float(nodata_tag.value)
+                    except (TypeError, ValueError):
+                        nodata = None
+                    if nodata is not None and np.isfinite(nodata):
+                        data[data == nodata] = np.nan
+    finally:
+        tifffile_logger.setLevel(previous_level)
 
     if data.ndim > 2:
         data = data[0]
-    data = np.asarray(data, dtype=np.float32, copy=False)
 
     invalid = ~np.isfinite(data)
     sentinel = np.abs(data) > 1e20
     if invalid.any() or sentinel.any():
         data = data.copy()
         data[invalid | sentinel] = np.nan
-    return data
+    return cast(NDArrayFloat, np.asarray(data, dtype=np.float32))
+
+
+def _decode_geotiff(response: TileResponse, request: TileRequest) -> NDArrayFloat:
+    raw_bytes = bytes(response.data)
+    with tempfile.NamedTemporaryFile(suffix=".tif") as tmp:
+        tmp.write(raw_bytes)
+        tmp.flush()
+        try:
+            return _read_geotiff_array(tmp.name)
+        except Exception:  # pragma: no cover - fallback path
+            tif = GeoTiff(tmp.name, as_crs=None)
+            data = cast(NDArrayFloat, np.asarray(tif.read(), dtype=np.float32))
+            if data.ndim > 2:
+                data = data[0]
+            invalid = ~np.isfinite(data)
+            sentinel = np.abs(data) > 1e20
+            if invalid.any() or sentinel.any():
+                data = data.copy()
+                data[invalid | sentinel] = np.nan
+            return np.asarray(data, dtype=np.float32)
 
 
 def _decode_raster_image(response: TileResponse, request: TileRequest) -> NDArrayFloat:
