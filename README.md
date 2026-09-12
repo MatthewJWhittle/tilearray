@@ -101,7 +101,7 @@ Two thin presets exist because public hosts want **different** behaviour — not
 
 These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields (`adaptive_concurrency`, `initial_concurrent_requests`, `min_concurrent_requests`, `max_concurrent_requests`, `rate_limit_per_second`, and so on). The EA preset ceiling of 32 is a safety max AIMD tunes under (`max_concurrent_requests`) — it only helps if Dask can run that many tile fetches in parallel (`create_array(..., compute=True)` sets `num_workers=max(cpu_count, max_concurrent)` automatically; for manual `.compute()`, pass the same or use `compute_thread_pool_size(fetch_policy)`).
 
-Offline before/after bench: `uv run python scripts/bench_fetch_engine.py` (results in `benchmarks/fetch_engine_bench_results.txt`). On a live Skipton-scale EA mosaic (~16 tiles), warm start often lands ~5–10 s (EA jitter); the prior AIMD preset (start=2) was ~14 s, legacy unbounded ~10–13 s when healthy, and the old polite fixed cap of 2 at 1 req/s ~25 s — stability under 429 still matters.
+Offline before/after bench: `uv run python scripts/bench_fetch_engine.py` (results in `benchmarks/fetch_engine_bench_results.txt`). On a live Skipton-scale EA mosaic (~16 tiles), warm start often lands ~5–10 s (EA jitter); the prior AIMD preset (start=2) was ~14 s, legacy unbounded ~10–13 s when healthy, and the old polite fixed cap of 2 at 1 req/s ~25 s — stability under 429 still matters. On a live 64-tile (~5 km / 1000×1000) EA mosaic, ceiling 16 with Dask stuck at default workers was ~20 s (`max_inflight` 8); ceiling 32 with Dask workers aligned via `compute_thread_pool_size` was ~14.7 s (`max_inflight` 32).
 
 See [example-sources.md](example-sources.md) for additional public endpoints.
 
@@ -109,7 +109,7 @@ See [example-sources.md](example-sources.md) for additional public endpoints.
 
 | Export | Role |
 |--------|------|
-| `create_array`, `load_array` | Lazy or eager xarray from a service |
+| `create_array`, `load_array` | Lazy or eager xarray from a service; `compute_thread_pool_size` (`from tilearray.array import …`) sizes Dask workers for manual `.compute()` |
 | `WCSService`, `WCSParser` | Low-level WCS client + capabilities |
 | `XYZService` | XYZ tile URL template client |
 | `WCSConfig`, `XYZConfig`, `ServiceConfig` | Endpoint / CRS / chunk config; presets `for_openstreetmap()` / `for_ea_dsp()` |
