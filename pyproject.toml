@@ -32,7 +32,7 @@ dependencies = [
     "pydantic>=2.12.3",
     "pyproj>=3.6.1",
     "requests>=2.32.5",
-    "respx>=0.22.0",
+    "tenacity>=9.0.0",
     "xarray>=2024.7.0",
 ]
 
@@ -127,7 +127,7 @@ module = "tilearray.array"
 disable_error_code = ["unreachable", "assignment"]
 
 [[tool.mypy.overrides]]
-module = ["requests", "requests.*"]
+module = ["requests", "requests.*", "httpx", "httpx.*", "tenacity", "tenacity.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]

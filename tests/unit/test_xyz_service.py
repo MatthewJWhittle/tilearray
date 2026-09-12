@@ -105,7 +105,7 @@ def _single_tile_bbox(zoom: int, tile_x: int, tile_y: int) -> BoundingBox:
 
 
 def _mock_fetch_tile(png_tile_bytes: bytes):
-    def fetch_tile(request: TileRequest) -> TileResponse:
+    def fetch_tile(request: TileRequest, **kwargs: object) -> TileResponse:
         return TileResponse(
             data=png_tile_bytes,
             content_type="image/png",

@@ -30,6 +30,7 @@ from geotiff.geotiff import TiffFile  # type: ignore[import-untyped]
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field
 
+from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .service import get_service
 from .service.base import BaseService
 from .service.config import ServiceConfig as ServiceConfigModel
@@ -333,6 +334,27 @@ def _organize_tiles(
     return grid
 
 
+def _resolve_fetch_policy(
+    service_config: ServiceConfigModel | None,
+    service_options: dict[str, Any],
+) -> FetchPolicy:
+    base = (
+        service_config.fetch_policy() if service_config is not None else FetchPolicy()
+    )
+    return FetchPolicy(
+        max_concurrent=service_options.pop(
+            "max_concurrent_requests", base.max_concurrent
+        ),
+        max_connections=service_options.pop("max_connections", base.max_connections),
+        retries=service_options.pop("fetch_retries", base.retries),
+        timeout=service_options.pop("fetch_timeout", base.timeout),
+        rate_limit_per_second=service_options.pop(
+            "rate_limit_per_second", base.rate_limit_per_second
+        ),
+        rate_limiter=service_options.pop("rate_limiter", base.rate_limiter),
+    )
+
+
 def create_array(
     service_url: str | ServiceConfigModel,
     bbox: BoundingBox | BBoxTuple,
@@ -346,6 +368,7 @@ def create_array(
     compute: bool = False,
     dtype: str | np.dtype[Any] = np.dtype("float32"),
     tile_decoder: TileDecoder | None = None,
+    on_progress: ProgressCallback | None = None,
     **service_options: Any,
 ) -> xr.DataArray:
     """Create an xarray ``DataArray`` backed by Dask from a remote service."""
@@ -369,6 +392,9 @@ def create_array(
             "Provided service_type does not match the ServiceConfig service_type"
         )
 
+    options = dict(service_options)
+    fetch_policy = _resolve_fetch_policy(service_config, options)
+
     request = ArrayRequest.from_inputs(
         service_url=base_service_url,
         service_config=service_config,
@@ -378,7 +404,7 @@ def create_array(
         grid_shape_input=grid_shape,
         output_format_input=output_format,
         cache_dir_input=cache_dir,
-        service_options_input=dict(service_options),
+        service_options_input=options,
     )
 
     service = request.build_service(service_type)
@@ -392,6 +418,7 @@ def create_array(
     cache_path = request.cache_path
     chunk_height, chunk_width = request.chunk_size
     dtype_np = np.dtype(dtype)
+    progress = FetchProgress(total=len(tile_requests), on_progress=on_progress)
 
     blocks: list[list[DaskArray]] = []
     for row_tiles in tile_grid:
@@ -405,6 +432,8 @@ def create_array(
                 cache_path,
                 decoder,
                 dtype_np,
+                fetch_policy,
+                progress,
             )
             row_blocks.append(
                 da_from_delayed(
@@ -432,17 +461,23 @@ def create_array(
         attrs=attrs,
     )
 
-    return data_array.compute() if compute else data_array
+    if compute:
+        computed = data_array.compute()
+        if progress.errors:
+            warnings.warn(
+                f"{len(progress.errors)} tile fetch(es) failed; "
+                "failed regions are filled with NaN. "
+                f"First error: {progress.errors[0]}",
+                stacklevel=2,
+            )
+        return computed
+    return data_array
 
 
 def load_array(*args: Any, compute: bool = True, **kwargs: Any) -> xr.DataArray:
     """Convenience wrapper around :func:`create_array`."""
 
-    array = create_array(*args, compute=False, **kwargs)
-    if compute:
-        compute_fn = cast(Callable[[], xr.DataArray], array.compute)
-        return compute_fn()
-    return array
+    return create_array(*args, compute=compute, **kwargs)
 
 
 def _coerce_crs(crs: CRS | str | int) -> CRS:
@@ -533,8 +568,12 @@ def _load_tile_array(
     cache_dir: Path | None,
     decoder: TileDecoder,
     dtype: np.dtype[Any],
+    fetch_policy: FetchPolicy | None = None,
+    progress: FetchProgress | None = None,
 ) -> NDArrayFloat:
-    response = _fetch_with_cache(request, cache_dir)
+    response = _fetch_with_cache(request, cache_dir, fetch_policy)
+    if progress is not None:
+        progress.tick(request, response)
     if not response.success:
         height = request.height or 0
         width = request.width or 0
@@ -552,7 +591,11 @@ def _load_tile_array(
     return np.asarray(array, dtype=dtype)
 
 
-def _fetch_with_cache(request: TileRequest, cache_dir: Path | None) -> TileResponse:
+def _fetch_with_cache(
+    request: TileRequest,
+    cache_dir: Path | None,
+    fetch_policy: FetchPolicy | None = None,
+) -> TileResponse:
     if cache_dir is not None:
         cached = _read_cache(cache_dir, request)
         if cached is not None:
@@ -568,7 +611,7 @@ def _fetch_with_cache(request: TileRequest, cache_dir: Path | None) -> TileRespo
                 error_message=None,
             )
 
-    response = fetch_tile(request)
+    response = fetch_tile(request, policy=fetch_policy)
     if cache_dir is not None and response.success:
         cached_data = bytes(response.data)
         if cached_data:

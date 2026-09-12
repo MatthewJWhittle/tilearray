@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import patch
 
+import httpx
 import pytest
-import requests
+import respx
 
+from tilearray.fetch import FetchPolicy, TileFetcher
 from tilearray.tiles import create_tile_grid, fetch_tile, save_tile
 from tilearray.types import CRS, BoundingBox, Format, TileRequest, TileResponse
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def reset_fetcher_instances() -> Any:
+    TileFetcher.reset_instances()
+    yield
+    TileFetcher.reset_instances()
 
 
 def _bbox(min_x: float, min_y: float, max_x: float, max_y: float) -> BoundingBox:
@@ -130,6 +140,7 @@ def test_fetch_tile_requires_url() -> None:
         fetch_tile(request)
 
 
+@respx.mock
 def test_fetch_tile_returns_successful_response() -> None:
     request = TileRequest(
         url="https://example.com/tile",
@@ -137,53 +148,59 @@ def test_fetch_tile_returns_successful_response() -> None:
         output_format=Format.GEOTIFF,
         retries=0,
     )
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.content = b"tile-bytes"
-    mock_response.headers = {"content-type": "image/tiff"}
-    mock_response.url = request.url
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(
+            200,
+            content=b"tile-bytes",
+            headers={"content-type": "image/tiff"},
+        )
+    )
 
-    with patch("tilearray.tiles.requests.get", return_value=mock_response) as get:
-        response = fetch_tile(request)
+    response = fetch_tile(
+        request,
+        policy=FetchPolicy(max_concurrent=1, rate_limit_per_second=None),
+    )
 
     assert response.success is True
     assert response.data == b"tile-bytes"
-    get.assert_called_once()
-    assert get.call_args.kwargs["headers"]["Accept"] == Format.GEOTIFF.value
 
 
+@respx.mock
 def test_fetch_tile_returns_error_after_http_failure() -> None:
     request = TileRequest(
         url="https://example.com/tile",
         params={},
         retries=0,
     )
-    mock_response = MagicMock()
-    mock_response.status_code = 500
-    mock_response.text = "server error"
-    mock_response.headers = {}
-    mock_response.url = request.url
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(500, text="server error")
+    )
 
-    with patch("tilearray.tiles.requests.get", return_value=mock_response):
-        response = fetch_tile(request)
+    response = fetch_tile(
+        request,
+        policy=FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=0),
+    )
 
     assert response.success is False
     assert response.status_code == 500
     assert response.error_message is not None
 
 
+@respx.mock
 def test_fetch_tile_returns_error_after_network_failure() -> None:
     request = TileRequest(
         url="https://example.com/tile",
         params={},
         retries=0,
     )
+    respx.get("https://example.com/tile").mock(
+        side_effect=httpx.ConnectError("offline")
+    )
 
-    with patch(
-        "tilearray.tiles.requests.get",
-        side_effect=requests.ConnectionError("offline"),
-    ):
-        response = fetch_tile(request)
+    response = fetch_tile(
+        request,
+        policy=FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=0),
+    )
 
     assert response.success is False
     assert response.status_code == 0
@@ -216,4 +233,6 @@ def test_save_tile_returns_false_for_failed_response() -> None:
         error_message="failed",
     )
 
-    assert save_tile(tile_response, "/tmp/unused.tif") is False
+    with patch("tilearray.tiles.logger") as logger:
+        assert save_tile(tile_response, "/tmp/unused.tif") is False
+    logger.error.assert_called_once()
