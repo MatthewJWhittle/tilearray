@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- README Fetch presets: live 64-tile (~5 km) bench (~20 s at ceiling 16 / `max_inflight` 8 → ~14.7 s at ceiling 32 with aligned Dask workers); `compute_thread_pool_size` noted in Public API table
 - README Fetch presets: honest Skipton warm-start timings and note that EA ceiling 16 is a tunable safety max
 - README and example-sources: fetch preset docs updated for AIMD EA DSP defaults (adaptive concurrency, no fixed 1 req/s cap)
 - README and example-sources: fetch preset quick start, Fetch presets section, and corrected EA Lidar CoverageId in examples
