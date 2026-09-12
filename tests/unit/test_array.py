@@ -19,6 +19,7 @@ from tilearray.array import (
     _resize_tile_array,
     compute_thread_pool_size,
 )
+from tilearray.errors import NetworkError
 from tilearray.fetch import FetchPolicy
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
@@ -579,6 +580,46 @@ def test_create_array_on_progress_callback(monkeypatch: MonkeyPatch) -> None:
 
     assert result.shape == (4, 4)
     assert progress_events == [(1, 1)]
+
+
+def test_load_array_raises_when_tile_fetch_fails_after_retries(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326)
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
+        return DummyService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        return TileResponse(
+            data=b"",
+            content_type="",
+            status_code=403,
+            headers={},
+            url=request.url,
+            success=False,
+            error_message="HTTP 403: Forbidden",
+        )
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+
+    def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
+        height = request.height or 1
+        width = request.width or 1
+        return np.ones((height, width), dtype=np.float32)
+
+    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+
+    with pytest.raises(NetworkError, match="HTTP 403"):
+        array_module.load_array(
+            service_url="http://example.com/wcs",
+            bbox=bbox,
+            crs=CRS.EPSG_4326,
+            chunk_size=(4, 4),
+            fetch_retries=0,
+            rate_limit_per_second=None,
+        )
 
 
 def test_create_array_downsamples_oversized_tiles(monkeypatch: MonkeyPatch) -> None:

@@ -57,8 +57,8 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
     Fetch defaults for Environment Agency Data Service Platform WCS endpoints.
 
     Uses in-process AIMD concurrency (starts modest, ramps on success, backs off
-    hard on 429 / timeouts) with a bounded ceiling. No fixed per-second throttle;
-    ``Retry-After`` and transient 429/503 are handled by :class:`~tilearray.fetch.TileFetcher`.
+    hard on 403/408/429 / timeouts) with a bounded ceiling. No fixed per-second throttle;
+    ``Retry-After`` and transient 403/408/429/503 are handled by :class:`~tilearray.fetch.TileFetcher`.
     """
 
     return {

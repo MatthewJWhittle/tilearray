@@ -62,6 +62,46 @@ def test_fetch_tile_success() -> None:
 
 
 @respx.mock
+def test_fetch_tile_retries_transient_403() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(
+            403,
+            text="Forbidden",
+            headers={"Server": "Microsoft-Azure-Application-Gateway/v2"},
+        ),
+        httpx.Response(403, text="Forbidden"),
+        httpx.Response(200, content=b"recovered"),
+    ]
+
+    response = fetch_tile_with_policy(
+        _tile_request(retries=2),
+        FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=2),
+    )
+
+    assert response.success is True
+    assert response.data == b"recovered"
+    assert route.call_count == 3
+
+
+@respx.mock
+def test_fetch_tile_honours_retry_after_on_403() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(403, headers={"Retry-After": "0"}),
+        httpx.Response(200, content=b"ok"),
+    ]
+
+    response = fetch_tile_with_policy(
+        _tile_request(retries=1),
+        FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=1),
+    )
+
+    assert response.success is True
+    assert route.call_count == 2
+
+
+@respx.mock
 def test_fetch_tile_retries_transient_503() -> None:
     route = respx.get("https://example.com/tile")
     route.side_effect = [
@@ -241,6 +281,38 @@ def test_aimd_increases_limit_after_successes() -> None:
         assert response.success is True
 
     assert fetcher.stats.peak_concurrency_limit >= 3
+
+
+@respx.mock
+def test_aimd_decreases_limit_on_403() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(
+            403,
+            headers={
+                "Retry-After": "0",
+                "Server": "Microsoft-Azure-Application-Gateway/v2",
+            },
+        ),
+        httpx.Response(200, content=b"ok"),
+    ]
+    policy = FetchPolicy(
+        max_concurrent=8,
+        initial_concurrent=4,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+        retries=1,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    response = fetcher.fetch(_tile_request(retries=1))
+    gate = fetcher._adaptive_gate
+    assert gate is not None
+
+    assert response.success is True
+    assert fetcher.stats.concurrency_decreases >= 1
+    assert fetcher.stats.retry_count >= 1
 
 
 @respx.mock
