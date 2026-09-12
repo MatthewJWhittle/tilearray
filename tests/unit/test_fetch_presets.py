@@ -28,7 +28,7 @@ def test_osm_fetch_defaults_include_user_agent() -> None:
 
 def test_ea_dsp_fetch_defaults_use_aimd() -> None:
     defaults = ea_dsp_fetch_defaults()
-    assert defaults["max_concurrent_requests"] == 8
+    assert defaults["max_concurrent_requests"] == 16
     assert defaults["initial_concurrent_requests"] == 2
     assert defaults["min_concurrent_requests"] == 1
     assert defaults["adaptive_concurrency"] is True
@@ -55,7 +55,7 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
         "https://environment.data.gov.uk/example/wcs",
         coverage_id="test-coverage",
     )
-    assert config.max_concurrent_requests == 8
+    assert config.max_concurrent_requests == 16
     assert config.initial_concurrent_requests == 2
     assert config.adaptive_concurrency is True
     assert config.fetch_retries == 4
@@ -65,7 +65,7 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
     assert policy.retries == 4
     assert policy.adaptive_concurrency is True
     assert policy.initial_concurrent == 2
-    assert policy.max_concurrent == 8
+    assert policy.max_concurrent == 16
 
 
 def test_custom_osm_user_agent() -> None:

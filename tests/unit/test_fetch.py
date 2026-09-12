@@ -292,36 +292,53 @@ def test_aimd_decreases_limit_on_timeout() -> None:
     assert gate.current_limit("example.com") <= 2
 
 
-def test_adaptive_gate_additive_and_multiplicative() -> None:
-    gate = AdaptiveConcurrencyGate(initial=2, minimum=1, maximum=8)
+def test_adaptive_gate_ramps_with_queued_waiters() -> None:
+    """Per-success increase is required: queued tiles keep inflight > 0 mid-batch."""
+
+    gate = AdaptiveConcurrencyGate(initial=2, minimum=1, maximum=16)
+    release = threading.Event()
+
+    def worker() -> None:
+        gate.acquire("host")
+        release.wait(timeout=1)
+        time.sleep(0.01)
+        gate.finish_success("host")
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(worker) for _ in range(3)]
+        time.sleep(0.05)
+        release.set()
+        for future in futures:
+            future.result()
+
+    assert gate.current_limit("host") >= 3
+
+
+def test_adaptive_gate_slow_start_then_additive() -> None:
+    gate = AdaptiveConcurrencyGate(initial=2, minimum=1, maximum=16)
 
     gate.record_success("host")
-    assert gate.current_limit("host") == 3
+    assert gate.current_limit("host") == 4
+
+    gate.record_success("host")
+    assert gate.current_limit("host") == 6
 
     gate.record_pressure("host")
-    assert gate.current_limit("host") == 1
+    assert gate.current_limit("host") == 3
     assert gate.decrease_count == 1
 
 
 @respx.mock
-def test_aimd_healthy_burst_reaches_high_inflight() -> None:
-    active = 0
-    max_active = 0
-    lock = threading.Lock()
+def test_aimd_realistic_latency_skipton_scale() -> None:
+    tile_latency_s = 0.08
 
     def handler(request: httpx.Request) -> httpx.Response:
-        nonlocal active, max_active
-        with lock:
-            active += 1
-            max_active = max(max_active, active)
-        time.sleep(0.03)
-        with lock:
-            active -= 1
+        time.sleep(tile_latency_s)
         return httpx.Response(200, content=b"x")
 
     respx.get("https://example.com/tile").mock(side_effect=handler)
     policy = FetchPolicy(
-        max_concurrent=8,
+        max_concurrent=16,
         initial_concurrent=2,
         min_concurrent=1,
         adaptive_concurrency=True,
@@ -330,13 +347,30 @@ def test_aimd_healthy_burst_reaches_high_inflight() -> None:
     fetcher = TileFetcher.for_policy(policy)
     request = _tile_request(retries=0)
 
+    fixed_policy = FetchPolicy(
+        max_concurrent=2,
+        adaptive_concurrency=False,
+        rate_limit_per_second=None,
+    )
+    fixed_fetcher = TileFetcher.for_policy(fixed_policy)
+
+    started = time.monotonic()
     with ThreadPoolExecutor(max_workers=16) as pool:
         futures = [pool.submit(fetcher.fetch, request) for _ in range(16)]
         for future in futures:
             future.result()
+    aimd_elapsed = time.monotonic() - started
 
-    assert max_active >= 4
-    assert fetcher.stats.peak_concurrency_limit >= 4
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        futures = [pool.submit(fixed_fetcher.fetch, request) for _ in range(16)]
+        for future in futures:
+            future.result()
+    fixed_elapsed = time.monotonic() - started
+
+    assert fetcher.stats.peak_concurrency_limit >= 8
+    assert fetcher.stats.max_inflight >= 8
+    assert aimd_elapsed < fixed_elapsed * 0.75
 
 
 def test_fetch_progress_callback_records_failures() -> None:

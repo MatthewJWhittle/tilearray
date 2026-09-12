@@ -30,7 +30,7 @@ _DEFAULT_INITIAL_CONCURRENT = 2
 _DEFAULT_MIN_CONCURRENT = 1
 _DEFAULT_RATE_LIMIT_PER_SECOND = 2.0
 _DEFAULT_MULTIPLICATIVE_DECREASE = 0.5
-_DEFAULT_ADDITIVE_INCREASE = 1
+_DEFAULT_ADDITIVE_INCREASE = 2
 
 
 @runtime_checkable
@@ -163,19 +163,44 @@ class AdaptiveConcurrencyGate:
                 state.condition.wait(timeout=0.05)
             state.inflight += 1
 
-    def release(self, host: str) -> None:
+    def _increase_limit(self, state: _HostConcurrencyState) -> None:
+        if state.limit >= self._maximum:
+            return
+        state.limit = min(
+            self._maximum,
+            state.limit + self._additive_increase,
+        )
+        state.peak_limit = max(state.peak_limit, state.limit)
+        self.peak_limit = max(self.peak_limit, state.limit)
+
+    def finish_success(self, host: str) -> None:
+        """Release a slot and apply per-success AIMD increase."""
+
         state = self._state_for(host)
         with state.condition:
             state.inflight -= 1
+            self._increase_limit(state)
+            state.condition.notify_all()
+
+    def finish_pressure(self, host: str) -> None:
+        """Release a slot and apply multiplicative decrease atomically."""
+
+        state = self._state_for(host)
+        with state.condition:
+            state.inflight -= 1
+            new_limit = max(
+                self._minimum,
+                int(state.limit * self._multiplicative_decrease),
+            )
+            if new_limit < state.limit:
+                state.limit = new_limit
+                self.decrease_count += 1
             state.condition.notify_all()
 
     def record_success(self, host: str) -> None:
         state = self._state_for(host)
         with state.condition:
-            if state.limit < self._maximum:
-                state.limit += self._additive_increase
-                state.peak_limit = max(state.peak_limit, state.limit)
-                self.peak_limit = max(self.peak_limit, state.limit)
+            self._increase_limit(state)
             state.condition.notify_all()
 
     def record_pressure(self, host: str) -> None:
@@ -194,6 +219,43 @@ class AdaptiveConcurrencyGate:
         state = self._state_for(host)
         with state.condition:
             return state.limit
+
+
+_ADAPTIVE_GATES: dict[tuple[Any, ...], AdaptiveConcurrencyGate] = {}
+_ADAPTIVE_GATES_LOCK = threading.Lock()
+
+
+def _adaptive_gate_key(policy: FetchPolicy) -> tuple[Any, ...]:
+    return (
+        policy.initial_concurrent,
+        policy.min_concurrent,
+        policy.max_concurrent,
+        policy.multiplicative_decrease,
+        policy.additive_increase,
+    )
+
+
+def _shared_adaptive_gate(policy: FetchPolicy) -> AdaptiveConcurrencyGate:
+    key = _adaptive_gate_key(policy)
+    with _ADAPTIVE_GATES_LOCK:
+        gate = _ADAPTIVE_GATES.get(key)
+        if gate is None:
+            gate = AdaptiveConcurrencyGate(
+                initial=policy.initial_concurrent,
+                minimum=policy.min_concurrent,
+                maximum=policy.max_concurrent,
+                additive_increase=policy.additive_increase,
+                multiplicative_decrease=policy.multiplicative_decrease,
+            )
+            _ADAPTIVE_GATES[key] = gate
+        return gate
+
+
+def reset_adaptive_gates() -> None:
+    """Discard shared AIMD gate state (primarily for tests)."""
+
+    with _ADAPTIVE_GATES_LOCK:
+        _ADAPTIVE_GATES.clear()
 
 
 class RetryableHTTPError(Exception):
@@ -370,14 +432,8 @@ class TileFetcher:
         self._adaptive_gate: AdaptiveConcurrencyGate | None = None
         self._semaphore: threading.Semaphore | None = None
         if self._policy.adaptive_concurrency:
-            self._adaptive_gate = AdaptiveConcurrencyGate(
-                initial=self._policy.initial_concurrent,
-                minimum=self._policy.min_concurrent,
-                maximum=self._policy.max_concurrent,
-                additive_increase=self._policy.additive_increase,
-                multiplicative_decrease=self._policy.multiplicative_decrease,
-            )
-            self.stats.peak_concurrency_limit = self._policy.initial_concurrent
+            self._adaptive_gate = _shared_adaptive_gate(self._policy)
+            self.stats.peak_concurrency_limit = self._adaptive_gate.peak_limit
         else:
             self._semaphore = threading.Semaphore(self._policy.max_concurrent)
         if self._policy.rate_limiter is not None:
@@ -419,6 +475,7 @@ class TileFetcher:
             for fetcher in cls._instances.values():
                 fetcher.close()
             cls._instances.clear()
+        reset_adaptive_gates()
 
     def _acquire_concurrency(self, host: str) -> None:
         if self._adaptive_gate is not None:
@@ -427,9 +484,18 @@ class TileFetcher:
         assert self._semaphore is not None
         self._semaphore.acquire()
 
-    def _release_concurrency(self, host: str) -> None:
+    def _finish_success(self, host: str) -> None:
         if self._adaptive_gate is not None:
-            self._adaptive_gate.release(host)
+            self._adaptive_gate.finish_success(host)
+            self.stats._sync_adaptive_stats(self._adaptive_gate)
+            return
+        assert self._semaphore is not None
+        self._semaphore.release()
+
+    def _finish_pressure(self, host: str) -> None:
+        if self._adaptive_gate is not None:
+            self._adaptive_gate.finish_pressure(host)
+            self.stats._sync_adaptive_stats(self._adaptive_gate)
             return
         assert self._semaphore is not None
         self._semaphore.release()
@@ -437,11 +503,6 @@ class TileFetcher:
     def _record_pressure(self, host: str) -> None:
         if self._adaptive_gate is not None:
             self._adaptive_gate.record_pressure(host)
-            self.stats._sync_adaptive_stats(self._adaptive_gate)
-
-    def _record_success(self, host: str) -> None:
-        if self._adaptive_gate is not None:
-            self._adaptive_gate.record_success(host)
             self.stats._sync_adaptive_stats(self._adaptive_gate)
 
     def fetch(self, request: TileRequest) -> TileResponse:
@@ -480,12 +541,15 @@ class TileFetcher:
                     )
                 finally:
                     self.stats._leave_inflight()
-            finally:
-                self._release_concurrency(host)
+            except httpx.TransportError:
+                self._finish_pressure(host)
+                raise
+
             if response.status_code in _RETRYABLE_STATUS_CODES:
-                self._record_pressure(host)
+                self._finish_pressure(host)
                 raise RetryableHTTPError(response, _parse_retry_after(response))
-            self._record_success(host)
+
+            self._finish_success(host)
             return response
 
         try:
@@ -493,7 +557,6 @@ class TileFetcher:
         except RetryableHTTPError as exc:
             return _response_from_httpx(exc.response, request.url)
         except httpx.TransportError as exc:
-            self._record_pressure(host)
             return TileResponse(
                 data=b"",
                 content_type="",
