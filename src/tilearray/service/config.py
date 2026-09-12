@@ -254,7 +254,8 @@ class XYZConfig(ServiceConfig):
 
         defaults = osm_fetch_defaults(
             user_agent=user_agent,
-            contact_url=contact_url or "https://github.com/MatthewJWhittle/tilearray/issues",
+            contact_url=contact_url
+            or "https://github.com/MatthewJWhittle/tilearray/issues",
         )
         defaults.update(kwargs)
         return cls.from_url(OSM_TILE_TEMPLATE, zoom=zoom, **defaults)

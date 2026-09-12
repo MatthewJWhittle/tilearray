@@ -46,6 +46,7 @@ def _policy_from_service_defaults(defaults: dict[str, object]) -> FetchPolicy:
         rate_limit_per_second=defaults.get("rate_limit_per_second"),  # type: ignore[arg-type]
     )
 
+
 MOCK_LATENCY_S = 0.03
 SERVER_MAX_CONCURRENT = 2
 BASE_URL = "https://bench.example/wcs"
@@ -124,8 +125,13 @@ def _legacy_fetch(
 def _run_legacy(requests_list: list[TileRequest]) -> tuple[float, LegacyStats]:
     stats = LegacyStats()
     started = time.perf_counter()
-    with httpx.Client() as client, ThreadPoolExecutor(max_workers=len(requests_list)) as pool:
-        futures = [pool.submit(_legacy_fetch, req, client, stats) for req in requests_list]
+    with (
+        httpx.Client() as client,
+        ThreadPoolExecutor(max_workers=len(requests_list)) as pool,
+    ):
+        futures = [
+            pool.submit(_legacy_fetch, req, client, stats) for req in requests_list
+        ]
         for future in as_completed(futures):
             future.result()
     return time.perf_counter() - started, stats
@@ -146,7 +152,9 @@ def _run_tile_fetcher(
     return time.perf_counter() - started, fetcher
 
 
-def _format_row(label: str, wall: float, max_inflight: int, attempts: int, retries: int) -> str:
+def _format_row(
+    label: str, wall: float, max_inflight: int, attempts: int, retries: int
+) -> str:
     return (
         f"{label:<28}  wall={wall:6.3f}s  max_inflight={max_inflight}  "
         f"http_attempts={attempts}  retries={retries}"
@@ -172,7 +180,15 @@ def run_overload_scenario() -> list[str]:
     lines.append(
         f"Scenario A — overload-sensitive mock (server max concurrent = 2, {TILE_COUNT} tiles)"
     )
-    lines.append(_format_row("Legacy (unbounded)", legacy_wall, legacy_stats.max_inflight, legacy_stats.http_attempts, legacy_stats.retries))
+    lines.append(
+        _format_row(
+            "Legacy (unbounded)",
+            legacy_wall,
+            legacy_stats.max_inflight,
+            legacy_stats.http_attempts,
+            legacy_stats.retries,
+        )
+    )
     lines.append(
         _format_row(
             "TileFetcher + EA preset",
@@ -217,9 +233,13 @@ def run_ea_fixture_scenario() -> list[str]:
         key = str(request.url)
         call_counts[key] = call_counts.get(key, 0) + 1
         if call_counts[key] == 1:
-            return httpx.Response(429, headers={"Retry-After": "0"}, text="rate limited")
+            return httpx.Response(
+                429, headers={"Retry-After": "0"}, text="rate limited"
+            )
         time.sleep(MOCK_LATENCY_S)
-        return httpx.Response(200, content=tile_bytes, headers={"content-type": "image/tiff"})
+        return httpx.Response(
+            200, content=tile_bytes, headers={"content-type": "image/tiff"}
+        )
 
     with respx.mock:
         for index in range(4):
@@ -233,7 +253,9 @@ def run_ea_fixture_scenario() -> list[str]:
         wall, fetcher = _run_tile_fetcher(ea_policy, fixture_requests)
 
     lines.append("")
-    lines.append(f"Scenario B — EA fixture offline ({fixture.name}, 4 tiles, 429 + Retry-After)")
+    lines.append(
+        f"Scenario B — EA fixture offline ({fixture.name}, 4 tiles, 429 + Retry-After)"
+    )
     lines.append(f"  bbox reference (OSGB): {EA_LIDAR_BENCH_BBOX}")
     lines.append(
         _format_row(
