@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 import math
+import os
 import tempfile
 import warnings
 from collections.abc import Sequence
@@ -334,6 +335,25 @@ def _organize_tiles(
     return grid
 
 
+def compute_thread_pool_size(
+    fetch_policy: FetchPolicy,
+    *,
+    override: int | None = None,
+) -> int:
+    """
+    Thread-pool size for Dask's ``threads`` scheduler when computing tile arrays.
+
+    Dask defaults to ``cpu_count()`` workers, which can cap in-flight tile fetches
+    below :attr:`~tilearray.fetch.FetchPolicy.max_concurrent`. Pass the result as
+    ``num_workers`` when calling :meth:`xarray.DataArray.compute` manually.
+    """
+
+    if override is not None:
+        return max(1, override)
+    cpu_count = os.cpu_count() or 1
+    return max(cpu_count, fetch_policy.max_concurrent)
+
+
 def _resolve_fetch_policy(
     service_config: ServiceConfigModel | None,
     service_options: dict[str, Any],
@@ -375,12 +395,19 @@ def create_array(
     output_format: Format | None = None,
     cache_dir: str | Path | None = None,
     compute: bool = False,
+    compute_num_workers: int | None = None,
     dtype: str | np.dtype[Any] = np.dtype("float32"),
     tile_decoder: TileDecoder | None = None,
     on_progress: ProgressCallback | None = None,
     **service_options: Any,
 ) -> xr.DataArray:
-    """Create an xarray ``DataArray`` backed by Dask from a remote service."""
+    """
+    Create an xarray ``DataArray`` backed by Dask from a remote service.
+
+    When ``compute=True``, tile fetches run on Dask's threaded scheduler with
+    ``num_workers=compute_thread_pool_size(fetch_policy)`` (override via
+    ``compute_num_workers``) so AIMD can use the full fetch concurrency ceiling.
+    """
 
     target_crs = _coerce_crs(crs)
     normalized_bbox = _normalize_bbox(bbox, target_crs)
@@ -471,7 +498,13 @@ def create_array(
     )
 
     if compute:
-        computed = data_array.compute()
+        num_workers = compute_thread_pool_size(
+            fetch_policy, override=compute_num_workers
+        )
+        computed = data_array.compute(
+            scheduler="threads",
+            num_workers=num_workers,
+        )
         if progress.errors:
             warnings.warn(
                 f"{len(progress.errors)} tile fetch(es) failed; "
