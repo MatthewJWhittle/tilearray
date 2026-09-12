@@ -27,6 +27,9 @@ class TileGeometry(BaseModel):
     width: int = Field(..., gt=0, description="Tile width in output pixels")
     height: int = Field(..., gt=0, description="Tile height in output pixels")
     crs: CRS = Field(default=CRS.EPSG_4326, description="CRS in which bounds are expressed")
+    tile_x: Optional[int] = Field(default=None, description="XYZ tile column index")
+    tile_y: Optional[int] = Field(default=None, description="XYZ tile row index")
+    zoom: Optional[int] = Field(default=None, description="XYZ zoom level")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -204,6 +207,10 @@ def detect_service_type(url: str, fallback: Optional[ServiceTypeEnum] = None) ->
         return ServiceTypeEnum.WMS
     if "wmts" in lower_path:
         return ServiceTypeEnum.WMTS
+
+    lower_url = url.lower()
+    if all(token in lower_url for token in ("{x}", "{y}", "{z}")):
+        return ServiceTypeEnum.XYZ
 
     if fallback is not None:
         return fallback

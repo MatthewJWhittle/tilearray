@@ -32,9 +32,6 @@ def fetch_tile(request: TileRequest) -> TileResponse:
     if not request.url:
         raise ValueError("URL is required")
     
-    if not request.params:
-        raise ValueError("Request parameters are required")
-    
     # Prepare headers
     headers = request.headers or {}
     if request.output_format:
@@ -48,7 +45,7 @@ def fetch_tile(request: TileRequest) -> TileResponse:
             
             response = requests.get(
                 request.url,
-                params=request.params,
+                params=request.params or None,
                 headers=headers,
                 timeout=request.timeout,
                 stream=True  # For large tiles
