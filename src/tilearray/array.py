@@ -561,9 +561,11 @@ def _assemble_tile_mosaic(
     """
 
     if n_bands > 1:
-        row_arrays = [da_concatenate(row_blocks, axis=1) for row_blocks in blocks]
-        return da_concatenate(row_arrays, axis=0)
-    return da_block(blocks)
+        row_arrays = [
+            cast(DaskArray, da_concatenate(row_blocks, axis=1)) for row_blocks in blocks
+        ]
+        return cast(DaskArray, da_concatenate(row_arrays, axis=0))
+    return cast(DaskArray, da_block(blocks))
 
 
 def _probe_tile_band_count(
