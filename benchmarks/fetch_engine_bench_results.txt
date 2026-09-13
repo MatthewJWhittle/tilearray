@@ -2,8 +2,8 @@
 tiles=4  mock_latency=0.03s  server_max_concurrent=2
 
 Scenario A — overload-sensitive mock (server max concurrent = 2, 4 tiles)
-Legacy (unbounded)            wall= 0.049s  max_inflight=3  http_attempts=8  retries=4
-TileFetcher + EA AIMD preset  wall= 1.767s  max_inflight=3  http_attempts=6  retries=2
+Legacy (unbounded)            wall= 0.048s  max_inflight=3  http_attempts=8  retries=4
+TileFetcher + EA AIMD preset  wall= 1.510s  max_inflight=3  http_attempts=6  retries=2
 TileFetcher + OSM preset      wall= 1.032s  max_inflight=2  http_attempts=4  retries=0
 
 Win: max_inflight capped, HTTP attempts and retry storms reduced (8→6 attempts, 4→2 retries for EA preset). EA preset uses AIMD concurrency (starts at 8, backs off on pressure).
@@ -17,14 +17,14 @@ TileFetcher + EA AIMD preset  wall= 0.065s  max_inflight=12  http_attempts=16  r
 Note: instant mocks understate live RTT. Extrapolating Skipton (~16 tiles, ~1.5s/tile): static cap=2 ~12s (observed ~25s on live EA host); AIMD slow-start target ~10–13s (legacy range).
 
 Scenario D — realistic RTT mock (16 tiles, 0.12s/tile latency)
-Fixed cap=2                   wall= 0.968s  max_inflight=2  http_attempts=16  retries=0
+Fixed cap=2                   wall= 0.969s  max_inflight=2  http_attempts=16  retries=0
 TileFetcher + EA AIMD preset  wall= 0.246s  max_inflight=12  http_attempts=16  retries=0
   EA AIMD peak limit=32  max_inflight=12
 Win: AIMD reaches high in-flight under RTT (~3.9× faster than fixed cap=2 at 0.12s/tile; scales to live Skipton target).
 
 Scenario B — EA fixture offline (ea_lidar_64x64.tif, 4 tiles, 429 + Retry-After)
   bbox reference (OSGB): (431900.0, 382700.0, 431964.0, 382764.0)
-TileFetcher + EA AIMD preset  wall= 0.034s  max_inflight=4  http_attempts=8  retries=4
+TileFetcher + EA AIMD preset  wall= 0.064s  max_inflight=2  http_attempts=8  retries=4
   fixture bytes/tile=16803  successful_retries=4
 
 Re-run: uv run python scripts/bench_fetch_engine.py
