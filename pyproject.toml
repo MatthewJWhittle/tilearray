@@ -127,6 +127,10 @@ module = "tilearray.array"
 disable_error_code = ["unreachable", "assignment"]
 
 [[tool.mypy.overrides]]
+module = "tilearray.decode"
+disable_error_code = ["unreachable", "assignment", "redundant-cast"]
+
+[[tool.mypy.overrides]]
 module = ["requests", "requests.*", "httpx", "httpx.*", "tenacity", "tenacity.*"]
 ignore_missing_imports = true
 

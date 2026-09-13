@@ -10,7 +10,9 @@ from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from ..types import CRS, BoundingBox, ServiceTypeEnum, TileRequest
+from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
+from .requests import compose_tile_request as _compose_tile_request
+from .requests import merge_str_mappings
 
 __all__ = [
     "TileGeometry",
@@ -171,6 +173,35 @@ class BaseService(ABC):
                     height=height,
                     crs=bbox.crs,
                 )
+
+    def request_headers(self, **options: object) -> dict[str, str]:
+        """Merge service-level and per-call HTTP headers."""
+
+        return merge_str_mappings(self.config.get("headers"), options.get("headers"))
+
+    def compose_tile_request(
+        self,
+        tile: TileGeometry,
+        *,
+        url: str,
+        params: dict[str, Any] | None = None,
+        output_format: Format | None = None,
+        crs: CRS | None = None,
+        **options: object,
+    ) -> TileRequest:
+        """Build a tile request with config headers/params applied."""
+
+        return _compose_tile_request(
+            config=self.config,
+            options=dict(options),
+            url=url,
+            params=params,
+            bbox=tile.bbox,
+            width=tile.width,
+            height=tile.height,
+            crs=crs or tile.crs,
+            output_format=output_format,
+        )
 
     @abstractmethod
     def build_tile_request(
