@@ -6,13 +6,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import math
 import os
-import tempfile
-import warnings
 from collections.abc import Sequence
-from io import BytesIO
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -24,13 +20,20 @@ from typing import (
 import numpy as np
 import xarray as xr
 from dask.array import block as da_block
+from dask.array import concatenate as da_concatenate
 from dask.array import from_delayed as da_from_delayed
 from dask.delayed import Delayed, delayed
-from geotiff import GeoTiff  # type: ignore[import-untyped]
-from geotiff.geotiff import TiffFile  # type: ignore[import-untyped]
-from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field
 
+from .decode import (
+    NDArrayFloat,
+    TileDecoder,
+    band_count_from_array,
+    default_band_count_for_format,
+)
+from .decode import (
+    decoder_for_format as _decoder_for_format,
+)
 from .errors import NetworkError
 from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .service import get_service
@@ -47,43 +50,10 @@ from .types import (
     TileResponse,
 )
 
-try:  # pragma: no cover - optional dependency
-    from PIL import Image as _PILImage
-except ImportError:  # pragma: no cover - optional dependency
-    _PILImage = None
-
-try:  # pragma: no cover - optional dependency
-    import imageio.v2 as _imageio  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - optional dependency
-    _imageio = None
-
 if TYPE_CHECKING:
     from dask.array.core import Array as DaskArray
 else:  # pragma: no cover - typing aid
     DaskArray = Any
-
-NDArrayFloat = NDArray[np.floating[Any]]
-TileDecoder = Callable[[TileResponse, TileRequest], NDArrayFloat]
-
-_DECODER_REGISTRY: dict[Format, TileDecoder] = {}
-
-
-def register_tile_decoder(fmt: Format, decoder: TileDecoder) -> None:
-    """Register a tile decoder for a particular output format."""
-
-    _DECODER_REGISTRY[fmt] = decoder
-
-
-def _decoder_for_format(fmt: Format | str | None) -> TileDecoder | None:
-    if isinstance(fmt, Format):
-        return _DECODER_REGISTRY.get(fmt)
-    if isinstance(fmt, str):
-        try:
-            fmt_enum = Format(fmt)
-        except ValueError:
-            return None
-        return _DECODER_REGISTRY.get(fmt_enum)
-    return None
 
 
 class ArrayRequest(BaseModel):
@@ -460,6 +430,16 @@ def create_array(
     dtype_np = np.dtype(dtype)
     progress = FetchProgress(total=len(tile_requests), on_progress=on_progress)
 
+    effective_format = request.effective_format(service)
+    n_bands = _probe_tile_band_count(
+        tile_requests[0],
+        cache_path,
+        decoder,
+        dtype_np,
+        fetch_policy,
+        effective_format,
+    )
+
     blocks: list[list[DaskArray]] = []
     for row_tiles in tile_grid:
         row_blocks: list[DaskArray] = []
@@ -475,18 +455,18 @@ def create_array(
                 fetch_policy,
                 progress,
             )
+            block_shape = (height, width, n_bands) if n_bands > 1 else (height, width)
             row_blocks.append(
                 da_from_delayed(
                     delayed_tile,
-                    shape=(height, width),
+                    shape=block_shape,
                     dtype=dtype_np,
                 )
             )
         blocks.append(row_blocks)
 
-    data = da_block(blocks)
+    data = _assemble_tile_mosaic(blocks, n_bands)
 
-    effective_format = request.effective_format(service)
     attrs = request.array_attrs(service, tile_options, effective_format)
 
     normalized_bbox = request.bbox
@@ -495,10 +475,16 @@ def create_array(
     y_coords = np.linspace(normalized_bbox.max_y, normalized_bbox.min_y, data.shape[0])
     x_coords = np.linspace(normalized_bbox.min_x, normalized_bbox.max_x, data.shape[1])
 
+    coords: dict[str, Any] = {"y": y_coords, "x": x_coords}
+    dims: tuple[str, ...] = ("y", "x")
+    if n_bands > 1:
+        coords["band"] = np.arange(n_bands)
+        dims = ("y", "x", "band")
+
     data_array = xr.DataArray(
         data,
-        coords={"y": y_coords, "x": x_coords},
-        dims=("y", "x"),
+        coords=coords,
+        dims=dims,
         attrs=attrs,
     )
 
@@ -563,9 +549,60 @@ def _validate_chunk_size(chunk_size: tuple[int, int]) -> tuple[int, int]:
     return height, width
 
 
+def _assemble_tile_mosaic(
+    blocks: list[list[DaskArray]],
+    n_bands: int,
+) -> DaskArray:
+    """
+    Stitch decoded tile blocks into a single mosaic array.
+
+    ``da.block`` maps the tile grid onto the leading axes of each block. For
+    multi-band tiles ``(y, x, band)`` that incorrectly concatenates along
+    ``band`` instead of ``x``. Concatenate explicitly on spatial axes instead.
+    """
+
+    if n_bands > 1:
+        row_arrays = [
+            cast(DaskArray, da_concatenate(row_blocks, axis=1)) for row_blocks in blocks
+        ]
+        return cast(DaskArray, da_concatenate(row_arrays, axis=0))
+    return cast(DaskArray, da_block(blocks))
+
+
+def _probe_tile_band_count(
+    sample_request: TileRequest,
+    cache_dir: Path | None,
+    decoder: TileDecoder,
+    dtype: np.dtype[Any],
+    fetch_policy: FetchPolicy | None,
+    effective_format: Format | None,
+) -> int:
+    """Determine band count before building the Dask graph."""
+
+    fixed = default_band_count_for_format(effective_format)
+    if fixed is not None:
+        return fixed
+
+    sample = _load_tile_array(
+        sample_request,
+        cache_dir,
+        decoder,
+        dtype,
+        fetch_policy,
+    )
+    return band_count_from_array(sample)
+
+
 def _resize_tile_array(
     array: NDArrayFloat, target_height: int, target_width: int
 ) -> NDArrayFloat:
+    if array.ndim == 3:
+        resized_bands = [
+            _resize_tile_array(array[..., band], target_height, target_width)
+            for band in range(array.shape[2])
+        ]
+        return cast(NDArrayFloat, np.stack(resized_bands, axis=-1))
+
     actual_height, actual_width = array.shape
 
     if actual_height == target_height and actual_width == target_width:
@@ -618,8 +655,8 @@ def _load_tile_array(
         raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
 
     array = decoder(response, request)
-    if array.ndim != 2:
-        raise ValueError("tile_decoder must return a 2D array")
+    if array.ndim not in (2, 3):
+        raise ValueError("tile_decoder must return a 2D or 3D (y, x[, band]) array")
 
     target_height = request.height or array.shape[0]
     target_width = request.width or array.shape[1]
@@ -680,88 +717,3 @@ def _write_cache(cache_dir: Path, request: TileRequest, data: bytes) -> None:
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = cache_dir / f"{_cache_key(request)}.tile"
     path.write_bytes(data)
-
-
-def _read_geotiff_array(path: str) -> NDArrayFloat:
-    """Read raster values from a GeoTIFF file on disk."""
-
-    tifffile_logger = logging.getLogger("tifffile")
-    previous_level = tifffile_logger.level
-    tifffile_logger.setLevel(logging.ERROR)
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=UserWarning)
-            with TiffFile(path) as tif_file:
-                data = np.asarray(tif_file.asarray(), dtype=np.float64)
-                page = tif_file.pages[0]
-                nodata_tag = page.tags.get("GDAL_NODATA")
-                if nodata_tag is not None:
-                    try:
-                        nodata = float(nodata_tag.value)
-                    except (TypeError, ValueError):
-                        nodata = None
-                    if nodata is not None and np.isfinite(nodata):
-                        data[data == nodata] = np.nan
-    finally:
-        tifffile_logger.setLevel(previous_level)
-
-    if data.ndim > 2:
-        data = data[0]
-
-    invalid = ~np.isfinite(data)
-    sentinel = np.abs(data) > 1e20
-    if invalid.any() or sentinel.any():
-        data = data.copy()
-        data[invalid | sentinel] = np.nan
-    return cast(NDArrayFloat, np.asarray(data, dtype=np.float32))
-
-
-def _decode_geotiff(response: TileResponse, request: TileRequest) -> NDArrayFloat:
-    raw_bytes = bytes(response.data)
-    with tempfile.NamedTemporaryFile(suffix=".tif") as tmp:
-        tmp.write(raw_bytes)
-        tmp.flush()
-        try:
-            return _read_geotiff_array(tmp.name)
-        except Exception:  # pragma: no cover - fallback path
-            tif = GeoTiff(tmp.name, as_crs=None)
-            data = cast(NDArrayFloat, np.asarray(tif.read(), dtype=np.float32))
-            if data.ndim > 2:
-                data = data[0]
-            invalid = ~np.isfinite(data)
-            sentinel = np.abs(data) > 1e20
-            if invalid.any() or sentinel.any():
-                data = data.copy()
-                data[invalid | sentinel] = np.nan
-            return np.asarray(data, dtype=np.float32)
-
-
-def _decode_raster_image(response: TileResponse, request: TileRequest) -> NDArrayFloat:
-    raw_bytes = bytes(response.data)
-    data: NDArrayFloat | None = None
-
-    if _PILImage is not None:  # pragma: no cover - depends on optional library
-        with BytesIO(raw_bytes) as bio:
-            with _PILImage.open(bio) as img:
-                data = cast(NDArrayFloat, np.asarray(img))
-    elif _imageio is not None:  # pragma: no cover
-        with BytesIO(raw_bytes) as bio:
-            data = cast(NDArrayFloat, np.asarray(_imageio.imread(bio)))
-
-    if data is None:  # pragma: no cover
-        msg = (
-            "PNG/JPEG decoding requires Pillow or imageio. "
-            "Install one of these packages or provide a custom tile_decoder."
-        )
-        raise RuntimeError(msg)
-
-    if data.ndim == 3:
-        data = data[..., 0]
-
-    return cast(NDArrayFloat, np.asarray(data, dtype=np.float32))
-
-
-register_tile_decoder(Format.GEOTIFF, _decode_geotiff)
-if _PILImage is not None or _imageio is not None:  # pragma: no cover - registration
-    register_tile_decoder(Format.PNG, _decode_raster_image)
-    register_tile_decoder(Format.JPEG, _decode_raster_image)

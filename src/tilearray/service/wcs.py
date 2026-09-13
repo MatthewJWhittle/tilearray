@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from typing import Any, cast
+from typing import Any
 
 import requests
 
@@ -407,18 +407,18 @@ class WCSService(BaseService):
             "subsettingCRS": crs.value,
         }
 
-        extra_params = options.get("params")
-        if isinstance(extra_params, dict):
-            params.update(cast(dict[str, Any], extra_params))
-
-        return TileRequest(
+        passthrough = {
+            key: value
+            for key, value in options.items()
+            if key not in {"output_format", "crs"}
+        }
+        return self.compose_tile_request(
+            tile,
             url=self.base_url,
             params=params,
             output_format=fmt,
             crs=crs,
-            bbox=tile.bbox,
-            width=tile.width,
-            height=tile.height,
+            **passthrough,
         )
 
     # ------------------------------------------------------------------

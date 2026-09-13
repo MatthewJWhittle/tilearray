@@ -66,6 +66,30 @@ def test_wcs_service_build_tile_request():
     assert request.bbox == geometry.bbox
 
 
+def test_wcs_service_build_tile_request_includes_headers():
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        headers={"User-Agent": "tilearray-test/1.0"},
+    )
+    geometry = TileGeometry(
+        bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326),
+        width=256,
+        height=256,
+        crs=CRS.EPSG_4326,
+    )
+
+    request = service.build_tile_request(
+        geometry,
+        headers={"X-Peer-Test": "enabled"},
+    )
+
+    assert request.headers == {
+        "User-Agent": "tilearray-test/1.0",
+        "X-Peer-Test": "enabled",
+    }
+
+
 def test_wcs_service_requires_coverage_id():
     service = WCSService("http://example.com/wcs")
     geometry = TileGeometry(

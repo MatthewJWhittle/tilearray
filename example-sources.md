@@ -25,7 +25,8 @@ Thin configs / docs only — not a product catalogue.
 
 NASA GIBS XYZ (happy-path peer, no key)
 https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg
-Quirk: path is `{z}/{y}/{x}` (row before col), not OSM `{z}/{x}/{y}`. Use `XYZConfig.from_url` with that template. Public; coordinate if >~1M tiles/24h.
+Quirk: path is `{z}/{y}/{x}` (row before col), not OSM `{z}/{x}/{y}`. Use `XYZConfig.from_url` with that template. JPEG colour mosaics preserve RGB bands `(y, x, band)` via the shared decode pipeline. Public; coordinate if >~1M tiles/24h.
+Quirk: URL template hardcodes `BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8` — layer-specific; another GIBS layer needs a new template from GetCapabilities, not placeholder swaps alone.
 
 OS Maps API ZXY (UK + clean 429 — needs free Data Hub key)
 https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=…
@@ -36,6 +37,8 @@ https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WCSS
 Test: ArcGIS WCS 2.0.1 vs EA DSP CoverageId quirks. Public USGS elevation.
 
 
-VOM (WMS — not supported yet)
-
-https://environment.data.gov.uk/spatialdata/vegetation-object-model/wms?request=GetCapabilities&service=WMS&version=1.3.0
+EA Vegetation Object Model (WMS)
+https://environment.data.gov.uk/spatialdata/vegetation-object-model/wms
+Use `WMSConfig.from_url(..., layers=…)` — no fetch preset; thin GetMap adapter only.
+Quirk: layer id is year-suffixed (e.g. `Vegetation_Object_Model_2022` from GetCapabilities — don't copy a stale year).
+Quirk: transparent GetMap PNG decodes to 4 bands (RGBA), not 3.

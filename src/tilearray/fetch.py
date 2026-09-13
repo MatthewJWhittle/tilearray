@@ -496,11 +496,13 @@ class TileFetcher:
     def reset_instances(cls) -> None:
         """Close and discard cached fetcher instances (primarily for tests)."""
 
+        global _default_fetcher
         with cls._instances_lock:
             for fetcher in cls._instances.values():
                 fetcher.close()
             cls._instances.clear()
         reset_adaptive_gates()
+        _default_fetcher = TileFetcher.for_policy(FetchPolicy())
 
     def _acquire_concurrency(self, host: str) -> None:
         if self._adaptive_gate is not None:

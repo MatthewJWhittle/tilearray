@@ -2,22 +2,27 @@ import base64
 import os
 import threading
 import time
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, cast
 
 import numpy as np
 import pytest
 import xarray as xr
+from PIL import Image
 from pytest import MonkeyPatch
 
 import tilearray.array as array_module
+import tilearray.decode as decode_module
 from tilearray.array import (
     ArrayRequest,
-    _decode_geotiff,
     _organize_tiles,
-    _read_geotiff_array,
     _resize_tile_array,
     compute_thread_pool_size,
+)
+from tilearray.decode import (
+    decoder_for_format,
+    read_geotiff_path,
 )
 from tilearray.errors import NetworkError
 from tilearray.fetch import FetchPolicy
@@ -35,11 +40,11 @@ from tilearray.types import (
 
 @pytest.fixture(autouse=True)
 def preserve_decoder_registry():
-    original = dict(array_module._DECODER_REGISTRY)
+    original = dict(decode_module._DECODER_REGISTRY)
     try:
         yield
     finally:
-        array_module._DECODER_REGISTRY = original
+        decode_module._DECODER_REGISTRY = original
 
 
 class DummyService:
@@ -146,7 +151,7 @@ def test_create_array_with_custom_decoder(
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     result = array_module.create_array(
         service_url="http://example.com/wcs",
@@ -169,7 +174,7 @@ def test_create_array_without_decoder_raises(monkeypatch: MonkeyPatch) -> None:
         return DummyService()
 
     monkeypatch.setattr(array_module, "get_service", fake_service_factory)
-    monkeypatch.setattr(array_module, "_DECODER_REGISTRY", {})
+    monkeypatch.setattr(decode_module, "_DECODER_REGISTRY", {})
 
     with pytest.raises(RuntimeError):
         array_module.create_array(
@@ -216,7 +221,7 @@ def test_create_array_with_service_config(
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     result = array_module.create_array(
         service_url=config,
@@ -260,7 +265,7 @@ def test_create_array_infers_decoder_from_service(
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
     monkeypatch.setattr(array_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
@@ -338,7 +343,107 @@ def test_builtin_png_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     )
 
     computed = cast(Callable[[], xr.DataArray], result.compute)()
-    assert computed.shape == (2, 2)
+    assert computed.shape == (2, 2, 4)
+    assert computed.dims == ("y", "x", "band")
+
+
+def test_create_array_multi_tile_rgb_jpeg_mosaic(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Multi-tile RGB JPEG mosaics must keep band=3, not stack bands via da.block."""
+
+    tile_height = tile_width = 8
+    rows, cols = 2, 3
+    rgb = np.zeros((tile_height, tile_width, 3), dtype=np.uint8)
+    rgb[..., 0] = 200
+    rgb[..., 1] = 100
+    rgb[..., 2] = 50
+    with BytesIO() as buffer:
+        Image.fromarray(rgb, mode="RGB").save(buffer, format="JPEG")
+        jpeg_bytes = buffer.getvalue()
+
+    class GridJPEGService(BaseService):
+        service_type = ServiceTypeEnum.XYZ
+        output_format = Format.JPEG
+
+        def __init__(self) -> None:
+            super().__init__("http://example.com")
+
+        def generate_tile_requests(
+            self,
+            bbox: BoundingBox,
+            chunk_size: tuple[int, int],
+            **options: Any,
+        ) -> list[TileRequest]:
+            width, height = chunk_size
+            grid_rows, grid_cols = options.get("grid_shape", (1, 1))
+            span_x = (bbox.max_x - bbox.min_x) / grid_cols
+            span_y = (bbox.max_y - bbox.min_y) / grid_rows
+            tiles: list[TileRequest] = []
+            for row in range(grid_rows):
+                for col in range(grid_cols):
+                    min_x = bbox.min_x + col * span_x
+                    max_x = min_x + span_x
+                    min_y = bbox.min_y + (grid_rows - 1 - row) * span_y
+                    max_y = min_y + span_y
+                    tile_bbox = BoundingBox(
+                        min_x=min_x,
+                        min_y=min_y,
+                        max_x=max_x,
+                        max_y=max_y,
+                        crs=bbox.crs,
+                    )
+                    tiles.append(
+                        TileRequest(
+                            url=f"http://example.com/{row}/{col}.jpg",
+                            params={},
+                            output_format=Format.JPEG,
+                            crs=bbox.crs,
+                            bbox=tile_bbox,
+                            width=width,
+                            height=height,
+                        )
+                    )
+            return tiles
+
+        def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
+            return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> GridJPEGService:
+        return GridJPEGService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        return TileResponse(
+            data=jpeg_bytes,
+            content_type="image/jpeg",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+
+    bbox = BoundingBox(min_x=-5, min_y=50, max_x=0, max_y=55, crs=CRS.EPSG_4326)
+    result = array_module.create_array(
+        service_url="http://example.com",
+        bbox=bbox,
+        crs=CRS.EPSG_4326,
+        service_type=ServiceTypeEnum.XYZ,
+        chunk_size=(tile_width, tile_height),
+        grid_shape=(rows, cols),
+        output_format=Format.JPEG,
+        compute=True,
+    )
+
+    assert result.shape == (tile_height * rows, tile_width * cols, 3)
+    assert result.dims == ("y", "x", "band")
+    assert np.isfinite(result).all()
+    assert float(result[..., 0].mean()) == pytest.approx(200.0, rel=1e-3)
+    assert float(result[..., 1].mean()) == pytest.approx(100.0, rel=1e-3)
+    assert float(result[..., 2].mean()) == pytest.approx(50.0, rel=1e-3)
 
 
 def test_plan_tiles_uses_resolution() -> None:
@@ -541,7 +646,7 @@ def test_read_ea_lidar_geotiff_fixture() -> None:
         / "wcs_tiles"
         / "ea_lidar_64x64.tif"
     )
-    data = _read_geotiff_array(str(fixture))
+    data = read_geotiff_path(str(fixture))
 
     assert data.shape == (64, 64)
     assert data.dtype == np.float32
@@ -577,7 +682,9 @@ def test_decode_geotiff_handles_oversized_native_resolution_tile() -> None:
         height=13,
     )
 
-    decoded = _decode_geotiff(response, request)
+    decoder = decoder_for_format(Format.GEOTIFF)
+    assert decoder is not None
+    decoded = decoder(response, request)
     assert decoded.shape == (64, 64)
 
 
@@ -689,7 +796,7 @@ def test_create_array_on_progress_callback(monkeypatch: MonkeyPatch) -> None:
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     result = array_module.create_array(
         service_url="http://example.com/wcs",
@@ -732,7 +839,7 @@ def test_load_array_raises_when_tile_fetch_fails_after_retries(
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     with pytest.raises(NetworkError, match="HTTP 403"):
         array_module.load_array(
@@ -770,7 +877,7 @@ def test_create_array_downsamples_oversized_tiles(monkeypatch: MonkeyPatch) -> N
         width = (request.width or 1) * 2
         return np.ones((height, width), dtype=np.float32)
 
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     result = array_module.create_array(
         service_url="http://example.com/wcs",
@@ -871,7 +978,7 @@ def test_create_array_compute_exceeds_cpu_count_inflight(
 
     monkeypatch.setattr(array_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     bbox = BoundingBox(min_x=0, min_y=0, max_x=4, max_y=4, crs=CRS.EPSG_4326)
     array_module.create_array(
@@ -887,3 +994,52 @@ def test_create_array_compute_exceeds_cpu_count_inflight(
 
     assert peak > cpu
     assert peak >= min(tile_count, max_concurrent) // 2
+
+
+@pytest.mark.unit
+def test_decode_raster_image_preserves_rgb_bands() -> None:
+    source = np.zeros((64, 64, 3), dtype=np.uint8)
+    source[..., 0] = 200
+    source[..., 1] = 100
+    source[..., 2] = 50
+    with BytesIO() as buffer:
+        Image.fromarray(source, mode="RGB").save(buffer, format="JPEG")
+        raw = buffer.getvalue()
+
+    response = TileResponse(
+        data=raw,
+        content_type="image/jpeg",
+        status_code=200,
+        headers={},
+        url="https://example.com/tile.jpg",
+        success=True,
+    )
+    request = TileRequest(url="https://example.com/tile.jpg", params={})
+
+    decoder = decoder_for_format(Format.JPEG)
+    assert decoder is not None
+    decoded = decoder(response, request)
+
+    assert decoded.shape == (64, 64, 3)
+    assert float(decoded[..., 0].mean()) == pytest.approx(200.0)
+    assert float(decoded[..., 1].mean()) == pytest.approx(100.0)
+    assert float(decoded[..., 2].mean()) == pytest.approx(50.0)
+
+
+@pytest.mark.unit
+def test_resize_tile_array_preserves_rgb_bands() -> None:
+    source = np.stack(
+        [
+            np.full((64, 64), 200.0, dtype=np.float32),
+            np.full((64, 64), 100.0, dtype=np.float32),
+            np.full((64, 64), 50.0, dtype=np.float32),
+        ],
+        axis=-1,
+    )
+
+    resized = _resize_tile_array(source, 32, 32)
+
+    assert resized.shape == (32, 32, 3)
+    assert float(resized[..., 0].mean()) == pytest.approx(200.0)
+    assert float(resized[..., 1].mean()) == pytest.approx(100.0)
+    assert float(resized[..., 2].mean()) == pytest.approx(50.0)
