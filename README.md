@@ -105,7 +105,9 @@ mean_elevation = compute_with_policy(
 print(float(mean_elevation))
 ```
 
-`create_array` stores fetch policy metadata on `da.attrs`; `compute_with_policy` reads it automatically. Live before/after bench (network required): `uv run python scripts/bench_compute_with_policy_live.py`.
+`create_array` stores fetch policy metadata on `da.attrs`; `compute_with_policy` reads it automatically.
+
+Illustrative Skipton bench (64 tiles, 1024², lazy `.mean()`, cold disk cache): plain `.compute()` ~6.7 s (~8 Dask threads) vs `compute_with_policy()` ~2.3 s (32 workers = EA fetch ceiling) — about 3× faster with the same mean. Absolute times depend on network round-trip time; treat as an example, not a guarantee. Live before/after bench (network required): `uv run python scripts/bench_compute_with_policy_live.py`.
 
 ### XYZ slippy-map tiles
 
@@ -191,7 +193,7 @@ Two thin presets exist because public hosts want **different** behaviour — not
 - If a tile still fails after retries: raises `NetworkError` — mosaics do **not** succeed with silent NaN holes.
 - Live 256-tile EA stress: previously ~18% holes at ~27 s; after fix `finite_frac=1.0` with ~40 retries (~49 s) at ×0.5 pressure; after less-jumpy AIMD (×0.75, floor 4) ~53 s, `finite_frac=1.0`, ~89 retries (same ~50 s band as ×0.5 / ~40 retries — stays hotter under Azure blips, still complete).
 
-These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields (`adaptive_concurrency`, `initial_concurrent_requests`, `min_concurrent_requests`, `max_concurrent_requests`, `rate_limit_per_second`, and so on). The EA preset ceiling of 32 is a safety max AIMD tunes under (`max_concurrent_requests`) — it only helps if Dask can run that many tile fetches in parallel (`create_array(..., compute=True)` sets `num_workers=max(cpu_count, max_concurrent)` automatically; for manual `.compute()`, pass the same or use `compute_thread_pool_size(fetch_policy)`).
+These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields (`adaptive_concurrency`, `initial_concurrent_requests`, `min_concurrent_requests`, `max_concurrent_requests`, `rate_limit_per_second`, and so on). The EA preset ceiling of 32 is a safety max AIMD tunes under (`max_concurrent_requests`) — it only helps if Dask can run that many tile fetches in parallel. **Multi-tile lazy mosaics:** prefer `compute_with_policy()` over plain `.compute()` so Dask thread count matches the fetch ceiling instead of defaulting to CPU count (`create_array(..., compute=True)` sets workers automatically; otherwise use `compute_with_policy` or size manually via `compute_thread_pool_size(fetch_policy)`).
 
 Offline before/after bench: `uv run python scripts/bench_fetch_engine.py` (results in `benchmarks/fetch_engine_bench_results.txt`). On a live Skipton-scale EA mosaic (~16 tiles), warm start often lands ~5–10 s (EA jitter); the prior AIMD preset (start=2) was ~14 s, legacy unbounded ~10–13 s when healthy, and the old polite fixed cap of 2 at 1 req/s ~25 s — stability under 429 still matters. On a live 64-tile (~5 km / 1000×1000) EA mosaic, ceiling 16 with Dask stuck at default workers was ~20 s (`max_inflight` 8); ceiling 32 with Dask workers aligned via `compute_thread_pool_size` was ~14.7 s (`max_inflight` 32).
 
