@@ -96,14 +96,14 @@ Tile fetches go through a shared engine with bounded concurrency, retries, and o
 
 Two thin presets exist because public hosts want **different** behaviour — not because we catalogue every coverage id:
 
-- **`WCSConfig.for_ea_dsp()`** — [Environment Agency Data Service Platform (EA DSP)](https://environment.data.gov.uk/) WCS. Uses **AIMD** (*additive increase, multiplicative decrease*): starts at 8 in-flight (warm), ramps while the host is happy (up to 32), remembers the last good per-host limit in-process for later mosaics, and backs off on 403/408/429/`Retry-After`/503/timeouts (×0.5, floor 1). No fixed requests-per-second cap — you do not set the limit on every call. Four retries, 60 s timeout; `Retry-After` is still honoured by `TileFetcher`. Failed tiles after retries raise `NetworkError` (no silent NaN holes).
+- **`WCSConfig.for_ea_dsp()`** — [Environment Agency Data Service Platform (EA DSP)](https://environment.data.gov.uk/) WCS. Uses **AIMD** (*additive increase, multiplicative decrease*): starts at 8 in-flight (warm), ramps while the host is happy (up to 32), remembers the last good per-host limit in-process for later mosaics, and backs off on 403/408/429/`Retry-After`/503/timeouts (×0.75, floor 4). No fixed requests-per-second cap — you do not set the limit on every call. Four retries, 60 s timeout; `Retry-After` is still honoured by `TileFetcher`. Failed tiles after retries raise `NetworkError` (no silent NaN holes).
 - **`XYZConfig.for_openstreetmap()`** — [OpenStreetMap Foundation (OSMF)](https://operations.osmfoundation.org/policies/tiles/) tile policy: identifiable User-Agent, **fixed** polite limits (max 2 in-flight, ~2 requests per second). Not AIMD — OSMF policy wants low, steady load rather than ramping concurrency.
 
 **Retries / gateway pressure**
 
-- Retryable HTTP codes: **403, 408, 429, 502, 503, 504** (Azure Application Gateway often returns **403** for throttle/WAF pressure, not only 429).
+- Retryable HTTP codes: **403, 408, 429, 500, 502, 503, 504** (Azure Application Gateway often returns **403** for throttle/WAF pressure, not only 429; EA DSP may return **500** `internal_error` under load).
 - EA preset: **4** retries; wait = `Retry-After` if present, else exponential backoff + jitter.
-- Those codes also trigger AIMD **pressure** (×0.5 in-flight).
+- Those codes also trigger AIMD **pressure** (EA preset: ×0.75 in-flight, floor 4).
 - If a tile still fails after retries: raises `NetworkError` — mosaics do **not** succeed with silent NaN holes.
 - Live 256-tile EA stress: previously ~18% holes at ~27 s; after fix `finite_frac=1.0` with ~40 retries (~49 s).
 
