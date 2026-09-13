@@ -55,6 +55,9 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - typing aid
     DaskArray = Any
 
+_FETCH_POLICY_ATTR = "tilearray_fetch_policy"
+_RECOMMENDED_NUM_WORKERS_ATTR = "tilearray_recommended_num_workers"
+
 
 class ArrayRequest(BaseModel):
     service_config: ServiceConfigModel | None = None
@@ -306,6 +309,74 @@ def _organize_tiles(
     return grid
 
 
+def _fetch_policy_summary(policy: FetchPolicy) -> dict[str, Any]:
+    """JSON-serializable fetch policy snapshot for xarray attrs."""
+
+    return {
+        "max_concurrent": policy.max_concurrent,
+        "max_connections": policy.max_connections,
+        "retries": policy.retries,
+        "timeout": policy.timeout,
+        "rate_limit_per_second": policy.rate_limit_per_second,
+        "adaptive_concurrency": policy.adaptive_concurrency,
+        "initial_concurrent": policy.initial_concurrent,
+        "min_concurrent": policy.min_concurrent,
+        "multiplicative_decrease": policy.multiplicative_decrease,
+        "additive_increase": policy.additive_increase,
+    }
+
+
+def _fetch_policy_from_summary(summary: dict[str, Any]) -> FetchPolicy:
+    defaults = FetchPolicy()
+    return FetchPolicy(
+        max_concurrent=int(summary.get("max_concurrent", defaults.max_concurrent)),
+        max_connections=summary.get("max_connections", defaults.max_connections),
+        retries=int(summary.get("retries", defaults.retries)),
+        timeout=float(summary.get("timeout", defaults.timeout)),
+        rate_limit_per_second=summary.get(
+            "rate_limit_per_second", defaults.rate_limit_per_second
+        ),
+        adaptive_concurrency=bool(
+            summary.get("adaptive_concurrency", defaults.adaptive_concurrency)
+        ),
+        initial_concurrent=int(
+            summary.get("initial_concurrent", defaults.initial_concurrent)
+        ),
+        min_concurrent=int(summary.get("min_concurrent", defaults.min_concurrent)),
+        multiplicative_decrease=float(
+            summary.get("multiplicative_decrease", defaults.multiplicative_decrease)
+        ),
+        additive_increase=int(
+            summary.get("additive_increase", defaults.additive_increase)
+        ),
+    )
+
+
+def _attrs_from_compute_target(obj: Any) -> dict[str, Any] | None:
+    attrs = getattr(obj, "attrs", None)
+    if isinstance(attrs, dict):
+        return attrs
+    return None
+
+
+def _resolve_fetch_policy_for_compute(
+    obj: Any,
+    *,
+    fetch_policy: FetchPolicy | None = None,
+    max_concurrent: int | None = None,
+) -> FetchPolicy:
+    if fetch_policy is not None:
+        return fetch_policy
+    if max_concurrent is not None:
+        return FetchPolicy(max_concurrent=max_concurrent)
+    attrs = _attrs_from_compute_target(obj)
+    if attrs is not None:
+        summary = attrs.get(_FETCH_POLICY_ATTR)
+        if isinstance(summary, dict):
+            return _fetch_policy_from_summary(summary)
+    return FetchPolicy()
+
+
 def compute_thread_pool_size(
     fetch_policy: FetchPolicy,
     *,
@@ -323,6 +394,47 @@ def compute_thread_pool_size(
         return max(1, override)
     cpu_count = os.cpu_count() or 1
     return max(cpu_count, fetch_policy.max_concurrent)
+
+
+def compute_with_policy(
+    obj: Any,
+    fetch_policy: FetchPolicy | None = None,
+    *,
+    max_concurrent: int | None = None,
+    num_workers: int | None = None,
+    **compute_kwargs: Any,
+) -> Any:
+    """
+    Compute a Dask-backed xarray or dask object with fetch-aligned thread workers.
+
+    Dask's default ``.compute()`` uses ``num_workers=cpu_count()``, which can cap
+    in-flight tile fetches below :attr:`~tilearray.fetch.FetchPolicy.max_concurrent`
+    when AIMD allows more parallel HTTP. This helper runs the threaded scheduler with
+    ``num_workers=compute_thread_pool_size(policy)``.
+
+    Policy resolution order: explicit ``fetch_policy``, then ``max_concurrent`` (builds
+    a minimal policy), then ``tilearray_fetch_policy`` on ``obj.attrs`` (set by
+    :func:`create_array`), else :class:`~tilearray.fetch.FetchPolicy` defaults.
+    """
+
+    policy = _resolve_fetch_policy_for_compute(
+        obj,
+        fetch_policy=fetch_policy,
+        max_concurrent=max_concurrent,
+    )
+
+    if num_workers is None and fetch_policy is None and max_concurrent is None:
+        attrs = _attrs_from_compute_target(obj)
+        if attrs is not None:
+            recommended = attrs.get(_RECOMMENDED_NUM_WORKERS_ATTR)
+            if recommended is not None:
+                num_workers = int(recommended)
+
+    workers = compute_thread_pool_size(policy, override=num_workers)
+    merged = dict(compute_kwargs)
+    merged["scheduler"] = "threads"
+    merged["num_workers"] = workers
+    return obj.compute(**merged)
 
 
 def _resolve_fetch_policy(
@@ -381,6 +493,10 @@ def create_array(
     When ``compute=True``, tile fetches run on Dask's threaded scheduler with
     ``num_workers=compute_thread_pool_size(fetch_policy)`` (override via
     ``compute_num_workers``) so AIMD can use the full fetch concurrency ceiling.
+
+    For lazy arrays (``compute=False``), prefer :func:`compute_with_policy` over
+    plain ``.compute()`` so Dask worker count matches the fetch ceiling. Fetch
+    policy metadata is stored on ``DataArray.attrs`` for that path.
     """
 
     target_crs = _coerce_crs(crs)
@@ -468,6 +584,8 @@ def create_array(
     data = _assemble_tile_mosaic(blocks, n_bands)
 
     attrs = request.array_attrs(service, tile_options, effective_format)
+    attrs[_FETCH_POLICY_ATTR] = _fetch_policy_summary(fetch_policy)
+    attrs[_RECOMMENDED_NUM_WORKERS_ATTR] = compute_thread_pool_size(fetch_policy)
 
     normalized_bbox = request.bbox
     target_crs = request.target_crs

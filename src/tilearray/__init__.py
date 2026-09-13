@@ -5,7 +5,7 @@ from ._version import __version__
 __author__ = "Matthew Whittle"
 __email__ = "47574804+MatthewJWhittle@users.noreply.github.com"
 
-from .array import create_array, load_array
+from .array import compute_with_policy, create_array, load_array
 from .service import (
     BaseService,
     TileGeometry,
@@ -39,6 +39,7 @@ __all__ = [
     "__version__",
     "__author__",
     "__email__",
+    "compute_with_policy",
     "create_array",
     "load_array",
     "BaseService",
