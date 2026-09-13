@@ -10,7 +10,13 @@ from pathlib import Path
 
 import numpy as np
 
-from .fetch import FetchPolicy, TileFetcher, fetch_tile_with_policy, get_fetcher
+from .fetch import (
+    FetchPolicy,
+    FetchProgress,
+    TileFetcher,
+    fetch_tile_with_policy,
+    get_fetcher,
+)
 from .types import BoundingBox, TileRequest, TileResponse
 
 logger = logging.getLogger(__name__)
@@ -30,6 +36,7 @@ def fetch_tile(
     *,
     policy: FetchPolicy | None = None,
     fetcher: TileFetcher | None = None,
+    progress: FetchProgress | None = None,
 ) -> TileResponse:
     """
     Fetch a tile from any geospatial service.
@@ -43,8 +50,8 @@ def fetch_tile(
         Tile response with data or error information
     """
     if fetcher is not None:
-        return fetcher.fetch(request)
-    return fetch_tile_with_policy(request, policy)
+        return fetcher.fetch(request, progress=progress)
+    return fetch_tile_with_policy(request, policy, progress=progress)
 
 
 def save_tile(tile_response: TileResponse, output_path: str | Path) -> bool:

@@ -16,7 +16,7 @@ URL:
 https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs
 Layer ID (CoverageId):
 13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m
-Prefer `WCSConfig.for_ea_dsp(...)` with this coverage id. The CoverageId comes from GetCapabilities (often `UUID__LayerName`) — never assume the URL path slug is the id. The preset uses AIMD concurrency (start 8, ceiling 32, floor 4, ×0.75 pressure, remembers last good limit in-process, no fixed req/s cap) rather than a fixed 1 req/s throttle.
+Prefer `WCSConfig.for_ea_dsp(...)` with this coverage id. The CoverageId comes from GetCapabilities (often `UUID__LayerName`) — never assume the URL path slug is the id. The preset uses AIMD concurrency (start 8, ceiling **10**, floor 4, ×0.75 pressure, sustained-403 circuit breaker, remembers last good limit in-process, no fixed req/s cap) rather than a fixed 1 req/s throttle. For county-scale cold mosaics (hundreds+ tiles), keep `max_concurrent_requests` ≤ **10** — live stretch at ceiling 32 triggered Azure App Gateway 403 storms on ~256+ tile cold starts.
 
 
 Peer stress targets

@@ -107,6 +107,28 @@ class ServiceConfig(BaseModel):
         default=None,
         description="Optional custom per-host rate limiter hook",
     )
+    forbidden_circuit_breaker: bool = Field(
+        default=False,
+        description=(
+            "Trip a sustained-403 circuit breaker (freeze at floor) when gateway "
+            "403s cluster within forbidden_window_seconds"
+        ),
+    )
+    forbidden_window_seconds: float = Field(
+        default=5.0,
+        gt=0,
+        description="Sliding window for counting clustered 403 responses",
+    )
+    forbidden_threshold: int = Field(
+        default=6,
+        ge=1,
+        description="403 count within the window that trips the circuit breaker",
+    )
+    forbidden_cooldown_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        description="Cooldown at floor after the circuit breaker trips",
+    )
 
     def build_service(self) -> BaseService:
         """Create the appropriate service implementation for this configuration."""
@@ -134,6 +156,10 @@ class ServiceConfig(BaseModel):
             initial_concurrent=self.initial_concurrent_requests,
             min_concurrent=self.min_concurrent_requests,
             multiplicative_decrease=self.multiplicative_decrease,
+            forbidden_circuit_breaker=self.forbidden_circuit_breaker,
+            forbidden_window_seconds=self.forbidden_window_seconds,
+            forbidden_threshold=self.forbidden_threshold,
+            forbidden_cooldown_seconds=self.forbidden_cooldown_seconds,
         )
 
     def service_kwargs(self) -> dict[str, Any]:
@@ -206,8 +232,8 @@ class WCSConfig(ServiceConfig):
         """
         WCS preset for Environment Agency Data Service Platform endpoints.
 
-        Enables per-host AIMD concurrency (starts at 8, ceiling 32) plus extra
-        retries for Retry-After / 429 / 503 behaviour.
+        Enables per-host AIMD concurrency (starts at 8, ceiling 10) plus a
+        sustained-403 circuit breaker for large cold mosaics on Azure App Gateway.
         """
 
         from ..fetch_presets import ea_dsp_fetch_defaults
