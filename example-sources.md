@@ -36,6 +36,6 @@ https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WCSS
 Test: ArcGIS WCS 2.0.1 vs EA DSP CoverageId quirks. Public USGS elevation.
 
 
-VOM (WMS — not supported yet)
-
-https://environment.data.gov.uk/spatialdata/vegetation-object-model/wms?request=GetCapabilities&service=WMS&version=1.3.0
+EA Vegetation Object Model (WMS)
+https://environment.data.gov.uk/spatialdata/vegetation-object-model/wms
+Use `WMSConfig.from_url(..., layers=…)` — no fetch preset; thin GetMap adapter only.
