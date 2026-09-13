@@ -229,6 +229,8 @@ class WCSParser:
                         title=self._get_text(coverage_elem, ".//wcs:Title"),
                         abstract=self._get_text(coverage_elem, ".//wcs:Abstract"),
                         keywords=self._get_keywords(coverage_elem),
+                        native_crs=None,
+                        native_format=None,
                     )
                 )
         return coverages
@@ -586,7 +588,11 @@ class WCSService(BaseService):
         cached = self.coverage_metadata(coverage_id)
         if cached is not None:
             return cached
-        return CoverageDescription(identifier=coverage_id)
+        return CoverageDescription(
+            identifier=coverage_id,
+            native_crs=None,
+            native_format=None,
+        )
 
     def _coerce_format(self, fmt: Any) -> Format:
         if isinstance(fmt, Format):
