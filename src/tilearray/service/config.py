@@ -312,3 +312,117 @@ class XYZConfig(ServiceConfig):
         kwargs["zoom"] = self.zoom
         kwargs["tile_size"] = self.tile_size
         return kwargs
+
+
+class WMSConfig(ServiceConfig):
+    """Configuration helper for Web Map Services."""
+
+    layers: str = Field(..., description="Comma-separated WMS layer names")
+    version: str = Field(default="1.3.0", description="WMS protocol version")
+    styles: str = Field(default="", description="WMS style names")
+    service_type: ServiceTypeEnum = Field(
+        default=ServiceTypeEnum.WMS, init=False, description="Service type constant"
+    )
+
+    @classmethod
+    def from_url(cls, url: str, layers: str, **kwargs: Any) -> WMSConfig:
+        """Convenience constructor for WMS endpoints."""
+
+        return cls(base_url=url, layers=layers, **kwargs)
+
+    def build_service(self) -> BaseService:
+        """Construct a ``WMSService`` instance from this configuration."""
+
+        from .wms import WMSService
+
+        kwargs = self.service_kwargs()
+        kwargs.setdefault("layers", self.layers)
+        kwargs.setdefault("version", self.version)
+        kwargs.setdefault("styles", self.styles)
+        return WMSService(self.base_url, **kwargs)
+
+    def service_kwargs(self) -> dict[str, Any]:
+        kwargs = super().service_kwargs()
+        kwargs.setdefault("layers", self.layers)
+        kwargs.setdefault("version", self.version)
+        kwargs.setdefault("styles", self.styles)
+        return kwargs
+
+    def tile_kwargs(self) -> dict[str, Any]:
+        kwargs = super().tile_kwargs()
+        kwargs["layers"] = self.layers
+        kwargs["styles"] = self.styles
+        return kwargs
+
+
+class WMTSConfig(ServiceConfig):
+    """Configuration helper for Web Map Tile Services."""
+
+    layer: str = Field(..., description="WMTS layer identifier")
+    tile_matrix_set: str = Field(..., description="Tile matrix set identifier")
+    tile_matrix: int = Field(..., ge=0, description="Tile matrix / zoom level")
+    style: str = Field(default="", description="WMTS style identifier")
+    url_template: str | None = Field(
+        default=None,
+        description="REST GetTile URL template from GetCapabilities",
+    )
+    version: str = Field(default="1.0.0", description="WMTS protocol version")
+    service_type: ServiceTypeEnum = Field(
+        default=ServiceTypeEnum.WMTS, init=False, description="Service type constant"
+    )
+
+    @classmethod
+    def from_url(
+        cls,
+        url: str,
+        *,
+        layer: str,
+        tile_matrix_set: str,
+        tile_matrix: int,
+        **kwargs: Any,
+    ) -> WMTSConfig:
+        """Convenience constructor for WMTS endpoints."""
+
+        return cls(
+            base_url=url,
+            layer=layer,
+            tile_matrix_set=tile_matrix_set,
+            tile_matrix=tile_matrix,
+            **kwargs,
+        )
+
+    def build_service(self) -> BaseService:
+        """Construct a ``WMTSService`` instance from this configuration."""
+
+        from .wmts import WMTSService
+
+        kwargs = self.service_kwargs()
+        kwargs.setdefault("layer", self.layer)
+        kwargs.setdefault("tile_matrix_set", self.tile_matrix_set)
+        kwargs.setdefault("tile_matrix", self.tile_matrix)
+        kwargs.setdefault("style", self.style)
+        kwargs.setdefault("version", self.version)
+        if self.url_template is not None:
+            kwargs.setdefault("url_template", self.url_template)
+        return WMTSService(self.base_url, **kwargs)
+
+    def service_kwargs(self) -> dict[str, Any]:
+        kwargs = super().service_kwargs()
+        kwargs.setdefault("layer", self.layer)
+        kwargs.setdefault("tile_matrix_set", self.tile_matrix_set)
+        kwargs.setdefault("tile_matrix", self.tile_matrix)
+        kwargs.setdefault("style", self.style)
+        kwargs.setdefault("version", self.version)
+        if self.url_template is not None:
+            kwargs.setdefault("url_template", self.url_template)
+        return kwargs
+
+    def tile_kwargs(self) -> dict[str, Any]:
+        kwargs = super().tile_kwargs()
+        kwargs["layer"] = self.layer
+        kwargs["tile_matrix_set"] = self.tile_matrix_set
+        kwargs["tile_matrix"] = self.tile_matrix
+        kwargs["style"] = self.style
+        if self.url_template is not None:
+            kwargs["url_template"] = self.url_template
+        return kwargs

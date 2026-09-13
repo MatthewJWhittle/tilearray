@@ -9,6 +9,8 @@ from .array import create_array, load_array
 from .service import (
     BaseService,
     TileGeometry,
+    WMSConfig,
+    WMTSConfig,
     XYZConfig,
     XYZService,
     detect_service_type,
@@ -16,6 +18,8 @@ from .service import (
     register_service,
 )
 from .service.wcs import WCSParser, WCSService
+from .service.wms import WMSService
+from .service.wmts import WMTSParser, WMTSService
 from .types import (
     CRS,
     BBoxTuple,
@@ -44,8 +48,13 @@ __all__ = [
     "register_service",
     "XYZConfig",
     "XYZService",
+    "WMSConfig",
+    "WMTSConfig",
     "WCSParser",
     "WCSService",
+    "WMSService",
+    "WMTSParser",
+    "WMTSService",
     "BBoxTuple",
     "BoundingBox",
     "CoverageDescription",

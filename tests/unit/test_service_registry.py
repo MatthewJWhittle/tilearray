@@ -6,6 +6,8 @@ import pytest
 
 from tilearray.service.base import detect_service_type, get_service
 from tilearray.service.wcs import WCSService
+from tilearray.service.wms import WMSService
+from tilearray.service.wmts import WMTSService
 from tilearray.types import ServiceTypeEnum
 
 pytestmark = pytest.mark.unit
@@ -41,3 +43,21 @@ def test_get_service_builds_registered_implementation() -> None:
     service = get_service("https://example.com/wcs", coverage_id="cov-1")
     assert isinstance(service, WCSService)
     assert service.coverage_id == "cov-1"
+
+
+def test_get_service_builds_wms_implementation() -> None:
+    service = get_service("https://example.com/wms", layers="roads")
+    assert isinstance(service, WMSService)
+    assert service.layers == "roads"
+
+
+def test_get_service_builds_wmts_implementation() -> None:
+    service = get_service(
+        "https://example.com/wmts",
+        layer="roads",
+        tile_matrix_set="EPSG4326",
+        tile_matrix=10,
+    )
+    assert isinstance(service, WMTSService)
+    assert service.layer == "roads"
+    assert service.tile_matrix == 10
