@@ -151,6 +151,16 @@ class CoverageDescription(BaseModel):
     supported_formats: list[Format] = Field(default_factory=list)
     spatial_extent: Optional[SpatialExtent] = None
     temporal_extent: Optional[TemporalExtent] = None
+    native_crs: Optional[CRS] = Field(
+        None, description="Native CRS from DescribeCoverage envelope srsName"
+    )
+    axis_labels: dict[str, tuple[str, str]] = Field(
+        default_factory=dict,
+        description="Subsetting axis labels keyed by normalized CRS (e.g. EPSG:3857)",
+    )
+    native_format: Optional[Format] = Field(
+        None, description="Preferred output format from DescribeCoverage nativeFormat"
+    )
 
 
 class ServiceCapabilities(BaseModel):

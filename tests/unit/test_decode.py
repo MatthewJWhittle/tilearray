@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,10 +15,15 @@ from tilearray.decode import (
     decode_tile_bytes,
     default_band_count_for_format,
     identity_unwrapper,
+    read_geotiff_bytes,
     read_image_bytes,
     unwrap_multipart,
 )
 from tilearray.types import Format, TileResponse
+
+GEOTIFF_FIXTURE = (
+    Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+)
 
 
 @pytest.mark.unit
@@ -75,11 +81,11 @@ def test_default_band_count_for_format() -> None:
 
 
 @pytest.mark.unit
-def test_unwrap_multipart_is_identity_stub() -> None:
+def test_unwrap_multipart_passes_through_non_multipart() -> None:
     payload = b"raw-bytes"
     response = TileResponse(
         data=payload,
-        content_type="multipart/related",
+        content_type="application/octet-stream",
         status_code=200,
         headers={},
         url="https://example.com/wcs",
@@ -87,3 +93,37 @@ def test_unwrap_multipart_is_identity_stub() -> None:
     )
 
     assert unwrap_multipart(payload, response) == payload
+
+
+@pytest.mark.unit
+def test_unwrap_multipart_extracts_geotiff_part() -> None:
+    tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
+    multipart_body = (
+        b"--wcs\r\n"
+        b"Content-Type: text/xml\r\n"
+        b"Content-ID: GML-Part\r\n\r\n"
+        b"<gmlcov:RectifiedGridCoverage/>\r\n"
+        b"--wcs\r\n"
+        b"Content-Type: image/tiff\r\n"
+        b"Content-ID: coverage.tif\r\n"
+        b"Content-Transfer-Encoding: binary\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
+    )
+    response = TileResponse(
+        data=multipart_body,
+        content_type='multipart/related; boundary="wcs";type="text/xml"',
+        status_code=200,
+        headers={},
+        url="https://example.com/wcs",
+        success=True,
+    )
+
+    unwrapped = unwrap_multipart(multipart_body, response)
+    assert unwrapped[:2] in (b"II", b"MM")
+    decoded = decode_tile_bytes(
+        multipart_body,
+        reader=read_geotiff_bytes,
+        band_policy="first_band",
+        unwrapper=unwrap_multipart,
+        response=response,
+    )
+    assert decoded.shape == (64, 64)

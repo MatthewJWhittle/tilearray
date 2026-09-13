@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Capabilities-driven WCS GetCoverage: axis labels and native CRS from DescribeCoverage; automatic reprojection to native CRS when needed; shared `unwrap_multipart` for ArcGIS `multipart/related` GeoTIFF payloads
+- Offline USGS 3DEP ArcGIS WCS contract tests (DescribeCoverage + multipart GetCoverage cassettes)
 - Thin WMS 1.3.0 and WMTS 1.0.0 adapters: `WMSService` (GetMap with CRS-aware bbox), `WMTSService` (GetTile REST or KVP, optional GetCapabilities), `WMSConfig` / `WMTSConfig`, shared decode and request composition with WCS/XYZ (no host-specific presets)
 - `TileFetcher` engine: shared `httpx` client, bounded concurrency, `tenacity` retries (429/5xx, `Retry-After`), and pluggable per-host rate limiting via `ServiceConfig`
 - Retryable HTTP status codes now include gateway throttling **403** and **408** (same AIMD / `Retry-After` path as 429/503)
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- WCS subset axes no longer hard-code Long/Lat per CRS; `WCSService` reads envelope `axisLabels` from DescribeCoverage (EA `E`/`N`, ArcGIS `x`/`y`, geographic fallback `Long`/`Lat`)
 - `create_array` / `load_array`: y coordinates now decrease with row index (north at row 0), matching `_organize_tiles` mosaic layout so north-up display no longer requires a manual flip
 - Multi-band mosaic assembly: spatial `concatenate` on `y`/`x` for RGB JPEG/PNG tiles (fixes `da.block` stacking along `band`); single-band GeoTIFF mosaics still use `da.block`
 - README: `create_array` output has north-up y coordinates (row 0 = north)

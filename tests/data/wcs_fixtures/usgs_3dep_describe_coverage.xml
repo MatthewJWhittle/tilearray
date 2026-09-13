@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wcs:CoverageDescriptions xmlns:wcs="http://www.opengis.net/wcs/2.0"
+ xmlns:ows="http://www.opengis.net/ows/2.0"
+ xmlns:gml="http://www.opengis.net/gml/3.2"
+ xmlns:gmlcov="http://www.opengis.net/gmlcov/1.0">
+  <wcs:CoverageDescription>
+    <gml:boundedBy>
+      <gml:Envelope srsName="http://www.opengis.net/def/crs/EPSG/0/3857" axisLabels="x y" uomLabels="Meter Meter" srsDimension="2">
+        <gml:lowerCorner>-20037507.0672000013 -1689391.82336018607</gml:lowerCorner>
+        <gml:upperCorner>20037507.5325271226 18809001.9719000012</gml:upperCorner>
+      </gml:Envelope>
+    </gml:boundedBy>
+    <wcs:CoverageId>DEP3Elevation</wcs:CoverageId>
+    <wcs:ServiceParameters>
+      <wcs:CoverageSubtype>RectifiedGridCoverage</wcs:CoverageSubtype>
+      <wcs:nativeFormat>image/tiff</wcs:nativeFormat>
+    </wcs:ServiceParameters>
+  </wcs:CoverageDescription>
+</wcs:CoverageDescriptions>

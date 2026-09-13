@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -5,9 +6,11 @@ import requests
 
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WCSConfig, XYZConfig
-from tilearray.service.wcs import WCSParser, WCSService
+from tilearray.service.wcs import WCSParser, WCSService, normalize_crs_reference
 from tilearray.service.xyz import XYZService
-from tilearray.types import CRS, BoundingBox, Format
+from tilearray.types import CRS, BoundingBox, CoverageDescription, Format
+
+FIXTURES = Path(__file__).resolve().parents[1] / "data" / "wcs_fixtures"
 
 
 def test_wcs_parser_parses_capabilities_example():
@@ -174,6 +177,12 @@ def test_wcs_service_get_coverage_handles_request_errors(monkeypatch) -> None:
         output_format=Format.GEOTIFF,
         crs=CRS.EPSG_4326,
     )
+    service.set_coverage_metadata(
+        CoverageDescription(
+            identifier="coverage-1",
+            axis_labels={"EPSG:4326": ("Long", "Lat")},
+        )
+    )
 
     def fake_get(*args, **kwargs):
         raise requests.HTTPError("bad gateway", response=MagicMock(status_code=502))
@@ -191,17 +200,86 @@ def test_wcs_service_get_coverage_handles_request_errors(monkeypatch) -> None:
     assert response.status_code == 502
 
 
-def test_wcs_service_subset_axes_for_projected_crs() -> None:
+def test_wcs_parser_reads_axis_labels_from_describe_coverage_fixtures() -> None:
+    parser = WCSParser("http://example.com/wcs")
+
+    ea = parser.parse_describe_coverage(
+        (FIXTURES / "ea_lidar_describe_coverage.xml").read_text()
+    )
+    assert ea.native_crs == CRS.EPSG_27700
+    assert ea.axis_labels["EPSG:27700"] == ("E", "N")
+
+    usgs = parser.parse_describe_coverage(
+        (FIXTURES / "usgs_3dep_describe_coverage.xml").read_text()
+    )
+    assert usgs.native_crs == CRS.EPSG_3857
+    assert usgs.axis_labels["EPSG:3857"] == ("x", "y")
+    assert usgs.native_format == Format.GEOTIFF
+
+
+def test_wcs_service_builds_subset_from_coverage_metadata() -> None:
+    parser = WCSParser("http://example.com/wcs")
+    ea_metadata = parser.parse_describe_coverage(
+        (FIXTURES / "ea_lidar_describe_coverage.xml").read_text()
+    )
     service = WCSService(
         "http://example.com/wcs",
-        coverage_id="coverage-1",
+        coverage_id=ea_metadata.identifier,
         crs=CRS.EPSG_27700,
     )
-    bbox = BoundingBox(min_x=0, min_y=0, max_x=10, max_y=10, crs=CRS.EPSG_27700)
-    subsets = service._format_subset(bbox, CRS.EPSG_27700)
+    service.set_coverage_metadata(ea_metadata)
+
+    geometry = TileGeometry(
+        bbox=BoundingBox(min_x=0, min_y=0, max_x=10, max_y=10, crs=CRS.EPSG_27700),
+        width=16,
+        height=16,
+        crs=CRS.EPSG_27700,
+    )
+    request = service.build_tile_request(geometry)
+    subsets = request.params["subset"]
 
     assert subsets[0].startswith("E(")
     assert subsets[1].startswith("N(")
+
+
+def test_wcs_service_reprojects_to_native_crs_for_arcgis_metadata() -> None:
+    parser = WCSParser("http://example.com/wcs")
+    usgs_metadata = parser.parse_describe_coverage(
+        (FIXTURES / "usgs_3dep_describe_coverage.xml").read_text()
+    )
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id=usgs_metadata.identifier,
+        crs=CRS.EPSG_4326,
+    )
+    service.set_coverage_metadata(usgs_metadata)
+
+    geometry = TileGeometry(
+        bbox=BoundingBox(
+            min_x=-105.01,
+            min_y=39.74,
+            max_x=-104.99,
+            max_y=39.76,
+            crs=CRS.EPSG_4326,
+        ),
+        width=16,
+        height=16,
+        crs=CRS.EPSG_4326,
+    )
+    request = service.build_tile_request(geometry)
+
+    assert request.params["subsettingCRS"] == "EPSG:3857"
+    subsets = request.params["subset"]
+    assert subsets[0].startswith("x(")
+    assert subsets[1].startswith("y(")
+
+
+def test_normalize_crs_reference() -> None:
+    assert (
+        normalize_crs_reference("http://www.opengis.net/def/crs/EPSG/0/3857")
+        == "EPSG:3857"
+    )
+    assert normalize_crs_reference("EPSG:27700") == "EPSG:27700"
 
 
 def test_wcs_service_coerce_helpers_validate_inputs() -> None:
