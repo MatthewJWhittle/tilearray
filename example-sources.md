@@ -25,7 +25,7 @@ Thin configs / docs only — not a product catalogue.
 
 NASA GIBS XYZ (happy-path peer, no key)
 https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg
-Quirk: path is `{z}/{y}/{x}` (row before col), not OSM `{z}/{x}/{y}`. Use `XYZConfig.from_url` with that template. Public; coordinate if >~1M tiles/24h.
+Quirk: path is `{z}/{y}/{x}` (row before col), not OSM `{z}/{x}/{y}`. Use `XYZConfig.from_url` with that template. JPEG colour mosaics preserve RGB bands `(y, x, band)` via the shared decode pipeline. Public; coordinate if >~1M tiles/24h.
 
 OS Maps API ZXY (UK + clean 429 — needs free Data Hub key)
 https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=…
