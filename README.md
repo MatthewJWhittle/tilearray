@@ -73,6 +73,40 @@ elevation = da.compute()
 print(elevation.shape, float(elevation.mean()))
 ```
 
+### Large DTM mosaics — lazy fetch + `compute_with_policy`
+
+For multi-tile mosaics, prefer **lazy** `create_array` and **`compute_with_policy`** instead of `load_array` (which eagerly fetches on return). Plain `.compute()` uses Dask's default thread pool (~CPU cores), which can leave AIMD fetch headroom unused when `max_concurrent_requests` is higher (e.g. 32 on EA WCS).
+
+```python
+from tilearray import compute_with_policy, create_array
+from tilearray.service import WCSConfig
+from tilearray.types import CRS, Format
+
+config = WCSConfig.for_ea_dsp(
+    "https://environment.data.gov.uk/spatialdata/"
+    "lidar-composite-digital-terrain-model-dtm-1m/wcs",
+    coverage_id="13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
+    crs=CRS.EPSG_27700,
+    output_format=Format.GEOTIFF,
+    chunk_size=(128, 128),
+    resolution=(1.0, 1.0),
+)
+
+# ~1 km window → ~64 tiles; do not use load_array for this path
+bbox = (418_000.0, 451_400.0, 419_024.0, 452_424.0)  # Skipton, Yorkshire
+da = create_array(config, bbox, CRS.EPSG_27700)
+
+# Delayed reduction still triggers tile fetches on compute (attrs stay on ``da``)
+policy = da.attrs["tilearray_fetch_policy"]
+mean_elevation = compute_with_policy(
+    da.mean(),
+    max_concurrent=policy["max_concurrent"],
+)
+print(float(mean_elevation))
+```
+
+`create_array` stores fetch policy metadata on `da.attrs`; `compute_with_policy` reads it automatically. Live before/after bench (network required): `uv run python scripts/bench_compute_with_policy_live.py`.
+
 ### XYZ slippy-map tiles
 
 ```python
@@ -177,7 +211,7 @@ Multi-band mosaics stitch tiles with spatial `concatenate` on `y`/`x` (not `da.b
 
 | Export | Role |
 |--------|------|
-| `create_array`, `load_array` | Lazy or eager xarray from a service; `compute_thread_pool_size` (`from tilearray.array import …`) sizes Dask workers for manual `.compute()` |
+| `create_array`, `load_array`, `compute_with_policy` | Lazy or eager xarray from a service; use `compute_with_policy` instead of plain `.compute()` on large lazy mosaics so Dask thread workers match AIMD fetch ceiling (`compute_thread_pool_size` in `tilearray.array` for manual sizing) |
 | `WCSService`, `WCSParser` | Low-level WCS client + capabilities |
 | `WMSService` | WMS 1.3.0 GetMap client (CRS-aware bbox) |
 | `WMTSService`, `WMTSParser` | WMTS GetTile client (REST `{TileMatrix}/{TileRow}/{TileCol}` or KVP; optional GetCapabilities) |
