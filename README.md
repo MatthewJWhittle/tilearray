@@ -138,6 +138,8 @@ da = create_array(
 )
 ```
 
+Arrays from `create_array` have north-up y coordinates (row 0 = north).
+
 ## Fetch presets
 
 Tile fetches go through a shared engine with bounded concurrency, retries, and optional per-host rate limits. **Dask** stays lazy for mosaic assembly: tiles are only pulled over HTTP when you actually compute.
