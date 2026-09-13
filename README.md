@@ -1,6 +1,6 @@
 # tilearray
 
-tilearray turns remote tile services into **Dask**-backed **xarray** arrays for geographic information system (GIS) and machine learning / deep learning work — one `create_array` call, polite to servers, fast when they're healthy. WCS and XYZ share a request-and-decode base with adaptive AIMD fetch under a hard ceiling; thin presets appear only when a host quirk requires one.
+tilearray turns remote tile services into **Dask**-backed **xarray** arrays for geographic information system (GIS) and machine learning / deep learning work — one `create_array` call, polite to servers, fast when they're healthy. WCS, WMS, WMTS, and XYZ share a request-and-decode base with adaptive AIMD fetch under a hard ceiling; thin presets appear only when a host quirk requires one.
 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
@@ -14,7 +14,7 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays for 
 - Configures endpoints with `WCSConfig`, `WMSConfig`, `WMTSConfig`, or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
 - Fetches tiles through a shared HTTP engine with bounded concurrency, retries (including gateway **403** / **408**), optional rate limits, and **adaptive concurrency (AIMD)** where enabled — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS). Failed tiles after retries raise `NetworkError` rather than leaving silent NaN holes.
 - Lets you register other service backends later via a small service registry
-- Shared **decode** and **request** helpers: JPEG/PNG tiles keep RGB bands `(y, x, band)`; GeoTIFF elevation uses the first band only; config headers/params (User-Agent, etc.) are wired onto every outgoing `TileRequest` via WCS and XYZ services
+- Shared **decode** and **request** helpers: JPEG/PNG tiles keep RGB bands `(y, x, band)`; GeoTIFF elevation uses the first band only; config headers/params (User-Agent, etc.) are wired onto every outgoing `TileRequest` via all service adapters
 
 ## Install
 
@@ -163,11 +163,13 @@ See [example-sources.md](example-sources.md) for additional public endpoints.
 
 ### Decode / request pipeline
 
-Tile bytes and HTTP metadata follow two shared paths so WCS and XYZ behave consistently:
+Tile bytes and HTTP metadata follow two shared paths so WCS, WMS, WMTS, and XYZ behave consistently:
 
 **Decode** (`tilearray.decode`) — unwrap response bytes → read (GeoTIFF / JPEG / PNG) → apply band policy → `float32`. JPEG and PNG use **`preserve`**: colour mosaics stay `(y, x, band)` (e.g. RGB is 3 bands). GeoTIFF elevation uses **`first_band`** (single `(y, x)` surface). Multipart WCS unwrap is an extension point today (`unwrap_multipart` is a pass-through stub; USGS ArcGIS ImageServer is not supported yet). You can still pass a custom `tile_decoder` to `create_array` when you need different behaviour.
 
-**Request composition** (`tilearray.service.requests.compose_tile_request`) — merges `headers` and `params` from service config and call-time options onto every `TileRequest`. Preset User-Agent strings and auth hooks therefore reach the fetch layer for both WCS and XYZ without each service re-implementing header wiring.
+Multi-band mosaics stitch tiles with spatial `concatenate` on `y`/`x` (not `da.block`, which would stack along `band` — e.g. a 2×3 grid of RGB tiles would become `band=9`). Single-band GeoTIFF elevation mosaics still use `da.block`.
+
+**Request composition** (`tilearray.service.requests.compose_tile_request`) — merges `headers` and `params` from service config and call-time options onto every `TileRequest`. Preset User-Agent strings and auth hooks therefore reach the fetch layer without each service re-implementing header wiring.
 
 ### Public API
 
@@ -175,11 +177,13 @@ Tile bytes and HTTP metadata follow two shared paths so WCS and XYZ behave consi
 |--------|------|
 | `create_array`, `load_array` | Lazy or eager xarray from a service; `compute_thread_pool_size` (`from tilearray.array import …`) sizes Dask workers for manual `.compute()` |
 | `WCSService`, `WCSParser` | Low-level WCS client + capabilities |
+| `WMSService` | WMS 1.3.0 GetMap client (CRS-aware bbox) |
+| `WMTSService`, `WMTSParser` | WMTS GetTile client (REST `{TileMatrix}/{TileRow}/{TileCol}` or KVP; optional GetCapabilities) |
 | `XYZService` | XYZ tile URL template client |
-| `WCSConfig`, `XYZConfig`, `ServiceConfig` | Endpoint / CRS / chunk config; presets `for_openstreetmap()` / `for_ea_dsp()` |
+| `WCSConfig`, `WMSConfig`, `WMTSConfig`, `XYZConfig`, `ServiceConfig` | Endpoint / CRS / chunk config; fetch presets `for_openstreetmap()` / `for_ea_dsp()` only |
 | `get_service`, `register_service`, `detect_service_type` | Service registry |
 
-Service types live under `tilearray.service` (e.g. `from tilearray.service import WCSConfig, XYZConfig`).
+Service types live under `tilearray.service` (e.g. `from tilearray.service import WCSConfig, WMSConfig, WMTSConfig, XYZConfig`).
 
 ## Development
 
@@ -211,8 +215,11 @@ tilearray/
 ├── src/tilearray/          # library
 │   ├── array.py            # create_array / load_array
 │   ├── decode.py           # shared unwrap → read → band-policy decode
-│   ├── service/            # WCS, XYZ + registry
-│   │   └── requests.py     # compose_tile_request (headers/params from config)
+│   ├── service/            # WCS, WMS, WMTS, XYZ + registry
+│   │   ├── config.py       # WCSConfig, WMSConfig, WMTSConfig, XYZConfig
+│   │   ├── requests.py     # compose_tile_request (headers/params from config)
+│   │   ├── wms.py          # WMS GetMap adapter
+│   │   └── wmts.py         # WMTS GetTile adapter (+ optional GetCapabilities)
 │   └── types.py
 ├── tests/
 │   ├── unit/
