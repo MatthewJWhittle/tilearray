@@ -105,7 +105,7 @@ Two thin presets exist because public hosts want **different** behaviour — not
 - EA preset: **4** retries; wait = `Retry-After` if present, else exponential backoff + jitter.
 - Those codes also trigger AIMD **pressure** (EA preset: ×0.75 in-flight, floor 4).
 - If a tile still fails after retries: raises `NetworkError` — mosaics do **not** succeed with silent NaN holes.
-- Live 256-tile EA stress: previously ~18% holes at ~27 s; after fix `finite_frac=1.0` with ~40 retries (~49 s).
+- Live 256-tile EA stress: previously ~18% holes at ~27 s; after fix `finite_frac=1.0` with ~40 retries (~49 s) at ×0.5 pressure; after less-jumpy AIMD (×0.75, floor 4) ~53 s, `finite_frac=1.0`, ~89 retries (same ~50 s band as ×0.5 / ~40 retries — stays hotter under Azure blips, still complete).
 
 These are example policies for testing host quirks, not a product catalogue. For custom endpoints, use `from_url` and tune `FetchPolicy` / `ServiceConfig` fields (`adaptive_concurrency`, `initial_concurrent_requests`, `min_concurrent_requests`, `max_concurrent_requests`, `rate_limit_per_second`, and so on). The EA preset ceiling of 32 is a safety max AIMD tunes under (`max_concurrent_requests`) — it only helps if Dask can run that many tile fetches in parallel (`create_array(..., compute=True)` sets `num_workers=max(cpu_count, max_concurrent)` automatically; for manual `.compute()`, pass the same or use `compute_thread_pool_size(fetch_policy)`).
 
