@@ -101,7 +101,7 @@ Two thin presets exist because public hosts want **different** behaviour — not
 
 **Retries / gateway pressure**
 
-- Retryable HTTP codes: **403, 408, 429, 502, 503, 504** (Azure Application Gateway often returns **403** for throttle/WAF pressure, not only 429).
+- Retryable HTTP codes: **403, 408, 429, 500, 502, 503, 504** (Azure Application Gateway often returns **403** for throttle/WAF pressure, not only 429; EA DSP may return **500** `internal_error` under load).
 - EA preset: **4** retries; wait = `Retry-After` if present, else exponential backoff + jitter.
 - Those codes also trigger AIMD **pressure** (EA preset: ×0.75 in-flight, floor 4).
 - If a tile still fails after retries: raises `NetworkError` — mosaics do **not** succeed with silent NaN holes.

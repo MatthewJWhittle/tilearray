@@ -121,6 +121,37 @@ def test_fetch_tile_retries_transient_503() -> None:
 
 
 @respx.mock
+def test_fetch_tile_retries_transient_500_with_aimd_pressure() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(
+            500,
+            text='{"statusCode":500,"code":"internal_error"}',
+        ),
+        httpx.Response(200, content=b"recovered"),
+    ]
+    policy = FetchPolicy(
+        max_concurrent=8,
+        initial_concurrent=4,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+        retries=1,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    response = fetcher.fetch(_tile_request(retries=1))
+    gate = fetcher._adaptive_gate
+    assert gate is not None
+
+    assert response.success is True
+    assert response.data == b"recovered"
+    assert route.call_count == 2
+    assert fetcher.stats.concurrency_decreases >= 1
+    assert fetcher.stats.retry_count >= 1
+
+
+@respx.mock
 def test_fetch_tile_honours_retry_after_on_429() -> None:
     route = respx.get("https://example.com/tile")
     route.side_effect = [
