@@ -8,7 +8,11 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from requests import RequestException
 
-from ..fetch import FetchPolicy, HostRateLimiter
+from ..fetch import (
+    _DEFAULT_MULTIPLICATIVE_DECREASE,
+    FetchPolicy,
+    HostRateLimiter,
+)
 from ..types import CRS, Format, ServiceTypeEnum
 from .base import BaseService, get_service
 
@@ -63,6 +67,12 @@ class ServiceConfig(BaseModel):
         default=1,
         ge=1,
         description="Floor in-flight limit after AIMD multiplicative decrease",
+    )
+    multiplicative_decrease: float = Field(
+        default=_DEFAULT_MULTIPLICATIVE_DECREASE,
+        gt=0.0,
+        lt=1.0,
+        description="AIMD multiplicative decrease factor on pressure (0–1 exclusive)",
     )
     adaptive_concurrency: bool = Field(
         default=False,
@@ -123,6 +133,7 @@ class ServiceConfig(BaseModel):
             adaptive_concurrency=self.adaptive_concurrency,
             initial_concurrent=self.initial_concurrent_requests,
             min_concurrent=self.min_concurrent_requests,
+            multiplicative_decrease=self.multiplicative_decrease,
         )
 
     def service_kwargs(self) -> dict[str, Any]:

@@ -30,7 +30,8 @@ def test_ea_dsp_fetch_defaults_use_aimd() -> None:
     defaults = ea_dsp_fetch_defaults()
     assert defaults["max_concurrent_requests"] == 32
     assert defaults["initial_concurrent_requests"] == 8
-    assert defaults["min_concurrent_requests"] == 1
+    assert defaults["min_concurrent_requests"] == 4
+    assert defaults["multiplicative_decrease"] == 0.75
     assert defaults["adaptive_concurrency"] is True
     assert defaults["rate_limit_per_second"] is None
     assert defaults["fetch_retries"] == 4
@@ -57,6 +58,8 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
     )
     assert config.max_concurrent_requests == 32
     assert config.initial_concurrent_requests == 8
+    assert config.min_concurrent_requests == 4
+    assert config.multiplicative_decrease == 0.75
     assert config.adaptive_concurrency is True
     assert config.fetch_retries == 4
     assert config.rate_limit_per_second is None
@@ -65,6 +68,8 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
     assert policy.retries == 4
     assert policy.adaptive_concurrency is True
     assert policy.initial_concurrent == 8
+    assert policy.min_concurrent == 4
+    assert policy.multiplicative_decrease == 0.75
     assert policy.max_concurrent == 32
 
 

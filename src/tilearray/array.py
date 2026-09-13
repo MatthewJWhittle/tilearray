@@ -382,6 +382,9 @@ def _resolve_fetch_policy(
         min_concurrent=service_options.pop(
             "min_concurrent_requests", base.min_concurrent
         ),
+        multiplicative_decrease=service_options.pop(
+            "multiplicative_decrease", base.multiplicative_decrease
+        ),
     )
 
 

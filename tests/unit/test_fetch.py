@@ -454,6 +454,28 @@ def test_adaptive_gate_slow_start_then_additive() -> None:
     assert gate.decrease_count == 1
 
 
+def test_adaptive_gate_ea_multiplicative_decrease_factor() -> None:
+    gate = AdaptiveConcurrencyGate(
+        initial=8, minimum=4, maximum=32, multiplicative_decrease=0.75
+    )
+    assert gate.current_limit("host") == 8
+
+    gate.record_pressure("host")
+    assert gate.current_limit("host") == 6
+    assert gate.decrease_count == 1
+
+
+def test_adaptive_gate_ea_floor_enforced_after_pressure() -> None:
+    gate = AdaptiveConcurrencyGate(
+        initial=8, minimum=4, maximum=32, multiplicative_decrease=0.75
+    )
+    for _ in range(5):
+        gate.record_pressure("host")
+
+    assert gate.current_limit("host") == 4
+    assert gate.decrease_count == 2
+
+
 @respx.mock
 def test_aimd_realistic_latency_skipton_scale() -> None:
     tile_latency_s = 0.08

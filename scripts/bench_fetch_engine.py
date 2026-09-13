@@ -52,6 +52,9 @@ def _policy_from_service_defaults(defaults: dict[str, object]) -> FetchPolicy:
             defaults.get("initial_concurrent_requests", 2)  # type: ignore[arg-type]
         ),
         min_concurrent=int(defaults.get("min_concurrent_requests", 1)),  # type: ignore[arg-type]
+        multiplicative_decrease=float(
+            defaults.get("multiplicative_decrease", 0.5)  # type: ignore[arg-type]
+        ),
     )
 
 
