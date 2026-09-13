@@ -5,13 +5,13 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays for 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
 
-> **Alpha.** The API may change. Today **Web Coverage Service (WCS)** — the Open Geospatial Consortium protocol that returns the actual raster values (not just a picture) — and **XYZ slippy-map tile URLs** are implemented. **Web Map Service (WMS)** and **Web Map Tile Service (WMTS)** show up in types/config but are **not supported yet**.
+> **Alpha.** The API may change. Today **Web Coverage Service (WCS)**, **Web Map Service (WMS)**, **Web Map Tile Service (WMTS)**, and **XYZ slippy-map tile URLs** are implemented as thin adapters behind one `create_array` entry point.
 
 ## What it does
 
-- Talks to a **WCS 2.0.1** endpoint and fetches GeoTIFF tiles, or fetches **XYZ** PNG tiles from a URL template
+- Talks to **WCS 2.0.1** (GeoTIFF tiles), **WMS 1.3.0** (GetMap PNG/JPEG), **WMTS 1.0.0** (GetTile REST or KVP), or **XYZ** PNG tiles from a URL template
 - Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
-- Configures endpoints with `WCSConfig` or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
+- Configures endpoints with `WCSConfig`, `WMSConfig`, `WMTSConfig`, or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
 - Fetches tiles through a shared HTTP engine with bounded concurrency, retries (including gateway **403** / **408**), optional rate limits, and **adaptive concurrency (AIMD)** where enabled — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS). Failed tiles after retries raise `NetworkError` rather than leaving silent NaN holes.
 - Lets you register other service backends later via a small service registry
 - Shared **decode** and **request** helpers: JPEG/PNG tiles keep RGB bands `(y, x, band)`; GeoTIFF elevation uses the first band only; config headers/params (User-Agent, etc.) are wired onto every outgoing `TileRequest` via WCS and XYZ services
@@ -89,7 +89,54 @@ da = create_array(
 print(da.shape, da.attrs["service_type"])  # (256, 256) or (256, 256, 3) for RGB — backed by Dask until computed
 ```
 
-`WCSConfig.from_url` and `XYZConfig.from_url` still work for custom endpoints — see [example-sources.md](example-sources.md) for URLs and coverage ids.
+`WCSConfig.from_url`, `WMSConfig.from_url`, `WMTSConfig.from_url`, and `XYZConfig.from_url` work for custom endpoints — see [example-sources.md](example-sources.md) for URLs and coverage ids.
+
+### WMS GetMap
+
+```python
+from tilearray import WMSConfig, create_array
+from tilearray.types import CRS, Format
+
+config = WMSConfig.from_url(
+    "https://example.com/wms",
+    layers="roads",
+    output_format=Format.PNG,
+    chunk_size=(256, 256),
+    grid_shape=(1, 1),
+)
+
+da = create_array(
+    config,
+    bbox=(-0.1, 51.4, 0.1, 51.6),
+    crs=CRS.EPSG_4326,
+)
+```
+
+### WMTS GetTile
+
+```python
+from tilearray import WMTSConfig, create_array
+from tilearray.types import CRS, Format
+
+config = WMTSConfig.from_url(
+    "https://example.com/wmts",
+    layer="roads",
+    tile_matrix_set="EPSG4326",
+    tile_matrix=12,
+    url_template=(
+        "https://example.com/wmts/rest/{Layer}/{Style}/{TileMatrixSet}/"
+        "{TileMatrix}/{TileRow}/{TileCol}.png"
+    ),
+    output_format=Format.PNG,
+    chunk_size=(256, 256),
+)
+
+da = create_array(
+    config,
+    bbox=(-0.2, 51.4, 0.2, 51.6),
+    crs=CRS.EPSG_4326,
+)
+```
 
 ## Fetch presets
 
