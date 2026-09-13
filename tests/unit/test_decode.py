@@ -1,0 +1,89 @@
+"""Unit tests for the shared tile decode pipeline."""
+
+from __future__ import annotations
+
+from io import BytesIO
+
+import numpy as np
+import pytest
+from PIL import Image
+
+from tilearray.decode import (
+    apply_band_policy,
+    band_count_from_array,
+    decode_tile_bytes,
+    default_band_count_for_format,
+    identity_unwrapper,
+    read_image_bytes,
+    unwrap_multipart,
+)
+from tilearray.types import Format, TileResponse
+
+
+@pytest.mark.unit
+def test_apply_band_policy_preserves_rgb() -> None:
+    rgb = np.zeros((8, 8, 3), dtype=np.float32)
+    rgb[..., 0] = 200
+    rgb[..., 1] = 100
+    rgb[..., 2] = 50
+
+    preserved = apply_band_policy(rgb, "preserve")
+
+    assert preserved.shape == (8, 8, 3)
+    assert float(preserved[..., 1].mean()) == pytest.approx(100.0)
+
+
+@pytest.mark.unit
+def test_apply_band_policy_first_band_for_geotiff_stack() -> None:
+    stack = np.stack(
+        [np.full((8, 8), 10.0), np.full((8, 8), 20.0)],
+        axis=0,
+    )
+
+    reduced = apply_band_policy(stack, "first_band")
+
+    assert reduced.shape == (8, 8)
+    assert float(reduced.mean()) == pytest.approx(10.0)
+
+
+@pytest.mark.unit
+def test_decode_tile_bytes_preserves_jpeg_rgb_bands() -> None:
+    source = np.zeros((32, 32, 3), dtype=np.uint8)
+    source[..., 0] = 180
+    source[..., 1] = 90
+    source[..., 2] = 30
+    with BytesIO() as buffer:
+        Image.fromarray(source, mode="RGB").save(buffer, format="JPEG")
+        raw = buffer.getvalue()
+
+    decoded = decode_tile_bytes(
+        raw,
+        reader=read_image_bytes,
+        band_policy="preserve",
+        unwrapper=identity_unwrapper,
+    )
+
+    assert decoded.shape == (32, 32, 3)
+    assert band_count_from_array(decoded) == 3
+
+
+@pytest.mark.unit
+def test_default_band_count_for_format() -> None:
+    assert default_band_count_for_format(Format.GEOTIFF) == 1
+    assert default_band_count_for_format(Format.JPEG) is None
+    assert default_band_count_for_format(Format.PNG) is None
+
+
+@pytest.mark.unit
+def test_unwrap_multipart_is_identity_stub() -> None:
+    payload = b"raw-bytes"
+    response = TileResponse(
+        data=payload,
+        content_type="multipart/related",
+        status_code=200,
+        headers={},
+        url="https://example.com/wcs",
+        success=True,
+    )
+
+    assert unwrap_multipart(payload, response) == payload

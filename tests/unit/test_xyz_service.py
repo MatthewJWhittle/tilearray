@@ -1,16 +1,20 @@
 from io import BytesIO
 from pathlib import Path
 
+import httpx
 import numpy as np
 import pytest
+import respx
 import xarray as xr
 from PIL import Image
 from pytest import MonkeyPatch
 
 from tilearray.array import create_array
+from tilearray.fetch import TileFetcher
 from tilearray.service.base import TileGeometry, detect_service_type
 from tilearray.service.config import XYZConfig
 from tilearray.service.xyz import XYZService, _tile_bounds, _tile_range_for_bbox
+from tilearray.tiles import fetch_tile
 from tilearray.types import (
     CRS,
     BoundingBox,
@@ -23,11 +27,29 @@ from tilearray.types import (
 OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 
+@pytest.fixture(autouse=True)
+def reset_fetcher_instances():
+    TileFetcher.reset_instances()
+    yield
+    TileFetcher.reset_instances()
+
+
 @pytest.fixture
 def png_tile_bytes() -> bytes:
     array = np.full((256, 256), 128, dtype=np.uint8)
     with BytesIO() as buffer:
         Image.fromarray(array, mode="L").save(buffer, format="PNG")
+        return buffer.getvalue()
+
+
+@pytest.fixture
+def rgb_jpeg_tile_bytes() -> bytes:
+    array = np.zeros((256, 256, 3), dtype=np.uint8)
+    array[..., 0] = 200
+    array[..., 1] = 100
+    array[..., 2] = 50
+    with BytesIO() as buffer:
+        Image.fromarray(array, mode="RGB").save(buffer, format="JPEG")
         return buffer.getvalue()
 
 
@@ -72,6 +94,33 @@ def test_xyz_service_build_tile_request():
     assert request.output_format == Format.PNG
     assert request.width == 256
     assert request.height == 256
+
+
+def test_xyz_service_build_tile_request_includes_headers():
+    service = XYZService(
+        OSM_TEMPLATE,
+        zoom=12,
+        headers={"User-Agent": "tilearray-test/1.0"},
+    )
+    tile = TileGeometry(
+        bbox=_tile_bounds(2048, 1361, 12, CRS.EPSG_4326),
+        width=256,
+        height=256,
+        crs=CRS.EPSG_4326,
+        tile_x=2048,
+        tile_y=1361,
+        zoom=12,
+    )
+
+    request = service.build_tile_request(
+        tile,
+        headers={"X-Peer-Test": "enabled"},
+    )
+
+    assert request.headers == {
+        "User-Agent": "tilearray-test/1.0",
+        "X-Peer-Test": "enabled",
+    }
 
 
 def test_xyz_service_infers_grid_shape_for_multi_tile_bbox():
@@ -173,3 +222,71 @@ def test_create_array_with_xyz_url_and_service_type(
 
     assert result.shape == (256, 256)
     assert result.attrs["service_type"] == "XYZ"
+
+
+def test_create_array_with_rgb_jpeg_tile(
+    rgb_jpeg_tile_bytes: bytes,
+    monkeypatch: MonkeyPatch,
+):
+    monkeypatch.setattr(
+        "tilearray.array.fetch_tile", _mock_fetch_tile(rgb_jpeg_tile_bytes)
+    )
+
+    zoom = 16
+    tile_x, tile_y = 32768, 21770
+    bbox = _single_tile_bbox(zoom, tile_x, tile_y)
+
+    result = create_array(
+        XYZConfig.from_url(
+            OSM_TEMPLATE,
+            zoom=zoom,
+            output_format=Format.JPEG,
+            chunk_size=(256, 256),
+        ),
+        bbox,
+        CRS.EPSG_4326,
+        compute=True,
+    )
+
+    assert result.shape == (256, 256, 3)
+    assert result.dims == ("y", "x", "band")
+    assert float(result[..., 0].mean()) == pytest.approx(200.0, rel=1e-3)
+    assert float(result[..., 1].mean()) == pytest.approx(100.0, rel=1e-3)
+    assert float(result[..., 2].mean()) == pytest.approx(50.0, rel=1e-3)
+
+
+@respx.mock
+def test_xyz_config_headers_reach_http_fetch(rgb_jpeg_tile_bytes: bytes) -> None:
+    captured: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(dict(request.headers))
+        return httpx.Response(200, content=rgb_jpeg_tile_bytes)
+
+    respx.get(url__regex=r"https://tile\.openstreetmap\.org/.*").mock(
+        side_effect=handler
+    )
+
+    zoom = 16
+    tile_x, tile_y = 32768, 21770
+    service = XYZService(
+        OSM_TEMPLATE,
+        zoom=zoom,
+        output_format=Format.JPEG,
+        headers={"User-Agent": "tilearray-peer-test/1.0"},
+    )
+    tile = TileGeometry(
+        bbox=_tile_bounds(tile_x, tile_y, zoom, CRS.EPSG_4326),
+        width=256,
+        height=256,
+        crs=CRS.EPSG_4326,
+        tile_x=tile_x,
+        tile_y=tile_y,
+        zoom=zoom,
+    )
+    request = service.build_tile_request(tile)
+
+    response = fetch_tile(request)
+
+    assert response.success is True
+    assert captured.get("user-agent") == "tilearray-peer-test/1.0"

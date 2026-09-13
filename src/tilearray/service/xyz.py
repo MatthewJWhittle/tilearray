@@ -94,19 +94,14 @@ class XYZService(BaseService):
         if isinstance(fmt, str):
             fmt = Format(fmt)
 
-        extra_params = options.get("params")
-        params: dict[str, Any] = (
-            dict(extra_params) if isinstance(extra_params, dict) else {}
-        )
-
-        return TileRequest(
+        passthrough = {
+            key: value for key, value in options.items() if key != "output_format"
+        }
+        return self.compose_tile_request(
+            tile,
             url=url,
-            params=params,
             output_format=fmt,
-            crs=tile.crs,
-            bbox=tile.bbox,
-            width=tile.width,
-            height=tile.height,
+            **passthrough,
         )
 
 
