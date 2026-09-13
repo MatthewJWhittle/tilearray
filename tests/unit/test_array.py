@@ -376,6 +376,129 @@ def test_plan_tiles_uses_resolution() -> None:
     assert {req.height for req in recorded} == {500}
 
 
+@pytest.mark.unit
+def test_create_array_y_coords_north_at_row_zero(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Y coordinates must match _organize_tiles: row 0 is north (max_y)."""
+
+    rows, cols = 2, 2
+    chunk = 2
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=4, max_y=4, crs=CRS.EPSG_4326)
+
+    class GridTileService(BaseService):
+        service_type = ServiceTypeEnum.WCS
+
+        def __init__(self) -> None:
+            super().__init__("http://example.com/wcs")
+            self.output_format = Format.GEOTIFF
+
+        def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
+            return TileRequest(
+                url="http://example.com/wcs",
+                params={},
+                output_format=Format.GEOTIFF,
+                crs=tile.crs,
+                bbox=tile.bbox,
+                width=tile.width,
+                height=tile.height,
+            )
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> GridTileService:
+        return GridTileService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        width = request.width or 1
+        height = request.height or 1
+        return TileResponse(
+            data=b"\x00" * (width * height),
+            content_type="application/octet-stream",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
+        assert request.bbox is not None
+        height = request.height or 1
+        width = request.width or 1
+        # Encode tile centroid latitude so geographic alignment is checkable.
+        value = float((request.bbox.min_y + request.bbox.max_y) / 2.0)
+        return np.full((height, width), value, dtype=np.float32)
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+
+    result = array_module.create_array(
+        service_url="http://example.com/wcs",
+        bbox=bbox,
+        crs=CRS.EPSG_4326,
+        chunk_size=(chunk, chunk),
+        grid_shape=(rows, cols),
+    )
+
+    y = result.coords["y"].values
+    assert y[0] == pytest.approx(bbox.max_y)
+    assert y[-1] == pytest.approx(bbox.min_y)
+    assert np.all(np.diff(y) <= 0)
+
+    computed = result.compute()
+    # Northern half of the mosaic (row 0) should sit at higher y than southern half.
+    north_value = float(computed.isel(y=0).mean())
+    south_value = float(computed.isel(y=-1).mean())
+    assert north_value > south_value
+
+
+@pytest.mark.unit
+def test_create_array_single_tile_y_coords_span_bbox(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    bbox = BoundingBox(min_x=10, min_y=20, max_x=30, max_y=40, crs=CRS.EPSG_4326)
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
+        return DummyService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        width = request.width or 1
+        height = request.height or 1
+        return TileResponse(
+            data=b"\x00" * (width * height),
+            content_type="application/octet-stream",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+
+    def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
+        height = request.height or 1
+        width = request.width or 1
+        return np.ones((height, width), dtype=np.float32)
+
+    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+
+    result = array_module.create_array(
+        service_url="http://example.com/wcs",
+        bbox=bbox,
+        crs=CRS.EPSG_4326,
+        chunk_size=(4, 4),
+    )
+
+    y = result.coords["y"].values
+    x = result.coords["x"].values
+    assert y[0] == pytest.approx(bbox.max_y)
+    assert y[-1] == pytest.approx(bbox.min_y)
+    assert x[0] == pytest.approx(bbox.min_x)
+    assert x[-1] == pytest.approx(bbox.max_x)
+
+
 def test_organize_tiles_orders_by_bbox() -> None:
     bbox = BoundingBox(min_x=0, min_y=0, max_x=2, max_y=2, crs=CRS.EPSG_4326)
 

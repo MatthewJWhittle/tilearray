@@ -491,7 +491,8 @@ def create_array(
 
     normalized_bbox = request.bbox
     target_crs = request.target_crs
-    y_coords = np.linspace(normalized_bbox.min_y, normalized_bbox.max_y, data.shape[0])
+    # Row 0 comes from the northernmost tiles (_organize_tiles sorts by -max_y).
+    y_coords = np.linspace(normalized_bbox.max_y, normalized_bbox.min_y, data.shape[0])
     x_coords = np.linspace(normalized_bbox.min_x, normalized_bbox.max_x, data.shape[1])
 
     data_array = xr.DataArray(
