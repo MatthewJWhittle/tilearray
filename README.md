@@ -1,6 +1,6 @@
 # tilearray
 
-Pull geospatial **coverage tiles** from remote map services into Python as lazy **xarray** / **dask** arrays — so you can work with big rasters without downloading everything up front.
+tilearray turns remote tile services into **Dask**-backed **xarray** arrays for geographic information system (GIS) and machine learning / deep learning work — one `create_array` call, polite to servers, fast when they're healthy. WCS and XYZ share a request-and-decode base with adaptive AIMD fetch under a hard ceiling; thin presets appear only when a host quirk requires one.
 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
@@ -14,6 +14,7 @@ Pull geospatial **coverage tiles** from remote map services into Python as lazy 
 - Configures endpoints with `WCSConfig` or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
 - Fetches tiles through a shared HTTP engine with bounded concurrency, retries (including gateway **403** / **408**), optional rate limits, and **adaptive concurrency (AIMD)** where enabled — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS). Failed tiles after retries raise `NetworkError` rather than leaving silent NaN holes.
 - Lets you register other service backends later via a small service registry
+- Shared **decode** and **request** helpers: JPEG/PNG tiles keep RGB bands `(y, x, band)`; GeoTIFF elevation uses the first band only; config headers/params (User-Agent, etc.) are wired onto every outgoing `TileRequest` via WCS and XYZ services
 
 ## Install
 
@@ -85,7 +86,7 @@ da = create_array(
     bbox=(-0.005, 51.495, 0.005, 51.505),  # small bbox near central London
     crs=CRS.EPSG_4326,
 )
-print(da.shape, da.attrs["service_type"])  # (256, 256) 'XYZ' — backed by Dask until computed
+print(da.shape, da.attrs["service_type"])  # (256, 256) or (256, 256, 3) for RGB — backed by Dask until computed
 ```
 
 `WCSConfig.from_url` and `XYZConfig.from_url` still work for custom endpoints — see [example-sources.md](example-sources.md) for URLs and coverage ids.
@@ -112,6 +113,14 @@ These are example policies for testing host quirks, not a product catalogue. For
 Offline before/after bench: `uv run python scripts/bench_fetch_engine.py` (results in `benchmarks/fetch_engine_bench_results.txt`). On a live Skipton-scale EA mosaic (~16 tiles), warm start often lands ~5–10 s (EA jitter); the prior AIMD preset (start=2) was ~14 s, legacy unbounded ~10–13 s when healthy, and the old polite fixed cap of 2 at 1 req/s ~25 s — stability under 429 still matters. On a live 64-tile (~5 km / 1000×1000) EA mosaic, ceiling 16 with Dask stuck at default workers was ~20 s (`max_inflight` 8); ceiling 32 with Dask workers aligned via `compute_thread_pool_size` was ~14.7 s (`max_inflight` 32).
 
 See [example-sources.md](example-sources.md) for additional public endpoints.
+
+### Decode / request pipeline
+
+Tile bytes and HTTP metadata follow two shared paths so WCS and XYZ behave consistently:
+
+**Decode** (`tilearray.decode`) — unwrap response bytes → read (GeoTIFF / JPEG / PNG) → apply band policy → `float32`. JPEG and PNG use **`preserve`**: colour mosaics stay `(y, x, band)` (e.g. RGB is 3 bands). GeoTIFF elevation uses **`first_band`** (single `(y, x)` surface). Multipart WCS unwrap is an extension point today (`unwrap_multipart` is a pass-through stub; USGS ArcGIS ImageServer is not supported yet). You can still pass a custom `tile_decoder` to `create_array` when you need different behaviour.
+
+**Request composition** (`tilearray.service.requests.compose_tile_request`) — merges `headers` and `params` from service config and call-time options onto every `TileRequest`. Preset User-Agent strings and auth hooks therefore reach the fetch layer for both WCS and XYZ without each service re-implementing header wiring.
 
 ### Public API
 
@@ -154,7 +163,9 @@ make pre-commit-run
 tilearray/
 ├── src/tilearray/          # library
 │   ├── array.py            # create_array / load_array
+│   ├── decode.py           # shared unwrap → read → band-policy decode
 │   ├── service/            # WCS, XYZ + registry
+│   │   └── requests.py     # compose_tile_request (headers/params from config)
 │   └── types.py
 ├── tests/
 │   ├── unit/
