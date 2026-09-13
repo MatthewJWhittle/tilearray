@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
 import warnings
 from collections.abc import Callable
+from email import policy
+from email.parser import BytesParser
 from io import BytesIO
 from typing import Literal, cast
 
@@ -48,16 +51,53 @@ def identity_unwrapper(data: bytes, response: TileResponse) -> bytes:
     return data
 
 
+def _extract_multipart_boundary(content_type: str, data: bytes) -> str | None:
+    match = re.search(r'boundary="?([^";]+)"?', content_type, flags=re.I)
+    if match:
+        return match.group(1)
+    if data.startswith(b"--"):
+        first_line = data.split(b"\n", 1)[0]
+        if first_line.startswith(b"--") and len(first_line) > 2:
+            return first_line[2:].decode("ascii", errors="ignore").strip()
+    return None
+
+
+def _extract_tiff_part(data: bytes, content_type: str) -> bytes | None:
+    boundary = _extract_multipart_boundary(content_type, data)
+    if not boundary:
+        return None
+
+    mime_bytes = f"Content-Type: {content_type}\r\n\r\n".encode("ascii") + data
+    message = BytesParser(policy=policy.default).parsebytes(mime_bytes)
+    if not message.is_multipart():
+        return None
+
+    for part in message.iter_parts():
+        part_type = (part.get_content_type() or "").lower()
+        if part_type in {"image/tiff", "image/geotiff"}:
+            payload = part.get_payload(decode=True)
+            if isinstance(payload, bytes) and payload[:2] in (b"II", b"MM"):
+                return payload
+    return None
+
+
 def unwrap_multipart(data: bytes, response: TileResponse) -> bytes:
     """
-    Extension point for multipart WCS payloads (e.g. ArcGIS ImageServer).
+    Unwrap ``multipart/related`` WCS payloads (e.g. ArcGIS ImageServer).
 
-    Full multipart parsing is out of scope; callers may register a custom
-    unwrapper via :func:`make_tile_decoder` until a shared implementation
-    lands here.
+    Returns the first ``image/tiff`` part when present; otherwise passes
+    through raw bytes unchanged.
     """
 
-    del response
+    content_type = (response.content_type or "").lower()
+    if data[:2] in (b"II", b"MM"):
+        return data
+
+    if "multipart/" in content_type or data.startswith(b"--"):
+        tiff_part = _extract_tiff_part(data, content_type)
+        if tiff_part is not None:
+            return tiff_part
+
     return data
 
 
@@ -253,6 +293,7 @@ def _register_default_decoders() -> None:
         make_tile_decoder(
             read_geotiff_bytes,
             band_policy=DEFAULT_BAND_POLICIES[Format.GEOTIFF],
+            unwrapper=unwrap_multipart,
         ),
     )
     if _PILImage is not None or _imageio is not None:  # pragma: no cover

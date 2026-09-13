@@ -34,7 +34,8 @@ Test: real HTTP 429 throttle (50/min dev or 600/min live). Attribution required.
 
 USGS 3DEP WCS (second WCS shape)
 https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WCSServer
-Test: ArcGIS WCS 2.0.1 vs EA DSP CoverageId quirks. Public USGS elevation.
+CoverageId: DEP3Elevation
+Use `WCSConfig.from_url(..., coverage_id="DEP3Elevation", crs=EPSG:3857)` — no fetch preset. tilearray reads native CRS and subset axis labels from DescribeCoverage (ArcGIS uses `x`/`y` in EPSG:3857, not Long/Lat). GetCoverage responses are often `multipart/related`; the shared decode pipeline unwraps the GeoTIFF part automatically. Public USGS elevation.
 
 
 EA Vegetation Object Model (WMS)

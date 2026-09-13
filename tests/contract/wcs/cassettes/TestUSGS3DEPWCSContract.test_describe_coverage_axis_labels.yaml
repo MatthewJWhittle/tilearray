@@ -1,0 +1,84 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/ImageServer/WCSServer?service=WCS&version=2.0.1&request=DescribeCoverage&coverageId=DEP3Elevation
+  response:
+    body:
+      string: "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<wcs:CoverageDescriptions
+        xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n xmlns=\"http://www.opengis.net/gml/3.2\"\n
+        xmlns:wcs=\"http://www.opengis.net/wcs/2.0\"\n xmlns:ows=\"http://www.opengis.net/ows/2.0\"\n
+        xmlns:gml=\"http://www.opengis.net/gml/3.2\"\n xmlns:gmlcov=\"http://www.opengis.net/gmlcov/1.0\"\n
+        xmlns:swe=\"http://www.opengis.net/swe/2.0\"\n xmlns:crs=\"http://www.opengis.net/wcs/service-extension/crs/1.0\"\n
+        xmlns:xlink=\"http://www.w3.org/1999/xlink\"\n xsi:schemaLocation=\"http://www.opengis.net/wcs/2.0
+        http://schemas.opengis.net/wcs/2.0/wcsDescribeCoverage.xsd http://www.opengis.net/swe/2.0
+        http://schemas.opengis.net/sweCommon/2.0/swe.xsd\">\n  <wcs:CoverageDescription>
+        \    <gml:boundedBy>\n      <gml:Envelope srsName=\"http://www.opengis.net/def/crs/EPSG/0/3857\"
+        axisLabels=\"x y\" uomLabels=\"Meter Meter\" srsDimension=\"2\">\n        <gml:lowerCorner>-20037507.0672000013
+        -1689391.82336018607</gml:lowerCorner>\n        <gml:upperCorner>20037507.5325271226
+        18809001.9719000012</gml:upperCorner>\n      </gml:Envelope>\n   </gml:boundedBy>\n
+        \   <wcs:CoverageId>DEP3Elevation</wcs:CoverageId>\n    <gml:domainSet>\n
+        \     <gml:RectifiedGrid gml:id=\"grid_DEP3Elevation\" dimension=\"2\">\n
+        \       <gml:limits>\n          <gml:GridEnvelope>\n            <gml:low>0
+        0</gml:low>\n            <gml:high>40075014 20498393</gml:high>\n          </gml:GridEnvelope>\n
+        \       </gml:limits>\n        <gml:axisLabels>x y</gml:axisLabels>\n        <gml:origin>\n
+        \         <gml:Point gml:id=\"grid_origin_DEP3Elevation\" srsName=\"http://www.opengis.net/def/crs/EPSG/0/3857\">\n
+        \           <gml:pos>-20037506.5672000051 18809001.4719000049</gml:pos>\n
+        \         </gml:Point>\n        </gml:origin>\n          <gml:offsetVector
+        srsName=\"EPSG:3857\" srsDimension=\"2\">0.999999990011909534 0</gml:offsetVector>\n
+        \         <gml:offsetVector srsName=\"EPSG:3857\" srsDimension=\"2\">0 -0.999999990011909534</gml:offsetVector>\n
+        \     </gml:RectifiedGrid>\n    </gml:domainSet>\n    <gmlcov:rangeType>\n
+        \     <swe:DataRecord>\n        <swe:field name=\"band_1\">\n          <swe:Quantity>\n
+        \           <swe:description>Band 1</swe:description>\n            <swe:uom
+        code=\"unknown\"/>\n            <swe:constraint>\n              <swe:AllowedValues>\n
+        \               <swe:interval>-60.304333 3922.473389</swe:interval>\n              </swe:AllowedValues>\n
+        \           </swe:constraint>\n          </swe:Quantity>\n        </swe:field>\n
+        \     </swe:DataRecord>\n    </gmlcov:rangeType>\n    <wcs:ServiceParameters>\n
+        \     <wcs:CoverageSubtype>RectifiedGridCoverage</wcs:CoverageSubtype>\n      <wcs:nativeFormat>image/tiff</wcs:nativeFormat>\n
+        \   </wcs:ServiceParameters>\n  </wcs:CoverageDescription>\n</wcs:CoverageDescriptions>\n"
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      Cache-Control:
+      - private
+      Connection:
+      - keep-alive
+      Content-Type:
+      - text/xml
+      Date:
+      - Sun, 13 Sep 2026 09:53:09 GMT
+      Server:
+      - nginx
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      Via:
+      - 1.1 654604c11e1221b06511e8fd344a994c.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - aEhwbE2lkxR5ULj8UOzr5gKIxlWw90PZTWXQE8IbqA7B95wo-Uh9gg==
+      X-Amz-Cf-Pop:
+      - CMH68-P7
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - 1; mode=block
+    status:
+      code: 200
+      message: OK
+version: 1

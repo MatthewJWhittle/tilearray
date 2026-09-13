@@ -7,8 +7,12 @@ responses. Default CI replays cassettes only — no outbound network.
 
 from __future__ import annotations
 
+import math
+
+import numpy as np
 import pytest
 
+from tilearray.decode import read_geotiff_bytes, unwrap_multipart
 from tilearray.service.wcs import WCSService
 from tilearray.types import CRS, BoundingBox, Format
 
@@ -92,3 +96,84 @@ class TestEALidarWCSContract:
         assert len(response.data) > 0
         # GeoTIFF magic bytes (little- or big-endian)
         assert response.data[:2] in (b"II", b"MM")
+
+
+USGS_3DEP_WCS_URL = (
+    "https://elevation.nationalmap.gov/arcgis/services/3DEPElevation/"
+    "ImageServer/WCSServer"
+)
+USGS_COVERAGE_ID = "DEP3Elevation"
+
+# Tiny Denver-area subset in Web Mercator (native ArcGIS axis labels: x/y)
+_R = 6378137.0
+_USGS_X = -105.0 * math.pi / 180 * _R
+_USGS_Y = math.log(math.tan(math.pi / 4 + 39.75 * math.pi / 360)) * _R
+_USGS_DELTA = 500.0
+USGS_GET_COVERAGE_BBOX = BoundingBox(
+    min_x=_USGS_X - _USGS_DELTA,
+    min_y=_USGS_Y - _USGS_DELTA,
+    max_x=_USGS_X + _USGS_DELTA,
+    max_y=_USGS_Y + _USGS_DELTA,
+    crs=CRS.EPSG_3857,
+)
+USGS_GET_COVERAGE_SIZE = (16, 16)
+
+
+@pytest.mark.contract
+@pytest.mark.vcr()
+class TestUSGS3DEPWCSContract:
+    """Protocol contract for USGS 3DEP ArcGIS ImageServer WCS (recorded HTTP)."""
+
+    def test_describe_coverage_axis_labels(self):
+        service = WCSService(
+            USGS_3DEP_WCS_URL,
+            coverage_id=USGS_COVERAGE_ID,
+            crs=CRS.EPSG_3857,
+        )
+        description = service.describe_coverage(USGS_COVERAGE_ID)
+
+        assert description.identifier == USGS_COVERAGE_ID
+        assert description.native_crs == CRS.EPSG_3857
+        assert description.axis_labels["EPSG:3857"] == ("x", "y")
+        assert description.native_format == Format.GEOTIFF
+
+    def test_get_coverage_multipart_geotiff(self):
+        service = WCSService(
+            USGS_3DEP_WCS_URL,
+            coverage_id=USGS_COVERAGE_ID,
+            output_format=Format.GEOTIFF,
+            crs=CRS.EPSG_3857,
+        )
+        service.ensure_coverage_metadata(USGS_COVERAGE_ID)
+        width, height = USGS_GET_COVERAGE_SIZE
+        response = service.get_coverage(
+            USGS_COVERAGE_ID,
+            USGS_GET_COVERAGE_BBOX,
+            width,
+            height,
+            output_format=Format.GEOTIFF,
+            crs=CRS.EPSG_3857,
+        )
+
+        assert response.success is True
+        assert response.status_code == 200
+        assert response.data is not None
+        assert len(response.data) > 0
+        assert response.data.startswith(b"--")
+
+        from tilearray.types import TileResponse
+
+        tile_response = TileResponse(
+            data=response.data,
+            content_type='multipart/related; boundary="wcs"',
+            status_code=200,
+            headers={},
+            url=USGS_3DEP_WCS_URL,
+            success=True,
+        )
+        tiff_bytes = unwrap_multipart(response.data, tile_response)
+        assert tiff_bytes[:2] in (b"II", b"MM")
+        decoded = read_geotiff_bytes(tiff_bytes)
+        assert decoded.ndim == 2
+        assert decoded.size > 0
+        assert float(np.nanmean(decoded)) > -500.0

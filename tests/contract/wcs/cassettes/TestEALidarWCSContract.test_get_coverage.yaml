@@ -11,6 +11,81 @@ interactions:
       User-Agent:
       - python-requests/2.32.5
     method: GET
+    uri: https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs?service=WCS&version=2.0.1&request=DescribeCoverage&coverageId=13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m
+  response:
+    body:
+      string: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><wcs:CoverageDescriptions
+        xmlns:wcs=\"http://www.opengis.net/wcs/2.0\" xmlns:ows=\"http://www.opengis.net/ows/2.0\"
+        xmlns:gml=\"http://www.opengis.net/gml/3.2\" xmlns:gmlcov=\"http://www.opengis.net/gmlcov/1.0\"
+        xmlns:xlink=\"http://www.w3.org/1999/xlink\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"
+        xmlns:swe=\"http://www.opengis.net/swe/2.0\" xmlns:wcsgs=\"http://www.geoserver.org/wcsgs/2.0\"
+        xsi:schemaLocation=\" http://www.opengis.net/wcs/2.0 http://schemas.opengis.net/wcs/2.0/wcsDescribeCoverage.xsd
+        http://www.geoserver.org/wcsgs/2.0 http://schemas.opengis.net/wcs/2.0/wcsgs.xsd\">\n
+        \ <wcs:CoverageDescription gml:id=\"13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m\">\n
+        \   <gml:description>Generated from ImagePyramid</gml:description>\n    <gml:name>Lidar_Composite_Elevation_DTM_1m</gml:name>\n
+        \   <gml:boundedBy>\n      <gml:Envelope srsName=\"http://www.opengis.net/def/crs/EPSG/0/27700\"
+        axisLabels=\"E N\" uomLabels=\"m m\" srsDimension=\"2\">\n        <gml:lowerCorner>80000.0
+        4000.0</gml:lowerCorner>\n        <gml:upperCorner>656000.0 665000.0</gml:upperCorner>\n
+        \     </gml:Envelope>\n    </gml:boundedBy>\n    <wcs:CoverageId>13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m</wcs:CoverageId>\n
+        \   <gml:coverageFunction>\n      <gml:GridFunction>\n        <gml:sequenceRule
+        axisOrder=\"+1 +2\">Linear</gml:sequenceRule>\n        <gml:startPoint>0 0</gml:startPoint>\n
+        \     </gml:GridFunction>\n    </gml:coverageFunction>\n    <gmlcov:metadata>\n
+        \     <gmlcov:Extension>\n        <ows:Keywords>\n          <ows:Keyword>WCS</ows:Keyword>\n
+        \       </ows:Keywords>\n      </gmlcov:Extension>\n    </gmlcov:metadata>\n
+        \   <gml:domainSet>\n      <gml:RectifiedGrid gml:id=\"grid00__13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m\"
+        dimension=\"2\">\n        <gml:limits>\n          <gml:GridEnvelope>\n            <gml:low>0
+        0</gml:low>\n            <gml:high>575999 660999</gml:high>\n          </gml:GridEnvelope>\n
+        \       </gml:limits>\n        <gml:axisLabels>i j</gml:axisLabels>\n        <gml:origin>\n
+        \         <gml:Point gml:id=\"p00_13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m\"
+        srsName=\"http://www.opengis.net/def/crs/EPSG/0/27700\">\n            <gml:pos>80000.5
+        664999.5</gml:pos>\n          </gml:Point>\n        </gml:origin>\n        <gml:offsetVector
+        srsName=\"http://www.opengis.net/def/crs/EPSG/0/27700\">1.0 0.0</gml:offsetVector>\n
+        \       <gml:offsetVector srsName=\"http://www.opengis.net/def/crs/EPSG/0/27700\">0.0
+        -1.0</gml:offsetVector>\n      </gml:RectifiedGrid>\n    </gml:domainSet>\n
+        \   <gmlcov:rangeType>\n      <swe:DataRecord xmlns:swe=\"http://www.opengis.net/swe/2.0\">\n
+        \       <swe:field name=\"Elevation\">\n          <swe:Quantity>\n            <swe:description>Elevation</swe:description>\n
+        \           <swe:uom code=\"W.m-2.Sr-1\"/>\n            <swe:constraint>\n
+        \             <swe:AllowedValues>\n                <swe:interval>-12.0 1400.0</swe:interval>\n
+        \             </swe:AllowedValues>\n            </swe:constraint>\n          </swe:Quantity>\n
+        \       </swe:field>\n      </swe:DataRecord>\n    </gmlcov:rangeType>\n    <wcs:ServiceParameters>\n
+        \     <wcs:CoverageSubtype>RectifiedGridCoverage</wcs:CoverageSubtype>\n      <wcs:nativeFormat>image/tiff</wcs:nativeFormat>\n
+        \   </wcs:ServiceParameters>\n  </wcs:CoverageDescription>\n</wcs:CoverageDescriptions>\n"
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/xml
+      Date:
+      - Sun, 13 Sep 2026 09:53:08 GMT
+      Server:
+      - openresty/1.25.3.2
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Origin
+      X-Powered-By:
+      - Express
+      request-context:
+      - 'appId=cid-v1:'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
     uri: https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs?service=WCS&version=2.0.1&request=GetCoverage&coverageId=13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m&subset=E%28431900.0%2C431964.0%29&subset=N%28382700.0%2C382764.0%29&format=image%2Ftiff&width=64&height=64&subsettingCRS=EPSG%3A27700
   response:
     body:
@@ -318,7 +393,7 @@ interactions:
       Content-Type:
       - image/tiff
       Date:
-      - Sat, 12 Sep 2026 09:56:59 GMT
+      - Sun, 13 Sep 2026 09:53:08 GMT
       Server:
       - openresty/1.25.3.2
       Strict-Transport-Security:
