@@ -76,14 +76,14 @@ class WMTSParser:
 
         capabilities = WMTSCapabilities()
         for tms_elem in root.findall(".//wmts:TileMatrixSet", self.namespaces):
-            parsed = self._parse_tile_matrix_set(tms_elem)
-            if parsed is not None:
-                capabilities.tile_matrix_sets[parsed.identifier] = parsed
+            tms = self._parse_tile_matrix_set(tms_elem)
+            if tms is not None:
+                capabilities.tile_matrix_sets[tms.identifier] = tms
 
         for layer_elem in root.findall(".//wmts:Layer", self.namespaces):
-            parsed = self._parse_layer(layer_elem)
-            if parsed is not None:
-                capabilities.layers[parsed.identifier] = parsed
+            layer = self._parse_layer(layer_elem)
+            if layer is not None:
+                capabilities.layers[layer.identifier] = layer
 
         return capabilities
 
@@ -570,7 +570,7 @@ def _format_extension(fmt: Format) -> str:
         return "jpg"
     if fmt == Format.GEOTIFF:
         return "tif"
-    return fmt.value.split("/")[-1]
+    raise ValueError(f"Unsupported format: {fmt}")
 
 
 def _matrix_index(
