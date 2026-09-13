@@ -20,6 +20,7 @@ from typing import (
 import numpy as np
 import xarray as xr
 from dask.array import block as da_block
+from dask.array import concatenate as da_concatenate
 from dask.array import from_delayed as da_from_delayed
 from dask.delayed import Delayed, delayed
 from pydantic import BaseModel, ConfigDict, Field
@@ -464,7 +465,7 @@ def create_array(
             )
         blocks.append(row_blocks)
 
-    data = da_block(blocks)
+    data = _assemble_tile_mosaic(blocks, n_bands)
 
     attrs = request.array_attrs(service, tile_options, effective_format)
 
@@ -545,6 +546,24 @@ def _validate_chunk_size(chunk_size: tuple[int, int]) -> tuple[int, int]:
     if width <= 0 or height <= 0:
         raise ValueError("chunk_size dimensions must be positive integers")
     return height, width
+
+
+def _assemble_tile_mosaic(
+    blocks: list[list[DaskArray]],
+    n_bands: int,
+) -> DaskArray:
+    """
+    Stitch decoded tile blocks into a single mosaic array.
+
+    ``da.block`` maps the tile grid onto the leading axes of each block. For
+    multi-band tiles ``(y, x, band)`` that incorrectly concatenates along
+    ``band`` instead of ``x``. Concatenate explicitly on spatial axes instead.
+    """
+
+    if n_bands > 1:
+        row_arrays = [da_concatenate(row_blocks, axis=1) for row_blocks in blocks]
+        return da_concatenate(row_arrays, axis=0)
+    return da_block(blocks)
 
 
 def _probe_tile_band_count(
