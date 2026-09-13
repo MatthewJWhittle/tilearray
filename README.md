@@ -9,12 +9,13 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays for 
 
 ## What it does
 
-- Talks to **WCS 2.0.1** (GeoTIFF tiles), **WMS 1.3.0** (GetMap PNG/JPEG), **WMTS 1.0.0** (GetTile REST or KVP), or **XYZ** PNG tiles from a URL template
+- Talks to **WCS 2.0.1** (GeoTIFF tiles; **capabilities-driven** GetCoverage from DescribeCoverage axis labels and native CRS), **WMS 1.3.0** (GetMap PNG/JPEG), **WMTS 1.0.0** (GetTile REST or KVP), or **XYZ** PNG tiles from a URL template
 - Builds a **Dask-backed** `xarray.DataArray` via `create_array` — “lazy” means the tiles are only fetched when you `.compute()` / `.load()`
 - Configures endpoints with `WCSConfig`, `WMSConfig`, `WMTSConfig`, or `XYZConfig` (coordinate reference system, chunk size, cache, etc.)
 - Fetches tiles through a shared HTTP engine with bounded concurrency, retries (including gateway **403** / **408**), optional rate limits, and **adaptive concurrency (AIMD)** where enabled — plus thin **fetch presets** for well-known public hosts (OpenStreetMap Foundation tiles, Environment Agency WCS). Failed tiles after retries raise `NetworkError` rather than leaving silent NaN holes.
 - Lets you register other service backends later via a small service registry
-- Shared **decode** and **request** helpers: JPEG/PNG tiles keep RGB bands `(y, x, band)`; GeoTIFF elevation uses the first band only; config headers/params (User-Agent, etc.) are wired onto every outgoing `TileRequest` via all service adapters
+- Origin-aligned tile planning via `create_tile_grid` in `tilearray.tiles` (helper, not yet a public re-export)
+- Shared **decode** and **request** helpers: JPEG/PNG tiles keep RGB bands `(y, x, band)`; GeoTIFF elevation uses the first band only, unwrapping `multipart/related` WCS payloads (GML + TIFF) as well as raw GeoTIFF; config headers/params (User-Agent, etc.) are wired onto every outgoing `TileRequest` via all service adapters
 
 ## Install
 
@@ -49,6 +50,7 @@ wcs_url = (
 coverage_id = (
     "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m"
 )
+# GetCoverage subset axes come from DescribeCoverage (EA uses E/N in EPSG:27700), not hardcoded Long/Lat
 
 config = WCSConfig.for_ea_dsp(
     wcs_url,
@@ -203,7 +205,9 @@ See [example-sources.md](example-sources.md) for additional public endpoints.
 
 Tile bytes and HTTP metadata follow two shared paths so WCS, WMS, WMTS, and XYZ behave consistently:
 
-**Decode** (`tilearray.decode`) — unwrap response bytes → read (GeoTIFF / JPEG / PNG) → apply band policy → `float32`. JPEG and PNG use **`preserve`**: colour mosaics stay `(y, x, band)` (e.g. RGB is 3 bands). GeoTIFF elevation uses **`first_band`** (single `(y, x)` surface). Multipart WCS unwrap is an extension point today (`unwrap_multipart` is a pass-through stub; USGS ArcGIS ImageServer is not supported yet). You can still pass a custom `tile_decoder` to `create_array` when you need different behaviour.
+**Decode** (`tilearray.decode`) — unwrap response bytes → read (GeoTIFF / JPEG / PNG) → apply band policy → `float32`. JPEG and PNG use **`preserve`**: colour mosaics stay `(y, x, band)` (e.g. RGB is 3 bands). GeoTIFF elevation uses **`first_band`** (single `(y, x)` surface). **`unwrap_multipart`** strips `multipart/related` WCS payloads (GML + TIFF) to the GeoTIFF part; raw GeoTIFF bytes pass through unchanged. Proven on real endpoints: Environment Agency Lidar WCS (live integration) and USGS 3DEP ArcGIS ImageServer WCS (second dialect; offline contract cassettes). You can still pass a custom `tile_decoder` to `create_array` when you need different behaviour.
+
+**WCS GetCoverage** (`tilearray.service.wcs`) — `WCSService` reads DescribeCoverage for envelope axis labels and native CRS, then builds subset parameters from that metadata (EA `E`/`N`, ArcGIS `x`/`y`, geographic fallback `Long`/`Lat`); it reprojects to native CRS when the requested CRS has no axis labels. See [example-sources.md](example-sources.md) for USGS 3DEP (`DEP3Elevation`, EPSG:3857).
 
 Multi-band mosaics stitch tiles with spatial `concatenate` on `y`/`x` (not `da.block`, which would stack along `band` — e.g. a 2×3 grid of RGB tiles would become `band=9`). Single-band GeoTIFF elevation mosaics still use `da.block`.
 
