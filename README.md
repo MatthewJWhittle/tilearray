@@ -1,6 +1,6 @@
 # tilearray
 
-Pull geospatial **coverage tiles** from remote map services into Python as lazy **xarray** / **dask** arrays — so you can work with big rasters without downloading everything up front.
+tilearray turns remote tile services into **Dask**-backed **xarray** arrays for geographic information system (GIS) and machine learning / deep learning work — one `create_array` call, polite to servers, fast when they're healthy. WCS and XYZ share a request-and-decode base with adaptive AIMD fetch under a hard ceiling; thin presets appear only when a host quirk requires one.
 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
