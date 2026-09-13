@@ -535,7 +535,7 @@ def test_create_array_y_coords_north_at_row_zero(
 
     monkeypatch.setattr(array_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     result = array_module.create_array(
         service_url="http://example.com/wcs",
@@ -587,7 +587,7 @@ def test_create_array_single_tile_y_coords_span_bbox(
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    array_module.register_tile_decoder(Format.GEOTIFF, decoder)
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
     result = array_module.create_array(
         service_url="http://example.com/wcs",
