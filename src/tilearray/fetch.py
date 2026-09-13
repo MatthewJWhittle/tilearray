@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 from urllib.parse import urlparse
@@ -18,6 +19,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from .errors import NetworkError
 from .types import TileRequest, TileResponse
 
 logger = logging.getLogger(__name__)
@@ -130,6 +132,9 @@ class AdaptiveConcurrencyGate:
         maximum: int,
         additive_increase: int = _DEFAULT_ADDITIVE_INCREASE,
         multiplicative_decrease: float = _DEFAULT_MULTIPLICATIVE_DECREASE,
+        forbidden_window_seconds: float | None = None,
+        forbidden_threshold: int = 6,
+        forbidden_cooldown_seconds: float = 15.0,
     ) -> None:
         if initial <= 0 or minimum <= 0 or maximum <= 0:
             raise ValueError("concurrency limits must be positive")
@@ -144,10 +149,17 @@ class AdaptiveConcurrencyGate:
         self._maximum = maximum
         self._additive_increase = additive_increase
         self._multiplicative_decrease = multiplicative_decrease
+        self._forbidden_window_seconds = forbidden_window_seconds
+        self._forbidden_threshold = forbidden_threshold
+        self._forbidden_cooldown_seconds = forbidden_cooldown_seconds
         self._hosts: dict[str, _HostConcurrencyState] = {}
+        self._forbidden_events: dict[str, deque[float]] = {}
+        self._frozen_until: dict[str, float] = {}
         self._map_lock = threading.Lock()
         self.decrease_count = 0
         self.peak_limit = initial
+        self.pressure_403_count = 0
+        self.circuit_breaker_trips = 0
         self._policy_key: tuple[Any, ...] | None = None
 
     def _remembered_limit(self, host: str) -> int | None:
@@ -174,14 +186,32 @@ class AdaptiveConcurrencyGate:
                 self._hosts[host] = state
             return state
 
+    def _is_frozen(self, host: str) -> bool:
+        frozen_until = self._frozen_until.get(host, 0.0)
+        return frozen_until > time.monotonic()
+
+    def _wait_for_freeze(self, host: str, state: _HostConcurrencyState) -> None:
+        while True:
+            frozen_until = self._frozen_until.get(host, 0.0)
+            now = time.monotonic()
+            if frozen_until <= now:
+                return
+            state.condition.wait(timeout=min(0.05, frozen_until - now))
+
     def acquire(self, host: str) -> None:
         state = self._state_for(host)
         with state.condition:
-            while state.inflight >= state.limit:
+            while True:
+                if self._is_frozen(host):
+                    self._wait_for_freeze(host, state)
+                if state.inflight < state.limit:
+                    state.inflight += 1
+                    return
                 state.condition.wait(timeout=0.05)
-            state.inflight += 1
 
     def _increase_limit(self, host: str, state: _HostConcurrencyState) -> None:
+        if self._is_frozen(host):
+            return
         if state.limit >= self._maximum:
             return
         state.limit = min(
@@ -236,6 +266,38 @@ class AdaptiveConcurrencyGate:
                 self._remember_limit(host, state.limit)
             state.condition.notify_all()
 
+    def record_forbidden(self, host: str) -> bool:
+        """Record a 403 and trip the circuit breaker when pressure clusters."""
+
+        if self._forbidden_window_seconds is None:
+            return False
+
+        now = time.monotonic()
+        with self._map_lock:
+            events = self._forbidden_events.setdefault(host, deque())
+            events.append(now)
+            self.pressure_403_count += 1
+            cutoff = now - self._forbidden_window_seconds
+            while events and events[0] < cutoff:
+                events.popleft()
+            if len(events) < self._forbidden_threshold:
+                return False
+            events.clear()
+            self._frozen_until[host] = now + self._forbidden_cooldown_seconds
+            self.circuit_breaker_trips += 1
+
+        state = self._state_for(host)
+        with state.condition:
+            if state.limit > self._minimum:
+                state.limit = self._minimum
+                self.decrease_count += 1
+                self._remember_limit(host, state.limit)
+            state.condition.notify_all()
+        return True
+
+    def circuit_breaker_frozen(self, host: str) -> bool:
+        return self._is_frozen(host)
+
     def current_limit(self, host: str) -> int:
         state = self._state_for(host)
         with state.condition:
@@ -255,6 +317,10 @@ def _adaptive_gate_key(policy: FetchPolicy) -> tuple[Any, ...]:
         policy.max_concurrent,
         policy.multiplicative_decrease,
         policy.additive_increase,
+        policy.forbidden_circuit_breaker,
+        policy.forbidden_window_seconds,
+        policy.forbidden_threshold,
+        policy.forbidden_cooldown_seconds,
     )
 
 
@@ -269,6 +335,13 @@ def _shared_adaptive_gate(policy: FetchPolicy) -> AdaptiveConcurrencyGate:
                 maximum=policy.max_concurrent,
                 additive_increase=policy.additive_increase,
                 multiplicative_decrease=policy.multiplicative_decrease,
+                forbidden_window_seconds=(
+                    policy.forbidden_window_seconds
+                    if policy.forbidden_circuit_breaker
+                    else None
+                ),
+                forbidden_threshold=policy.forbidden_threshold,
+                forbidden_cooldown_seconds=policy.forbidden_cooldown_seconds,
             )
             gate._policy_key = key
             _ADAPTIVE_GATES[key] = gate
@@ -301,6 +374,10 @@ class FetchStats:
     retry_count: int = 0
     peak_concurrency_limit: int = 0
     concurrency_decreases: int = 0
+    current_limit: int = 0
+    pressure_403_count: int = 0
+    circuit_breaker_trips: int = 0
+    circuit_breaker_frozen: bool = False
     _current_inflight: int = field(default=0, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -311,6 +388,10 @@ class FetchStats:
             self.retry_count = 0
             self.peak_concurrency_limit = 0
             self.concurrency_decreases = 0
+            self.current_limit = 0
+            self.pressure_403_count = 0
+            self.circuit_breaker_trips = 0
+            self.circuit_breaker_frozen = False
             self._current_inflight = 0
 
     def _enter_inflight(self) -> None:
@@ -330,12 +411,19 @@ class FetchStats:
         with self._lock:
             self.retry_count += 1
 
-    def _sync_adaptive_stats(self, gate: AdaptiveConcurrencyGate) -> None:
+    def _sync_adaptive_stats(
+        self, gate: AdaptiveConcurrencyGate, host: str | None = None
+    ) -> None:
         with self._lock:
             self.peak_concurrency_limit = max(
                 self.peak_concurrency_limit, gate.peak_limit
             )
             self.concurrency_decreases = gate.decrease_count
+            self.pressure_403_count = gate.pressure_403_count
+            self.circuit_breaker_trips = gate.circuit_breaker_trips
+            if host is not None:
+                self.current_limit = gate.current_limit(host)
+                self.circuit_breaker_frozen = gate.circuit_breaker_frozen(host)
 
 
 @dataclass(frozen=True)
@@ -353,6 +441,10 @@ class FetchPolicy:
     min_concurrent: int = _DEFAULT_MIN_CONCURRENT
     multiplicative_decrease: float = _DEFAULT_MULTIPLICATIVE_DECREASE
     additive_increase: int = _DEFAULT_ADDITIVE_INCREASE
+    forbidden_circuit_breaker: bool = False
+    forbidden_window_seconds: float = 5.0
+    forbidden_threshold: int = 6
+    forbidden_cooldown_seconds: float = 15.0
 
     def cache_key(self) -> tuple[Any, ...]:
         """Hashable key for sharing fetcher instances."""
@@ -368,6 +460,10 @@ class FetchPolicy:
             self.min_concurrent,
             self.multiplicative_decrease,
             self.additive_increase,
+            self.forbidden_circuit_breaker,
+            self.forbidden_window_seconds,
+            self.forbidden_threshold,
+            self.forbidden_cooldown_seconds,
         )
 
 
@@ -379,9 +475,32 @@ class FetchProgress:
     on_progress: ProgressCallback | None = None
     done: int = field(default=0, init=False)
     errors: list[str] = field(default_factory=list, init=False)
+    _aborted: bool = field(default=False, init=False)
+    _abort_reason: str | None = field(default=None, init=False)
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+
+    def abort(self, reason: str) -> None:
+        """Stop sibling tile fetches after a hard failure."""
+
+        with self._lock:
+            if not self._aborted:
+                self._aborted = True
+                self._abort_reason = reason
+
+    def is_aborted(self) -> bool:
+        with self._lock:
+            return self._aborted
+
+    def check_not_aborted(self) -> None:
+        """Raise :class:`~tilearray.errors.NetworkError` when the session aborted."""
+
+        with self._lock:
+            if self._aborted:
+                raise NetworkError(
+                    self._abort_reason or "Tile fetch aborted after earlier failure"
+                )
 
     def tick(self, request: TileRequest, response: TileResponse) -> None:
         with self._lock:
@@ -514,7 +633,7 @@ class TileFetcher:
     def _finish_success(self, host: str) -> None:
         if self._adaptive_gate is not None:
             self._adaptive_gate.finish_success(host)
-            self.stats._sync_adaptive_stats(self._adaptive_gate)
+            self.stats._sync_adaptive_stats(self._adaptive_gate, host)
             return
         assert self._semaphore is not None
         self._semaphore.release()
@@ -522,7 +641,7 @@ class TileFetcher:
     def _finish_pressure(self, host: str) -> None:
         if self._adaptive_gate is not None:
             self._adaptive_gate.finish_pressure(host)
-            self.stats._sync_adaptive_stats(self._adaptive_gate)
+            self.stats._sync_adaptive_stats(self._adaptive_gate, host)
             return
         assert self._semaphore is not None
         self._semaphore.release()
@@ -530,11 +649,24 @@ class TileFetcher:
     def _record_pressure(self, host: str) -> None:
         if self._adaptive_gate is not None:
             self._adaptive_gate.record_pressure(host)
-            self.stats._sync_adaptive_stats(self._adaptive_gate)
+            self.stats._sync_adaptive_stats(self._adaptive_gate, host)
 
-    def fetch(self, request: TileRequest) -> TileResponse:
+    def _record_forbidden(self, host: str) -> None:
+        if self._adaptive_gate is not None:
+            self._adaptive_gate.record_forbidden(host)
+            self.stats._sync_adaptive_stats(self._adaptive_gate, host)
+
+    def fetch(
+        self,
+        request: TileRequest,
+        *,
+        progress: FetchProgress | None = None,
+    ) -> TileResponse:
         if not request.url:
             raise ValueError("URL is required")
+
+        if progress is not None:
+            progress.check_not_aborted()
 
         headers = dict(request.headers or {})
         if request.output_format:
@@ -544,6 +676,8 @@ class TileFetcher:
         attempts = max(request.retries, self._policy.retries) + 1
 
         def _before_sleep(retry_state: RetryCallState) -> None:
+            if progress is not None:
+                progress.check_not_aborted()
             self.stats._record_retry()
 
         @retry(
@@ -554,8 +688,12 @@ class TileFetcher:
             before_sleep=_before_sleep,
         )
         def _perform_get() -> httpx.Response:
+            if progress is not None:
+                progress.check_not_aborted()
             self._acquire_concurrency(host)
             try:
+                if progress is not None:
+                    progress.check_not_aborted()
                 self._rate_limiter.before_request(host)
                 self.stats._enter_inflight()
                 try:
@@ -574,6 +712,8 @@ class TileFetcher:
 
             if response.status_code in _RETRYABLE_STATUS_CODES:
                 self._finish_pressure(host)
+                if response.status_code == 403:
+                    self._record_forbidden(host)
                 raise RetryableHTTPError(response, _parse_retry_after(response))
 
             self._finish_success(host)
@@ -611,7 +751,9 @@ def get_fetcher(policy: FetchPolicy | None = None) -> TileFetcher:
 def fetch_tile_with_policy(
     request: TileRequest,
     policy: FetchPolicy | None = None,
+    *,
+    progress: FetchProgress | None = None,
 ) -> TileResponse:
     """Fetch a tile using the configured :class:`TileFetcher`."""
 
-    return get_fetcher(policy).fetch(request)
+    return get_fetcher(policy).fetch(request, progress=progress)

@@ -62,11 +62,15 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
     """
 
     return {
-        "max_concurrent_requests": 32,
+        "max_concurrent_requests": 10,
         "initial_concurrent_requests": 8,
         "min_concurrent_requests": 4,
         "multiplicative_decrease": 0.75,
         "adaptive_concurrency": True,
+        "forbidden_circuit_breaker": True,
+        "forbidden_window_seconds": 5.0,
+        "forbidden_threshold": 6,
+        "forbidden_cooldown_seconds": 15.0,
         "rate_limit_per_second": None,
         "fetch_retries": 4,
         "fetch_timeout": 60.0,

@@ -28,11 +28,15 @@ def test_osm_fetch_defaults_include_user_agent() -> None:
 
 def test_ea_dsp_fetch_defaults_use_aimd() -> None:
     defaults = ea_dsp_fetch_defaults()
-    assert defaults["max_concurrent_requests"] == 32
+    assert defaults["max_concurrent_requests"] == 10
     assert defaults["initial_concurrent_requests"] == 8
     assert defaults["min_concurrent_requests"] == 4
     assert defaults["multiplicative_decrease"] == 0.75
     assert defaults["adaptive_concurrency"] is True
+    assert defaults["forbidden_circuit_breaker"] is True
+    assert defaults["forbidden_window_seconds"] == 5.0
+    assert defaults["forbidden_threshold"] == 6
+    assert defaults["forbidden_cooldown_seconds"] == 15.0
     assert defaults["rate_limit_per_second"] is None
     assert defaults["fetch_retries"] == 4
     assert defaults["fetch_timeout"] == 60.0
@@ -56,11 +60,12 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
         "https://environment.data.gov.uk/example/wcs",
         coverage_id="test-coverage",
     )
-    assert config.max_concurrent_requests == 32
+    assert config.max_concurrent_requests == 10
     assert config.initial_concurrent_requests == 8
     assert config.min_concurrent_requests == 4
     assert config.multiplicative_decrease == 0.75
     assert config.adaptive_concurrency is True
+    assert config.forbidden_circuit_breaker is True
     assert config.fetch_retries == 4
     assert config.rate_limit_per_second is None
     policy = config.fetch_policy()
@@ -70,7 +75,8 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
     assert policy.initial_concurrent == 8
     assert policy.min_concurrent == 4
     assert policy.multiplicative_decrease == 0.75
-    assert policy.max_concurrent == 32
+    assert policy.max_concurrent == 10
+    assert policy.forbidden_circuit_breaker is True
 
 
 def test_custom_osm_user_agent() -> None:

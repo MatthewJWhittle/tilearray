@@ -11,6 +11,7 @@ import httpx
 import pytest
 import respx
 
+from tilearray.errors import NetworkError
 from tilearray.fetch import (
     AdaptiveConcurrencyGate,
     FetchPolicy,
@@ -593,3 +594,141 @@ def test_fetch_progress_callback_records_failures() -> None:
 
     assert events == [(1, 2, True), (2, 2, False)]
     assert len(progress.errors) == 1
+
+
+@respx.mock
+def test_forbidden_circuit_breaker_trips_on_clustered_403s() -> None:
+    route = respx.get("https://example.com/tile")
+    route.mock(
+        return_value=httpx.Response(
+            403,
+            text="Forbidden",
+            headers={"Server": "Microsoft-Azure-Application-Gateway/v2"},
+        )
+    )
+    policy = FetchPolicy(
+        max_concurrent=10,
+        initial_concurrent=8,
+        min_concurrent=4,
+        adaptive_concurrency=True,
+        forbidden_circuit_breaker=True,
+        forbidden_window_seconds=5.0,
+        forbidden_threshold=6,
+        forbidden_cooldown_seconds=15.0,
+        rate_limit_per_second=None,
+        retries=0,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+    request = _tile_request(retries=0)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(fetcher.fetch, request) for _ in range(8)]
+        for future in futures:
+            future.result()
+
+    assert fetcher.stats.pressure_403_count >= 6
+    assert fetcher.stats.circuit_breaker_trips >= 1
+    assert fetcher.stats.current_limit == 4
+
+
+@respx.mock
+def test_forbidden_circuit_breaker_ignores_sparse_403s() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(403, text="Forbidden"),
+        httpx.Response(200, content=b"ok"),
+    ]
+    policy = FetchPolicy(
+        max_concurrent=8,
+        initial_concurrent=4,
+        min_concurrent=4,
+        adaptive_concurrency=True,
+        forbidden_circuit_breaker=True,
+        forbidden_window_seconds=5.0,
+        forbidden_threshold=6,
+        forbidden_cooldown_seconds=15.0,
+        rate_limit_per_second=None,
+        retries=1,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    response = fetcher.fetch(_tile_request(retries=1))
+
+    assert response.success is True
+    assert fetcher.stats.circuit_breaker_trips == 0
+    assert fetcher.stats.circuit_breaker_frozen is False
+
+
+@respx.mock
+def test_fetch_stats_expose_live_aimd_limit() -> None:
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(200, content=b"x")
+    )
+    policy = FetchPolicy(
+        max_concurrent=10,
+        initial_concurrent=8,
+        min_concurrent=4,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    fetcher.fetch(_tile_request(retries=0))
+
+    assert fetcher.stats.current_limit == 10
+    assert fetcher.stats.peak_concurrency_limit >= 8
+
+
+@respx.mock
+def test_fetch_abort_stops_sibling_tile_requests() -> None:
+    progress = FetchProgress(total=3)
+    policy = FetchPolicy(max_concurrent=3, rate_limit_per_second=None, retries=0)
+    fetcher = TileFetcher.for_policy(policy)
+
+    fail_route = respx.get("https://example.com/fail")
+    fail_route.mock(return_value=httpx.Response(500, text="fail"))
+    ok_calls = {"count": 0}
+    start_gate = threading.Barrier(3)
+
+    def ok_handler(request: httpx.Request) -> httpx.Response:
+        start_gate.wait(timeout=1)
+        ok_calls["count"] += 1
+        time.sleep(0.05)
+        return httpx.Response(200, content=b"x")
+
+    respx.get("https://example.com/ok").mock(side_effect=ok_handler)
+
+    fail_request = _tile_request(url="https://example.com/fail", retries=0)
+    ok_request = _tile_request(url="https://example.com/ok", retries=0)
+
+    def fail_and_abort() -> TileResponse:
+        response = fetcher.fetch(fail_request, progress=progress)
+        if not response.success:
+            progress.abort(response.error_message or "fail")
+        return response
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fail_future = pool.submit(fail_and_abort)
+        ok_futures = [
+            pool.submit(fetcher.fetch, ok_request, progress=progress) for _ in range(2)
+        ]
+        fail_response = fail_future.result()
+        aborted = 0
+        for future in ok_futures:
+            try:
+                future.result()
+            except NetworkError:
+                aborted += 1
+
+    assert fail_response.success is False
+    assert progress.is_aborted() is True
+    assert aborted >= 1
+    assert ok_calls["count"] <= 1
+
+
+def test_fetch_progress_abort_blocks_new_fetches() -> None:
+    progress = FetchProgress(total=1)
+    progress.abort("earlier failure")
+
+    with pytest.raises(NetworkError, match="earlier failure"):
+        progress.check_not_aborted()

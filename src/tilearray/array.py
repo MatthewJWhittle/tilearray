@@ -323,6 +323,10 @@ def _fetch_policy_summary(policy: FetchPolicy) -> dict[str, Any]:
         "min_concurrent": policy.min_concurrent,
         "multiplicative_decrease": policy.multiplicative_decrease,
         "additive_increase": policy.additive_increase,
+        "forbidden_circuit_breaker": policy.forbidden_circuit_breaker,
+        "forbidden_window_seconds": policy.forbidden_window_seconds,
+        "forbidden_threshold": policy.forbidden_threshold,
+        "forbidden_cooldown_seconds": policy.forbidden_cooldown_seconds,
     }
 
 
@@ -348,6 +352,20 @@ def _fetch_policy_from_summary(summary: dict[str, Any]) -> FetchPolicy:
         ),
         additive_increase=int(
             summary.get("additive_increase", defaults.additive_increase)
+        ),
+        forbidden_circuit_breaker=bool(
+            summary.get("forbidden_circuit_breaker", defaults.forbidden_circuit_breaker)
+        ),
+        forbidden_window_seconds=float(
+            summary.get("forbidden_window_seconds", defaults.forbidden_window_seconds)
+        ),
+        forbidden_threshold=int(
+            summary.get("forbidden_threshold", defaults.forbidden_threshold)
+        ),
+        forbidden_cooldown_seconds=float(
+            summary.get(
+                "forbidden_cooldown_seconds", defaults.forbidden_cooldown_seconds
+            )
         ),
     )
 
@@ -466,6 +484,18 @@ def _resolve_fetch_policy(
         ),
         multiplicative_decrease=service_options.pop(
             "multiplicative_decrease", base.multiplicative_decrease
+        ),
+        forbidden_circuit_breaker=service_options.pop(
+            "forbidden_circuit_breaker", base.forbidden_circuit_breaker
+        ),
+        forbidden_window_seconds=service_options.pop(
+            "forbidden_window_seconds", base.forbidden_window_seconds
+        ),
+        forbidden_threshold=service_options.pop(
+            "forbidden_threshold", base.forbidden_threshold
+        ),
+        forbidden_cooldown_seconds=service_options.pop(
+            "forbidden_cooldown_seconds", base.forbidden_cooldown_seconds
         ),
     )
 
@@ -765,11 +795,15 @@ def _load_tile_array(
     fetch_policy: FetchPolicy | None = None,
     progress: FetchProgress | None = None,
 ) -> NDArrayFloat:
-    response = _fetch_with_cache(request, cache_dir, fetch_policy)
+    if progress is not None:
+        progress.check_not_aborted()
+    response = _fetch_with_cache(request, cache_dir, fetch_policy, progress)
     if progress is not None:
         progress.tick(request, response)
     if not response.success:
         message = response.error_message or f"HTTP {response.status_code}"
+        if progress is not None:
+            progress.abort(message)
         raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
 
     array = decoder(response, request)
@@ -788,7 +822,10 @@ def _fetch_with_cache(
     request: TileRequest,
     cache_dir: Path | None,
     fetch_policy: FetchPolicy | None = None,
+    progress: FetchProgress | None = None,
 ) -> TileResponse:
+    if progress is not None:
+        progress.check_not_aborted()
     if cache_dir is not None:
         cached = _read_cache(cache_dir, request)
         if cached is not None:
@@ -804,7 +841,7 @@ def _fetch_with_cache(
                 error_message=None,
             )
 
-    response = fetch_tile(request, policy=fetch_policy)
+    response = fetch_tile(request, policy=fetch_policy, progress=progress)
     if cache_dir is not None and response.success:
         cached_data = bytes(response.data)
         if cached_data:
