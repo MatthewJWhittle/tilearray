@@ -28,6 +28,8 @@ ProgressCallback = Callable[[int, int, TileRequest, TileResponse], None]
 
 # Gateway throttling (403), rate limits (429), client timeout (408), upstream 5xx.
 _RETRYABLE_STATUS_CODES = frozenset({403, 408, 429, 500, 502, 503, 504})
+
+
 def _is_ogc_transient_404(response: httpx.Response) -> bool:
     """ArcGIS WCS intermittently returns 404 + OGC InvalidParameterValue on retryable tiles."""
 
@@ -48,6 +50,8 @@ def _is_retryable_http_response(response: httpx.Response) -> bool:
     if response.status_code in _RETRYABLE_STATUS_CODES:
         return True
     return _is_ogc_transient_404(response)
+
+
 _DEFAULT_MAX_CONCURRENT = 3
 _DEFAULT_INITIAL_CONCURRENT = 2
 _DEFAULT_MIN_CONCURRENT = 1

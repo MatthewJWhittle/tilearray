@@ -1107,8 +1107,7 @@ def test_cache_legacy_multipart_without_meta_sniffs_content_type(
 ) -> None:
     tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
     multipart_body = (
-        b"--wcs\r\n"
-        b"Content-Type: image/tiff\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
+        b"--wcs\r\nContent-Type: image/tiff\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
     )
     request = TileRequest(
         url="https://example.com/wcs",
