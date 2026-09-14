@@ -16,13 +16,18 @@ import tilearray.array as array_module
 import tilearray.decode as decode_module
 from tilearray.array import (
     ArrayRequest,
+    _fetch_with_cache,
     _organize_tiles,
+    _read_cache,
     _resize_tile_array,
+    _write_cache,
     compute_thread_pool_size,
 )
 from tilearray.decode import (
     decoder_for_format,
+    read_geotiff_bytes,
     read_geotiff_path,
+    unwrap_multipart,
 )
 from tilearray.errors import NetworkError
 from tilearray.fetch import FetchPolicy
@@ -1043,3 +1048,79 @@ def test_resize_tile_array_preserves_rgb_bands() -> None:
     assert float(resized[..., 0].mean()) == pytest.approx(200.0)
     assert float(resized[..., 1].mean()) == pytest.approx(100.0)
     assert float(resized[..., 2].mean()) == pytest.approx(50.0)
+
+
+GEOTIFF_FIXTURE = (
+    Path(__file__).resolve().parents[1] / "data" / "wcs_tiles" / "ea_lidar_64x64.tif"
+)
+
+
+def test_cache_round_trip_multipart_geotiff_preserves_decode(tmp_path: Path) -> None:
+    tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
+    multipart_body = (
+        b"--wcs\r\n"
+        b"Content-Type: text/xml\r\n"
+        b"Content-ID: GML-Part\r\n\r\n"
+        b"<gmlcov:RectifiedGridCoverage/>\r\n"
+        b"--wcs\r\n"
+        b"Content-Type: image/tiff\r\n"
+        b"Content-ID: coverage.tif\r\n"
+        b"Content-Transfer-Encoding: binary\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
+    )
+    request = TileRequest(
+        url="https://example.com/wcs",
+        params={"coverage": "dtm"},
+        output_format=Format.GEOTIFF,
+        width=64,
+        height=64,
+    )
+    content_type = 'multipart/related; boundary="wcs"'
+
+    _write_cache(tmp_path, request, multipart_body, content_type)
+    cached = _read_cache(tmp_path, request)
+    assert cached is not None
+    cached_data, cached_type = cached
+    assert cached_data == multipart_body
+    assert cached_type == content_type
+
+    def fail_fetch(*args: Any, **kwargs: Any) -> TileResponse:
+        raise AssertionError("fetch_tile should not run on warm cache hit")
+
+    import tilearray.array as array_module
+
+    original_fetch = array_module.fetch_tile
+    array_module.fetch_tile = fail_fetch  # type: ignore[assignment]
+    try:
+        response = _fetch_with_cache(request, tmp_path)
+    finally:
+        array_module.fetch_tile = original_fetch
+
+    assert response.success is True
+    assert response.content_type == content_type
+    unwrapped = unwrap_multipart(bytes(response.data), response)
+    decoded = read_geotiff_bytes(unwrapped)
+    assert decoded.shape == (64, 64)
+
+
+def test_cache_legacy_multipart_without_meta_sniffs_content_type(
+    tmp_path: Path,
+) -> None:
+    tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
+    multipart_body = (
+        b"--wcs\r\n"
+        b"Content-Type: image/tiff\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
+    )
+    request = TileRequest(
+        url="https://example.com/wcs",
+        params={"coverage": "legacy"},
+        output_format=Format.GEOTIFF,
+        width=64,
+        height=64,
+    )
+    key_path = tmp_path / f"{array_module._cache_key(request)}.tile"
+    key_path.write_bytes(multipart_body)
+
+    cached = _read_cache(tmp_path, request)
+    assert cached is not None
+    _, cached_type = cached
+    assert cached_type == "multipart/related"

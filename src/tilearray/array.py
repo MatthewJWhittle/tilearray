@@ -829,11 +829,10 @@ def _fetch_with_cache(
     if cache_dir is not None:
         cached = _read_cache(cache_dir, request)
         if cached is not None:
+            cached_data, cached_content_type = cached
             return TileResponse(
-                data=cached,
-                content_type=request.output_format.value
-                if request.output_format
-                else "",
+                data=cached_data,
+                content_type=cached_content_type,
                 status_code=200,
                 headers={},
                 url=request.url,
@@ -845,7 +844,7 @@ def _fetch_with_cache(
     if cache_dir is not None and response.success:
         cached_data = bytes(response.data)
         if cached_data:
-            _write_cache(cache_dir, request, cached_data)
+            _write_cache(cache_dir, request, cached_data, response.content_type)
     return response
 
 
@@ -862,13 +861,39 @@ def _cache_key(request: TileRequest) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def _read_cache(cache_dir: Path, request: TileRequest) -> bytes | None:
+def _read_cache(cache_dir: Path, request: TileRequest) -> tuple[bytes, str] | None:
     cache_dir.mkdir(parents=True, exist_ok=True)
-    path = cache_dir / f"{_cache_key(request)}.tile"
-    return path.read_bytes() if path.exists() else None
+    key = _cache_key(request)
+    path = cache_dir / f"{key}.tile"
+    if not path.exists():
+        return None
+
+    data = path.read_bytes()
+    meta_path = cache_dir / f"{key}.meta"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        content_type = str(meta.get("content_type", ""))
+    elif data.startswith(b"--"):
+        content_type = "multipart/related"
+    elif request.output_format is not None:
+        content_type = request.output_format.value
+    else:
+        content_type = ""
+    return data, content_type
 
 
-def _write_cache(cache_dir: Path, request: TileRequest, data: bytes) -> None:
+def _write_cache(
+    cache_dir: Path,
+    request: TileRequest,
+    data: bytes,
+    content_type: str,
+) -> None:
     cache_dir.mkdir(parents=True, exist_ok=True)
-    path = cache_dir / f"{_cache_key(request)}.tile"
+    key = _cache_key(request)
+    path = cache_dir / f"{key}.tile"
     path.write_bytes(data)
+    meta_path = cache_dir / f"{key}.meta"
+    meta_path.write_text(
+        json.dumps({"content_type": content_type}, sort_keys=True),
+        encoding="utf-8",
+    )

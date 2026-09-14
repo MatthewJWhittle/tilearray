@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- USGS ArcGIS WCS: retry intermittent 404 responses whose OGC exception body contains `InvalidParameterValue` / `SUBSETTINGCRS` (transient subsetting under load); AIMD pressure applies without treating every 404 as soft
+- Disk tile cache: persist response `content-type` alongside bytes so warm `compute_with_policy` runs still unwrap `multipart/related` GeoTIFF payloads (legacy caches without `.meta` fall back to body sniffing)
+
 ### Added
 
 - EA DSP fetch preset: sustained-403 **circuit breaker** (6+ gateway 403s within 5 s → freeze AIMD at floor for 15 s) to limit WAF/retry storms on large cold mosaics

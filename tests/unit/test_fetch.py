@@ -732,3 +732,73 @@ def test_fetch_progress_abort_blocks_new_fetches() -> None:
 
     with pytest.raises(NetworkError, match="earlier failure"):
         progress.check_not_aborted()
+
+
+_OGC_404_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ExceptionReport xmlns="http://www.opengis.net/ogc">
+  <Exception exceptionCode="InvalidParameterValue" locator="SUBSETTINGCRS">
+    <ExceptionText>Invalid or unsupported SubsettingCrs</ExceptionText>
+  </Exception>
+</ExceptionReport>"""
+
+
+@respx.mock
+def test_fetch_retries_ogc_404_invalid_parameter_value() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(
+            404,
+            content=_OGC_404_BODY,
+            headers={"content-type": "application/xml"},
+        ),
+        httpx.Response(200, content=b"recovered"),
+    ]
+
+    response = fetch_tile_with_policy(
+        _tile_request(retries=1),
+        FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=1),
+    )
+
+    assert response.success is True
+    assert response.data == b"recovered"
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_fetch_does_not_retry_plain_404() -> None:
+    route = respx.get("https://example.com/tile")
+    route.mock(return_value=httpx.Response(404, text="Not Found"))
+
+    response = fetch_tile_with_policy(
+        _tile_request(retries=2),
+        FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=2),
+    )
+
+    assert response.success is False
+    assert response.status_code == 404
+    assert route.call_count == 1
+
+
+@respx.mock
+def test_aimd_decreases_limit_on_ogc_404() -> None:
+    route = respx.get("https://example.com/tile")
+    route.side_effect = [
+        httpx.Response(404, content=_OGC_404_BODY),
+        httpx.Response(200, content=b"ok"),
+    ]
+    policy = FetchPolicy(
+        max_concurrent=8,
+        initial_concurrent=4,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+        retries=1,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    response = fetcher.fetch(_tile_request(retries=1))
+
+    assert response.success is True
+    assert fetcher.stats.concurrency_decreases >= 1
+    assert fetcher.stats.retry_count >= 1
+    assert fetcher.stats.pressure_403_count == 0
