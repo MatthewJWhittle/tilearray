@@ -62,12 +62,24 @@ def _extract_multipart_boundary(content_type: str, data: bytes) -> str | None:
     return None
 
 
-def _extract_tiff_part(data: bytes, content_type: str) -> bytes | None:
+def _effective_multipart_content_type(content_type: str, data: bytes) -> str:
+    """Use body sniffing when headers claim image/tiff but bytes are multipart."""
+
+    if "multipart/" in content_type.lower():
+        return content_type
     boundary = _extract_multipart_boundary(content_type, data)
+    if data.startswith(b"--") and boundary:
+        return f'multipart/related; boundary="{boundary}"'
+    return content_type
+
+
+def _extract_tiff_part(data: bytes, content_type: str) -> bytes | None:
+    effective_type = _effective_multipart_content_type(content_type, data)
+    boundary = _extract_multipart_boundary(effective_type, data)
     if not boundary:
         return None
 
-    mime_bytes = f"Content-Type: {content_type}\r\n\r\n".encode("ascii") + data
+    mime_bytes = f"Content-Type: {effective_type}\r\n\r\n".encode("ascii") + data
     message = BytesParser(policy=policy.default).parsebytes(mime_bytes)
     if not message.is_multipart():
         return None

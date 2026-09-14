@@ -127,3 +127,39 @@ def test_unwrap_multipart_extracts_geotiff_part() -> None:
         response=response,
     )
     assert decoded.shape == (64, 64)
+
+
+@pytest.mark.unit
+def test_unwrap_multipart_sniffs_body_when_content_type_is_image_tiff() -> None:
+    """Disk cache may restore image/tiff while bytes remain multipart/related."""
+
+    tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
+    multipart_body = (
+        b"--wcs\r\n"
+        b"Content-Type: text/xml\r\n"
+        b"Content-ID: GML-Part\r\n\r\n"
+        b"<gmlcov:RectifiedGridCoverage/>\r\n"
+        b"--wcs\r\n"
+        b"Content-Type: image/tiff\r\n"
+        b"Content-ID: coverage.tif\r\n"
+        b"Content-Transfer-Encoding: binary\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
+    )
+    misleading_response = TileResponse(
+        data=multipart_body,
+        content_type="image/tiff",
+        status_code=200,
+        headers={},
+        url="https://example.com/wcs",
+        success=True,
+    )
+
+    unwrapped = unwrap_multipart(multipart_body, misleading_response)
+    assert unwrapped[:2] in (b"II", b"MM")
+    decoded = decode_tile_bytes(
+        multipart_body,
+        reader=read_geotiff_bytes,
+        band_policy="first_band",
+        unwrapper=unwrap_multipart,
+        response=misleading_response,
+    )
+    assert decoded.shape == (64, 64)
