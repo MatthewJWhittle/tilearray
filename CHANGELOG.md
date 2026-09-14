@@ -9,13 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- USGS ArcGIS WCS: retry intermittent 404 responses whose OGC exception body contains `InvalidParameterValue` / `SUBSETTINGCRS` (transient subsetting under load); AIMD pressure applies without treating every 404 as soft
-- Disk tile cache: persist response `content-type` alongside bytes so warm `compute_with_policy` runs still unwrap `multipart/related` GeoTIFF payloads (legacy caches without `.meta` fall back to body sniffing)
+- **Shared pressure pipeline:** HTTP responses are classified (status + body signatures) before retry / AIMD / circuit-breaker handling — replaces host-shaped forks (EA 403-only breaker, USGS-only OGC 404 helpers). Built-in signatures cover gateway 403/408/429/5xx and OGC `ExceptionReport` / `InvalidParameterValue` / `SUBSETTINGCRS` transient 404 bodies; custom signatures are pluggable via `PressureClassifier.register`
+- Disk tile cache + decode: trust bytes over `Content-Type` — `sniff_effective_content_type` detects multipart / TIFF markers; `.meta` sidecar is kept but warm reads no longer require perfect headers
 
 ### Added
 
-- EA DSP fetch preset: sustained-403 **circuit breaker** (6+ gateway 403s within 5 s → freeze AIMD at floor for 15 s) to limit WAF/retry storms on large cold mosaics
-- `TileFetcher.stats`: live `current_limit`, `pressure_403_count`, `circuit_breaker_trips`, and `circuit_breaker_frozen` for observing AIMD backoff during gateway pressure
+- `tilearray.pressure`: `PressureSignature`, `PressureClassifier`, `classify_response`, and built-in signature registry
+- EA DSP fetch preset: **pressure circuit breaker** (6+ classified breaker events within 5 s — gateway 403 or 429 — → freeze AIMD at floor for 15 s) to limit WAF/retry storms on large cold mosaics
+- `TileFetcher.stats`: live `current_limit`, `pressure_event_count`, `circuit_breaker_trips`, and `circuit_breaker_frozen` for observing AIMD backoff during gateway pressure
 - Mosaic fetch **abort**: after a hard tile failure (`NetworkError`), sibling tile tasks stop scheduling new HTTP (via shared `FetchProgress`); in-flight requests may still complete (Dask thread pool limitation)
 
 - Capabilities-driven WCS GetCoverage: axis labels and native CRS from DescribeCoverage; automatic reprojection to native CRS when needed; shared `unwrap_multipart` for ArcGIS `multipart/related` GeoTIFF payloads

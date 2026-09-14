@@ -110,19 +110,20 @@ class ServiceConfig(BaseModel):
     forbidden_circuit_breaker: bool = Field(
         default=False,
         description=(
-            "Trip a sustained-403 circuit breaker (freeze at floor) when gateway "
-            "403s cluster within forbidden_window_seconds"
+            "Trip a pressure circuit breaker (freeze at floor) when classified "
+            "breaker events (e.g. gateway 403 or 429) cluster within "
+            "forbidden_window_seconds"
         ),
     )
     forbidden_window_seconds: float = Field(
         default=5.0,
         gt=0,
-        description="Sliding window for counting clustered 403 responses",
+        description="Sliding window for counting clustered breaker-classified events",
     )
     forbidden_threshold: int = Field(
         default=6,
         ge=1,
-        description="403 count within the window that trips the circuit breaker",
+        description="Breaker event count within the window that trips the circuit breaker",
     )
     forbidden_cooldown_seconds: float = Field(
         default=15.0,

@@ -30,6 +30,7 @@ from .decode import (
     TileDecoder,
     band_count_from_array,
     default_band_count_for_format,
+    sniff_effective_content_type,
 )
 from .decode import (
     decoder_for_format as _decoder_for_format,
@@ -872,13 +873,12 @@ def _read_cache(cache_dir: Path, request: TileRequest) -> tuple[bytes, str] | No
     meta_path = cache_dir / f"{key}.meta"
     if meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        content_type = str(meta.get("content_type", ""))
-    elif data.startswith(b"--"):
-        content_type = "multipart/related"
+        stored_type = str(meta.get("content_type", ""))
     elif request.output_format is not None:
-        content_type = request.output_format.value
+        stored_type = request.output_format.value
     else:
-        content_type = ""
+        stored_type = ""
+    content_type = sniff_effective_content_type(stored_type, data)
     return data, content_type
 
 

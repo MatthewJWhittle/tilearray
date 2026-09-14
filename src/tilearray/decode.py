@@ -73,8 +73,30 @@ def _effective_multipart_content_type(content_type: str, data: bytes) -> str:
     return content_type
 
 
+def sniff_effective_content_type(content_type: str, data: bytes) -> str:
+    """
+    Infer the effective MIME type from bytes, not headers alone.
+
+    Used by decode and disk cache restore when ``Content-Type`` is missing,
+    generic, or misleading (e.g. ``image/tiff`` on ``multipart/related``).
+    """
+
+    if not data:
+        return content_type
+
+    if data[:2] in (b"II", b"MM"):
+        if content_type:
+            return content_type
+        return "image/tiff"
+
+    if "multipart/" in content_type.lower() or data.startswith(b"--"):
+        return _effective_multipart_content_type(content_type, data)
+
+    return content_type
+
+
 def _extract_tiff_part(data: bytes, content_type: str) -> bytes | None:
-    effective_type = _effective_multipart_content_type(content_type, data)
+    effective_type = sniff_effective_content_type(content_type, data)
     boundary = _extract_multipart_boundary(effective_type, data)
     if not boundary:
         return None
@@ -101,11 +123,11 @@ def unwrap_multipart(data: bytes, response: TileResponse) -> bytes:
     through raw bytes unchanged.
     """
 
-    content_type = (response.content_type or "").lower()
+    content_type = sniff_effective_content_type(response.content_type or "", data)
     if data[:2] in (b"II", b"MM"):
         return data
 
-    if "multipart/" in content_type or data.startswith(b"--"):
+    if "multipart/" in content_type.lower() or data.startswith(b"--"):
         tiff_part = _extract_tiff_part(data, content_type)
         if tiff_part is not None:
             return tiff_part
@@ -148,7 +170,18 @@ def decode_tile_bytes(
         url="",
         success=True,
     )
-    payload = (unwrapper or identity_unwrapper)(raw_bytes, stub_response)
+    effective_response = TileResponse(
+        data=stub_response.data,
+        content_type=sniff_effective_content_type(
+            stub_response.content_type, bytes(stub_response.data)
+        ),
+        status_code=stub_response.status_code,
+        headers=stub_response.headers,
+        url=stub_response.url,
+        success=stub_response.success,
+        error_message=stub_response.error_message,
+    )
+    payload = (unwrapper or identity_unwrapper)(raw_bytes, effective_response)
     data = reader(payload)
     data = apply_band_policy(data, band_policy)
     return cast(NDArrayFloat, np.asarray(data, dtype=np.float32))
