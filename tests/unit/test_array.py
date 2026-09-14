@@ -1122,4 +1122,4 @@ def test_cache_legacy_multipart_without_meta_sniffs_content_type(
     cached = _read_cache(tmp_path, request)
     assert cached is not None
     _, cached_type = cached
-    assert cached_type == "multipart/related"
+    assert cached_type.startswith("multipart/related")

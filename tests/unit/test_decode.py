@@ -17,6 +17,7 @@ from tilearray.decode import (
     identity_unwrapper,
     read_geotiff_bytes,
     read_image_bytes,
+    sniff_effective_content_type,
     unwrap_multipart,
 )
 from tilearray.types import Format, TileResponse
@@ -163,3 +164,24 @@ def test_unwrap_multipart_sniffs_body_when_content_type_is_image_tiff() -> None:
         response=misleading_response,
     )
     assert decoded.shape == (64, 64)
+
+
+@pytest.mark.unit
+def test_sniff_effective_content_type_prefers_multipart_bytes_over_tiff_header() -> None:
+    tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
+    multipart_body = (
+        b"--wcs\r\nContent-Type: image/tiff\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
+    )
+
+    sniffed = sniff_effective_content_type("image/tiff", multipart_body)
+
+    assert sniffed.startswith("multipart/related")
+    assert "wcs" in sniffed
+
+
+@pytest.mark.unit
+def test_sniff_effective_content_type_keeps_raw_tiff() -> None:
+    tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
+
+    assert sniff_effective_content_type("image/tiff", tiff_bytes) == "image/tiff"
+    assert sniff_effective_content_type("", tiff_bytes) == "image/tiff"

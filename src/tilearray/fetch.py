@@ -20,36 +20,17 @@ from tenacity import (
 )
 
 from .errors import NetworkError
+from .pressure import (
+    DEFAULT_PRESSURE_CLASSIFIER,
+    PressureClassifier,
+    ResponseClassification,
+    classify_response,
+)
 from .types import TileRequest, TileResponse
 
 logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[int, int, TileRequest, TileResponse], None]
-
-# Gateway throttling (403), rate limits (429), client timeout (408), upstream 5xx.
-_RETRYABLE_STATUS_CODES = frozenset({403, 408, 429, 500, 502, 503, 504})
-
-
-def _is_ogc_transient_404(response: httpx.Response) -> bool:
-    """ArcGIS WCS intermittently returns 404 + OGC InvalidParameterValue on retryable tiles."""
-
-    if response.status_code != 404:
-        return False
-    body = response.content[:4096]
-    if not body:
-        return False
-    lowered = body.lower()
-    return (
-        b"invalidparametervalue" in lowered
-        or b"subsettingcrs" in lowered
-        or b"exceptionreport" in lowered
-    )
-
-
-def _is_retryable_http_response(response: httpx.Response) -> bool:
-    if response.status_code in _RETRYABLE_STATUS_CODES:
-        return True
-    return _is_ogc_transient_404(response)
 
 
 _DEFAULT_MAX_CONCURRENT = 3
@@ -177,12 +158,12 @@ class AdaptiveConcurrencyGate:
         self._forbidden_threshold = forbidden_threshold
         self._forbidden_cooldown_seconds = forbidden_cooldown_seconds
         self._hosts: dict[str, _HostConcurrencyState] = {}
-        self._forbidden_events: dict[str, deque[float]] = {}
+        self._pressure_events: dict[str, deque[float]] = {}
         self._frozen_until: dict[str, float] = {}
         self._map_lock = threading.Lock()
         self.decrease_count = 0
         self.peak_limit = initial
-        self.pressure_403_count = 0
+        self.pressure_event_count = 0
         self.circuit_breaker_trips = 0
         self._policy_key: tuple[Any, ...] | None = None
 
@@ -290,17 +271,17 @@ class AdaptiveConcurrencyGate:
                 self._remember_limit(host, state.limit)
             state.condition.notify_all()
 
-    def record_forbidden(self, host: str) -> bool:
-        """Record a 403 and trip the circuit breaker when pressure clusters."""
+    def record_circuit_breaker_pressure(self, host: str) -> bool:
+        """Record classified pressure and trip the breaker when events cluster."""
 
         if self._forbidden_window_seconds is None:
             return False
 
         now = time.monotonic()
         with self._map_lock:
-            events = self._forbidden_events.setdefault(host, deque())
+            events = self._pressure_events.setdefault(host, deque())
             events.append(now)
-            self.pressure_403_count += 1
+            self.pressure_event_count += 1
             cutoff = now - self._forbidden_window_seconds
             while events and events[0] < cutoff:
                 events.popleft()
@@ -399,7 +380,7 @@ class FetchStats:
     peak_concurrency_limit: int = 0
     concurrency_decreases: int = 0
     current_limit: int = 0
-    pressure_403_count: int = 0
+    pressure_event_count: int = 0
     circuit_breaker_trips: int = 0
     circuit_breaker_frozen: bool = False
     _current_inflight: int = field(default=0, repr=False)
@@ -413,7 +394,7 @@ class FetchStats:
             self.peak_concurrency_limit = 0
             self.concurrency_decreases = 0
             self.current_limit = 0
-            self.pressure_403_count = 0
+            self.pressure_event_count = 0
             self.circuit_breaker_trips = 0
             self.circuit_breaker_frozen = False
             self._current_inflight = 0
@@ -443,7 +424,7 @@ class FetchStats:
                 self.peak_concurrency_limit, gate.peak_limit
             )
             self.concurrency_decreases = gate.decrease_count
-            self.pressure_403_count = gate.pressure_403_count
+            self.pressure_event_count = gate.pressure_event_count
             self.circuit_breaker_trips = gate.circuit_breaker_trips
             if host is not None:
                 self.current_limit = gate.current_limit(host)
@@ -469,6 +450,7 @@ class FetchPolicy:
     forbidden_window_seconds: float = 5.0
     forbidden_threshold: int = 6
     forbidden_cooldown_seconds: float = 15.0
+    pressure_classifier: PressureClassifier | None = None
 
     def cache_key(self) -> tuple[Any, ...]:
         """Hashable key for sharing fetcher instances."""
@@ -588,6 +570,9 @@ class TileFetcher:
 
     def __init__(self, policy: FetchPolicy | None = None) -> None:
         self._policy = policy or FetchPolicy()
+        self._pressure_classifier = (
+            self._policy.pressure_classifier or DEFAULT_PRESSURE_CLASSIFIER
+        )
         self.stats = FetchStats()
         pool_size = self._policy.max_connections or self._policy.max_concurrent
         self._client = httpx.Client(
@@ -675,9 +660,12 @@ class TileFetcher:
             self._adaptive_gate.record_pressure(host)
             self.stats._sync_adaptive_stats(self._adaptive_gate, host)
 
-    def _record_forbidden(self, host: str) -> None:
+    def _classify_response(self, response: httpx.Response) -> ResponseClassification:
+        return classify_response(response, self._pressure_classifier)
+
+    def _record_circuit_breaker_pressure(self, host: str) -> None:
         if self._adaptive_gate is not None:
-            self._adaptive_gate.record_forbidden(host)
+            self._adaptive_gate.record_circuit_breaker_pressure(host)
             self.stats._sync_adaptive_stats(self._adaptive_gate, host)
 
     def fetch(
@@ -734,10 +722,11 @@ class TileFetcher:
                 self._finish_pressure(host)
                 raise
 
-            if _is_retryable_http_response(response):
+            classification = self._classify_response(response)
+            if classification.retryable:
                 self._finish_pressure(host)
-                if response.status_code == 403:
-                    self._record_forbidden(host)
+                if classification.circuit_breaker:
+                    self._record_circuit_breaker_pressure(host)
                 raise RetryableHTTPError(response, _parse_retry_after(response))
 
             self._finish_success(host)

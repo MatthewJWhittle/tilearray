@@ -626,7 +626,7 @@ def test_forbidden_circuit_breaker_trips_on_clustered_403s() -> None:
         for future in futures:
             future.result()
 
-    assert fetcher.stats.pressure_403_count >= 6
+    assert fetcher.stats.pressure_event_count >= 6
     assert fetcher.stats.circuit_breaker_trips >= 1
     assert fetcher.stats.current_limit == 4
 
@@ -801,4 +801,33 @@ def test_aimd_decreases_limit_on_ogc_404() -> None:
     assert response.success is True
     assert fetcher.stats.concurrency_decreases >= 1
     assert fetcher.stats.retry_count >= 1
-    assert fetcher.stats.pressure_403_count == 0
+    assert fetcher.stats.pressure_event_count == 0
+
+
+@respx.mock
+def test_circuit_breaker_trips_on_clustered_429s() -> None:
+    route = respx.get("https://example.com/tile")
+    route.mock(return_value=httpx.Response(429, text="Too Many Requests"))
+    policy = FetchPolicy(
+        max_concurrent=10,
+        initial_concurrent=8,
+        min_concurrent=4,
+        adaptive_concurrency=True,
+        forbidden_circuit_breaker=True,
+        forbidden_window_seconds=5.0,
+        forbidden_threshold=6,
+        forbidden_cooldown_seconds=15.0,
+        rate_limit_per_second=None,
+        retries=0,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+    request = _tile_request(retries=0)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(fetcher.fetch, request) for _ in range(8)]
+        for future in futures:
+            future.result()
+
+    assert fetcher.stats.pressure_event_count >= 6
+    assert fetcher.stats.circuit_breaker_trips >= 1
+    assert fetcher.stats.current_limit == 4
