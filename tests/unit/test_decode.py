@@ -167,7 +167,9 @@ def test_unwrap_multipart_sniffs_body_when_content_type_is_image_tiff() -> None:
 
 
 @pytest.mark.unit
-def test_sniff_effective_content_type_prefers_multipart_bytes_over_tiff_header() -> None:
+def test_sniff_effective_content_type_prefers_multipart_bytes_over_tiff_header() -> (
+    None
+):
     tiff_bytes = GEOTIFF_FIXTURE.read_bytes()
     multipart_body = (
         b"--wcs\r\nContent-Type: image/tiff\r\n\r\n" + tiff_bytes + b"\r\n--wcs--\r\n"
