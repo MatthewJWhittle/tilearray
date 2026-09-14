@@ -109,6 +109,8 @@ print(float(mean_elevation))
 
 `create_array` stores fetch policy metadata on `da.attrs`; `compute_with_policy` reads it automatically.
 
+One shared in-flight gate covers the whole client: Adaptive Increase/Multiplicative Decrease (AIMD) caps how many tile downloads run at once, and Dask processes tiles as they arrive. Mosaic size only lengthens the queue — it does not raise concurrency. Hosts still differ: Environment Agency (EA) Lidar behind Azure App Gateway often rejects a sustained burst at 32, so EA's safe sustained ceiling is about 10, not "32 is always fine."
+
 Illustrative Skipton bench (64 tiles, 1024², lazy `.mean()`, cold disk cache): plain `.compute()` ~6.7 s (~8 Dask threads) vs `compute_with_policy()` ~2.3 s (32 workers = EA fetch ceiling) — about 3× faster with the same mean. Absolute times depend on network round-trip time; treat as an example, not a guarantee. Live before/after bench (network required): `uv run python scripts/bench_compute_with_policy_live.py`.
 
 ### XYZ slippy-map tiles
