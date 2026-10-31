@@ -256,6 +256,7 @@ def test_custom_rate_limiter_hook_is_invoked() -> None:
 
 
 @respx.mock
+@pytest.mark.slow
 def test_builtin_rate_limiter_delays_requests() -> None:
     respx.get("https://example.com/tile").mock(
         return_value=httpx.Response(200, content=b"x")
@@ -509,6 +510,7 @@ def test_adaptive_gate_ea_floor_enforced_after_pressure() -> None:
 
 
 @respx.mock
+@pytest.mark.slow
 def test_aimd_realistic_latency_skipton_scale() -> None:
     tile_latency_s = 0.08
 
