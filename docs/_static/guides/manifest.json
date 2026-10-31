@@ -1,0 +1,91 @@
+{
+  "artifacts": {
+    "ea": {
+      "bbox": [
+        431900.0,
+        382700.0,
+        432156.0,
+        382956.0
+      ],
+      "chunk_size": [
+        64,
+        64
+      ],
+      "coverage_id": "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
+      "crs": "EPSG:27700",
+      "dims": [
+        "y",
+        "x"
+      ],
+      "elapsed_s": 2.863,
+      "figure": "ea-lidar-elevation.png",
+      "finite_frac": 1.0,
+      "host": "environment-agency-dsp",
+      "max_m": 186.88499450683594,
+      "mean_m": 175.73380813584663,
+      "min_m": 165.12600708007812,
+      "note": "Contract-scale bbox near the documented EA bench window; also see EA_LIDAR_BENCH_BBOX=(431900.0, 382700.0, 431964.0, 382764.0)",
+      "resolution": [
+        1.0,
+        1.0
+      ],
+      "service": "WCS",
+      "shape": [
+        256,
+        256
+      ]
+    },
+    "gibs": {
+      "bbox": [
+        -40.0,
+        20.0,
+        -10.0,
+        45.0
+      ],
+      "crs": "EPSG:4326",
+      "dims": [
+        "y",
+        "x",
+        "band"
+      ],
+      "elapsed_s": 0.6,
+      "figure": "gibs-bluemarble.png",
+      "host": "nasa-gibs",
+      "mean": 26.63834571838379,
+      "service": "XYZ",
+      "shape": [
+        512,
+        256,
+        3
+      ],
+      "template_note": "GIBS path is {z}/{y}/{x} (row before col)",
+      "zoom": 3
+    },
+    "osm": {
+      "attribution": "\u00a9 OpenStreetMap contributors",
+      "bbox": [
+        -0.005,
+        51.495,
+        0.005,
+        51.505
+      ],
+      "crs": "EPSG:4326",
+      "dims": [
+        "y",
+        "x"
+      ],
+      "elapsed_s": 3.532,
+      "figure": "osm-london.png",
+      "host": "openstreetmap",
+      "mean": 186.34127807617188,
+      "note": "OSM PNGs are often palette mode; decoded mosaic is single-band today",
+      "service": "XYZ",
+      "shape": [
+        1024,
+        512
+      ],
+      "zoom": 16
+    }
+  },
+  "generated_by": "scripts/generate_docs_artifacts.py"
+}

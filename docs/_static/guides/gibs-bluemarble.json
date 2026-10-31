@@ -1,0 +1,26 @@
+{
+  "bbox": [
+    -40.0,
+    20.0,
+    -10.0,
+    45.0
+  ],
+  "crs": "EPSG:4326",
+  "dims": [
+    "y",
+    "x",
+    "band"
+  ],
+  "elapsed_s": 0.6,
+  "figure": "gibs-bluemarble.png",
+  "host": "nasa-gibs",
+  "mean": 26.63834571838379,
+  "service": "XYZ",
+  "shape": [
+    512,
+    256,
+    3
+  ],
+  "template_note": "GIBS path is {z}/{y}/{x} (row before col)",
+  "zoom": 3
+}

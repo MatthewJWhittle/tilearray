@@ -3,9 +3,12 @@
 tilearray turns remote tile services into **Dask**-backed **xarray** arrays for geographic information system (GIS) and machine learning / deep learning work — one `create_array` call, polite to servers, fast when they're healthy. WCS, WMS, WMTS, and XYZ share a request-and-decode base with adaptive AIMD fetch under a hard ceiling; thin presets appear only when a host quirk requires one.
 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
+[![Docs](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
 
 > **Alpha.** The API may change. Today **Web Coverage Service (WCS)**, **Web Map Service (WMS)**, **Web Map Tile Service (WMTS)**, and **XYZ slippy-map tile URLs** are implemented as thin adapters behind one `create_array` entry point.
+
+**Docs:** Sphinx site in [`docs/`](docs/) — install, [how it works](docs/how-it-works.md), visual [usage guides](docs/guides/), and API reference. Contributors: `make docs` (HTML), `make docs-artifacts` (regenerate figures).
 
 ## What it does
 
@@ -269,7 +272,8 @@ tilearray/
 ├── tests/
 │   ├── unit/
 │   └── integration/
-├── notebooks/examples/
+├── docs/                   # Sphinx + MyST site (`make docs`)
+├── notebooks/examples/     # legacy notebooks; prefer docs/guides/
 ├── guidelines.md
 └── example-sources.md
 ```

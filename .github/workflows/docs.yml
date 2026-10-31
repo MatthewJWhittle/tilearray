@@ -1,0 +1,33 @@
+name: Docs
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.11
+
+    - name: Install dependencies
+      run: uv sync --extra docs --dev
+
+    - name: Build documentation
+      run: uv run --extra docs sphinx-build -W -b html docs docs/_build/html
+
+    - name: Upload HTML artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: docs-html
+        path: docs/_build/html
