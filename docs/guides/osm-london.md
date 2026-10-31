@@ -43,7 +43,9 @@ Typical output from the generator (shape can vary with tile alignment):
 ## Try it yourself
 
 ```bash
-uv run --extra docs python scripts/generate_docs_artifacts.py --only osm
+make docs-artifacts
+# optional: only this mosaic
+# uv run --extra docs python scripts/generate_docs_artifacts.py --only osm
 ```
 
 Larger or live-interactive demos should still honour OSMF tile policy — prefer the preset; do not raise concurrency past its polite caps.

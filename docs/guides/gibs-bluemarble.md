@@ -43,7 +43,9 @@ Imagery: NASA GIBS / BlueMarble_NextGeneration.
 ## Try it yourself
 
 ```bash
-uv run --extra docs python scripts/generate_docs_artifacts.py --only gibs
+make docs-artifacts
+# optional: only this mosaic
+# uv run --extra docs python scripts/generate_docs_artifacts.py --only gibs
 ```
 
 Coordinate with GIBS if you plan very large crawls; this guide stays at a tiny low-zoom glance.

@@ -57,7 +57,9 @@ From a recent generator run (values will drift slightly if you regenerate):
 ## Try it yourself
 
 ```bash
-uv run --extra docs python scripts/generate_docs_artifacts.py --only ea
+make docs-artifacts
+# optional: only this mosaic
+# uv run --extra docs python scripts/generate_docs_artifacts.py --only ea
 ```
 
 More public endpoints: [`example-sources.md`](https://github.com/MatthewJWhittle/tilearray/blob/main/example-sources.md) in the repository.
