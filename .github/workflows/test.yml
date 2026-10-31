@@ -104,14 +104,11 @@ jobs:
 
     - name: Fail on ogc-array leftovers (except CHANGELOG history)
       run: |
+        # Search user-facing / package paths only — not .github (workflow pattern
+        # strings would self-match) or CHANGELOG (rename history is intentional).
         if grep -RInE 'ogc-array|OGC Array' \
-          --exclude=CHANGELOG.md \
-          --exclude=uv.lock \
-          --exclude-dir=.git \
-          --exclude-dir=.venv \
-          --exclude-dir=dist \
-          --exclude-dir=htmlcov \
-          .; then
+          src docs notebooks tests README.md example-sources.md guidelines.md \
+          Makefile tox.ini pyproject.toml; then
           echo "Found ogc-array / OGC Array leftovers outside CHANGELOG"
           exit 1
         fi
