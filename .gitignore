@@ -179,3 +179,5 @@ cython_debug/
 # Local artifacts and tool caches
 artifacts/
 .ruff_cache/
+# Sphinx autosummary
+docs/api/generated/
