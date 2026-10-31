@@ -4,28 +4,48 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tilearray"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A Python library for loading geospatial data from remote tile servers as xarray objects"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-    {name = "Matthew Whittle"},
+    {name = "Matthew Whittle", email = "47574804+MatthewJWhittle@users.noreply.github.com"},
+]
+keywords = [
+    "geospatial",
+    "gis",
+    "xarray",
+    "ogc",
+    "wcs",
+    "wms",
+    "wmts",
+    "xyz",
+    "tiles",
+    "dask",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Typing :: Typed",
 ]
 requires-python = ">=3.9"
 dependencies = [
     "eval-type-backport>=0.2.0; python_version < '3.10'",
     "dask>=2024.8.0",
     "geotiff>=0.2.10",
+    # geotiff 0.2.x needs zarr 2.12.x; numcodecs>=0.16 breaks zarr 2 imports
+    "zarr>=2.12.0,<2.13",
+    "numcodecs>=0.12.1,<0.16",
     "httpx>=0.28.1",
     "numpy>=2.0.2",
     "pillow>=11.3.0",
@@ -37,14 +57,23 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Mirrors [dependency-groups].dev so `pip install 'tilearray[dev]'` matches `uv sync --dev`.
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "ruff>=0.1.0",
+    "coverage>=7.10.7",
+    "hypothesis>=6.141.1",
+    "ipykernel>=6.31.0",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.9.4",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
-    "jupyter>=1.0.0",
-    "ipykernel>=6.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=7.0.0",
+    "pytest-httpserver>=1.1.3",
+    "pytest-timeout>=2.4.0",
+    "pytest-vcr>=1.0.2",
+    "pytest-xdist>=3.8.0",
+    "respx>=0.22.0",
+    "ruff>=0.1.0",
 ]
 docs = [
     "sphinx>=6.0.0",
@@ -61,8 +90,22 @@ Repository = "https://github.com/MatthewJWhittle/tilearray"
 Documentation = "https://matthewjwhittle.github.io/tilearray/"
 "Bug Tracker" = "https://github.com/MatthewJWhittle/tilearray/issues"
 
+[tool.hatch.version]
+path = "src/tilearray/_version.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/tilearray"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/uv.lock",
+    "/ENGINE_REVIEW.md",
+    "/TEST_IMPROVEMENT_PLAN.md",
+    "/benchmarks",
+    "/scripts",
+    "/notebooks",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -190,17 +233,19 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
-    "mypy>=1.0.0",
-    "ruff>=0.1.0",
     "coverage>=7.10.7",
     "hypothesis>=6.141.1",
     "ipykernel>=6.31.0",
     "jupyter>=1.1.1",
     "matplotlib>=3.9.4",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "pytest>=7.0.0",
     "pytest-cov>=7.0.0",
     "pytest-httpserver>=1.1.3",
     "pytest-timeout>=2.4.0",
     "pytest-vcr>=1.0.2",
     "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
+    "ruff>=0.1.0",
 ]

@@ -84,3 +84,80 @@ jobs:
     - name: Run mypy
       run: |
         uv run mypy src/tilearray
+
+  packaging:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.11
+
+    - name: Cassette size and secret-header scan
+      run: |
+        uv run --no-project python scripts/check_cassettes.py
+
+    - name: Fail on ogc-array leftovers (except CHANGELOG history)
+      run: |
+        if grep -RInE 'ogc-array|OGC Array' \
+          --exclude=CHANGELOG.md \
+          --exclude=uv.lock \
+          --exclude-dir=.git \
+          --exclude-dir=.venv \
+          --exclude-dir=dist \
+          --exclude-dir=htmlcov \
+          .; then
+          echo "Found ogc-array / OGC Array leftovers outside CHANGELOG"
+          exit 1
+        fi
+        echo "OK: no ogc-array leftovers outside CHANGELOG"
+
+    - name: Build wheel and sdist
+      run: |
+        uv build
+
+    - name: Assert sdist excludes lockfile and review notes
+      run: |
+        tar_path="$(ls dist/tilearray-*.tar.gz | head -1)"
+        listing="$(tar -tzf "$tar_path")"
+        fail=0
+        if echo "$listing" | grep -Eq '(^|/)uv\.lock$'; then
+          echo "uv.lock must not be in the sdist"
+          fail=1
+        fi
+        if echo "$listing" | grep -Eq '(^|/)ENGINE_REVIEW\.md$'; then
+          echo "ENGINE_REVIEW.md must not be in the sdist"
+          fail=1
+        fi
+        if echo "$listing" | grep -Eq '(^|/)TEST_IMPROVEMENT_PLAN\.md$'; then
+          echo "TEST_IMPROVEMENT_PLAN.md must not be in the sdist"
+          fail=1
+        fi
+        if echo "$listing" | grep -Eq '(^|/)notebooks/'; then
+          echo "notebooks/ must not be in the sdist"
+          fail=1
+        fi
+        if [ "$fail" -ne 0 ]; then
+          exit 1
+        fi
+        echo "OK: sdist excludes lockfile, notebooks, and internal review notes"
+
+    - name: Clean-env wheel import smoke
+      run: |
+        wheel="$(ls dist/tilearray-*.whl | head -1)"
+        uv venv /tmp/tilearray-wheel-smoke --python 3.11
+        uv pip install --python /tmp/tilearray-wheel-smoke/bin/python "$wheel"
+        /tmp/tilearray-wheel-smoke/bin/python -c "
+        import tilearray
+        assert tilearray.__version__
+        assert hasattr(tilearray, 'WCSConfig')
+        assert hasattr(tilearray, 'ServiceConfig')
+        assert hasattr(tilearray, 'TileArrayError')
+        assert hasattr(tilearray, 'NetworkError')
+        print('OK:', tilearray.__version__)
+        "

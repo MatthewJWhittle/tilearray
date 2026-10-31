@@ -6,9 +6,19 @@ __author__ = "Matthew Whittle"
 __email__ = "47574804+MatthewJWhittle@users.noreply.github.com"
 
 from .array import compute_with_policy, create_array, load_array
+from .errors import (
+    ConfigurationError,
+    NetworkError,
+    ParseError,
+    ServiceError,
+    TileArrayError,
+    ValidationError,
+)
 from .service import (
     BaseService,
+    ServiceConfig,
     TileGeometry,
+    WCSConfig,
     WMSConfig,
     WMTSConfig,
     XYZConfig,
@@ -42,13 +52,21 @@ __all__ = [
     "compute_with_policy",
     "create_array",
     "load_array",
+    "TileArrayError",
+    "ServiceError",
+    "ValidationError",
+    "NetworkError",
+    "ParseError",
+    "ConfigurationError",
     "BaseService",
     "TileGeometry",
     "detect_service_type",
     "get_service",
     "register_service",
+    "ServiceConfig",
     "XYZConfig",
     "XYZService",
+    "WCSConfig",
     "WMSConfig",
     "WMTSConfig",
     "WCSParser",
