@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,8 +33,32 @@ jobs:
     - name: Build documentation
       run: uv run --extra docs sphinx-build -W -b html docs docs/_build/html
 
+    - name: Add .nojekyll for GitHub Pages
+      run: touch docs/_build/html/.nojekyll
+
     - name: Upload HTML artifact
       uses: actions/upload-artifact@v4
       with:
         name: docs-html
         path: docs/_build/html
+
+    - name: Upload Pages artifact
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs/_build/html
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4

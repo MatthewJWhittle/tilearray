@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - TBD
+
+Initial alpha release: lazy WCS- and XYZ-backed xarray arrays, shared fetch engine, Sphinx docs.
+
 ### Fixed
 
 - **Shared pressure pipeline:** HTTP responses are classified (status + body signatures) before retry / AIMD / circuit-breaker handling — replaces host-shaped forks (EA 403-only breaker, USGS-only OGC 404 helpers). Built-in signatures cover gateway 403/408/429/5xx and OGC `ExceptionReport` / `InvalidParameterValue` / `SUBSETTINGCRS` transient 404 bodies; custom signatures are pluggable via `PressureClassifier.register`
@@ -14,11 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sphinx documentation site (MyST + pydata-sphinx-theme): install, quickstart, how it works, visual usage guides (OSM / GIBS / EA Lidar), and API reference; offline `make docs` and `make docs-artifacts` for committed figures
+- GitHub Pages publish workflow for the Sphinx HTML site
 - `tilearray.pressure`: `PressureSignature`, `PressureClassifier`, `classify_response`, and built-in signature registry
 - EA DSP fetch preset: **pressure circuit breaker** (6+ classified breaker events within 5 s — gateway 403 or 429 — → freeze AIMD at floor for 15 s) to limit WAF/retry storms on large cold mosaics
 - `TileFetcher.stats`: live `current_limit`, `pressure_event_count`, `circuit_breaker_trips`, and `circuit_breaker_frozen` for observing AIMD backoff during gateway pressure
 - Mosaic fetch **abort**: after a hard tile failure (`NetworkError`), sibling tile tasks stop scheduling new HTTP (via shared `FetchProgress`); in-flight requests may still complete (Dask thread pool limitation)
-
 - Capabilities-driven WCS GetCoverage: axis labels and native CRS from DescribeCoverage; automatic reprojection to native CRS when needed; shared `unwrap_multipart` for ArcGIS `multipart/related` GeoTIFF payloads
 - Offline USGS 3DEP ArcGIS WCS contract tests (DescribeCoverage + multipart GetCoverage cassettes)
 - Thin WMS 1.3.0 and WMTS 1.0.0 adapters: `WMSService` (GetMap with CRS-aware bbox), `WMTSService` (GetTile REST or KVP, optional GetCapabilities), `WMSConfig` / `WMTSConfig`, shared decode and request composition with WCS/XYZ (no host-specific presets)
@@ -38,7 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EA DSP preset AIMD ceiling lowered from 32 to **10** (live county-scale evidence: ceiling 32 fails on ≥~256-tile cold mosaics; ceiling 8 completes Aire ~1015-tile valley)
 - README / example-sources: county-scale EA guidance (`max_concurrent_requests` ≤ preset ceiling)
 - README: shared client AIMD gate, mosaic queue vs concurrency, EA sustained ceiling (~10)
-
 - WCS subset axes no longer hard-code Long/Lat per CRS; `WCSService` reads envelope `axisLabels` from DescribeCoverage (EA `E`/`N`, ArcGIS `x`/`y`, geographic fallback `Long`/`Lat`)
 - README: capabilities-driven WCS, shared `multipart/related` GeoTIFF unwrap, and EA Lidar + USGS 3DEP proof on real endpoints
 - `create_array` / `load_array`: y coordinates now decrease with row index (north at row 0), matching `_organize_tiles` mosaic layout so north-up display no longer requires a manual flip
@@ -58,10 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `respx` moved from runtime to dev dependencies
 - Package renamed from scaffold `ogc-array` to `tilearray`; README, CI, and metadata aligned with shipped API
 - EA Lidar WCS GeoTIFF decode and non-divisible tile resize for native-resolution tiles
-
-## [0.1.0] - TBD
-
-Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
 
 [Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/MatthewJWhittle/tilearray/releases/tag/v0.1.0

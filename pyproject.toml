@@ -58,7 +58,7 @@ docs = [
 [project.urls]
 Homepage = "https://github.com/MatthewJWhittle/tilearray"
 Repository = "https://github.com/MatthewJWhittle/tilearray"
-Documentation = "https://github.com/MatthewJWhittle/tilearray/tree/main/docs"
+Documentation = "https://matthewjwhittle.github.io/tilearray/"
 "Bug Tracker" = "https://github.com/MatthewJWhittle/tilearray/issues"
 
 [tool.hatch.build.targets.wheel]

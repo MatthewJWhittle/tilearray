@@ -8,7 +8,7 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays for 
 
 > **Alpha.** The API may change. Today **Web Coverage Service (WCS)**, **Web Map Service (WMS)**, **Web Map Tile Service (WMTS)**, and **XYZ slippy-map tile URLs** are implemented as thin adapters behind one `create_array` entry point.
 
-**Docs:** Sphinx site in [`docs/`](docs/) — install, [how it works](docs/how-it-works.md), visual [usage guides](docs/guides/), and API reference. Contributors: `make docs` (HTML), `make docs-artifacts` (regenerate figures).
+**Docs:** [matthewjwhittle.github.io/tilearray](https://matthewjwhittle.github.io/tilearray/) — install, how it works, visual usage guides, and API reference. Source in [`docs/`](docs/). Contributors: `make docs` (HTML), `make docs-artifacts` (regenerate figures).
 
 ## What it does
 
