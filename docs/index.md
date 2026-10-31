@@ -1,20 +1,20 @@
 # tilearray
 
-tilearray turns remote tile services into **Dask**-backed **xarray** arrays for GIS and machine-learning work — one `create_array` call, polite to servers, fast when they're healthy.
+tilearray turns remote tile services into **Dask**-backed **xarray** arrays — one `create_array` call for WCS, WMS, WMTS, or XYZ.
 
 ```{admonition} Alpha
 :class: warning
 
-The API may change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one request-and-decode base behind `create_array`.
+The API may change.
 ```
 
 ## Start here
 
-- {doc}`install` — Python 3.9+, `uv` or `pip`
-- {doc}`how-it-works` — mental model for geo data engineers (lazy mosaics, fetch, scale)
-- {doc}`quickstart` — WCS elevation and XYZ slippy tiles (live network recipes)
-- {doc}`guides/index` — visual usage guides (OSM London, EA Lidar, …)
-- {doc}`api/index` — public exports and configuration helpers
+1. {doc}`install` — install the package
+2. {doc}`how-it-works` — what happens for a large AOI (plan, fetch, lazy mosaic)
+3. {doc}`quickstart` — copy-paste recipes against public hosts
+4. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar)
+5. {doc}`api/index` — public API reference
 
 ```{toctree}
 :hidden:
@@ -25,4 +25,12 @@ how-it-works
 quickstart
 guides/index
 api/index
+```
+
+```{toctree}
+:caption: Contributing
+:hidden:
+:maxdepth: 1
+
+building-docs
 ```

@@ -1,6 +1,6 @@
 # NASA GIBS XYZ — Blue Marble
 
-Load a small mid-Atlantic window from NASA GIBS as JPEG RGB tiles. Demonstrates `XYZConfig.from_url` with a **non-OSM** template where the path is `{z}/{y}/{x}` (row before column).
+Load a small mid-Atlantic window from NASA GIBS as JPEG RGB tiles. Uses `XYZConfig.from_url` with a template where the path is `{z}/{y}/{x}` (row before column) — not the OSM `{z}/{x}/{y}` order.
 
 ## Code
 
@@ -22,7 +22,7 @@ config = XYZConfig.from_url(
     max_concurrent_requests=2,
     rate_limit_per_second=2.0,
     headers={
-        "User-Agent": "tilearray-docs/0.1 (+https://github.com/MatthewJWhittle/tilearray/issues)",
+        "User-Agent": "tilearray/0.1 (+https://github.com/MatthewJWhittle/tilearray/issues)",
     },
 )
 
@@ -38,14 +38,4 @@ print(da.shape, da.dims)  # expect (y, x, band) for RGB JPEG
 :width: 520px
 ```
 
-Imagery: NASA GIBS / BlueMarble_NextGeneration.
-
-## Try it yourself
-
-```bash
-make docs-artifacts
-# optional: only this mosaic
-# uv run --extra docs python scripts/generate_docs_artifacts.py --only gibs
-```
-
-Coordinate with GIBS if you plan very large crawls; this guide stays at a tiny low-zoom glance.
+Imagery: NASA GIBS / BlueMarble_NextGeneration. Keep crawls modest; coordinate with GIBS for very large jobs.

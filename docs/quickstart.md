@@ -1,8 +1,8 @@
 # Quick start
 
-These snippets match the README. They talk to **live** public hosts — run them locally when you intend to hit the network. For plotted walkthroughs with committed figures, see {doc}`guides/index`.
+These examples hit **live** public hosts. For plotted walkthroughs, see {doc}`guides/index`.
 
-## XYZ slippy-map tiles
+## XYZ — OpenStreetMap
 
 ```python
 from tilearray import XYZConfig, create_array
@@ -12,16 +12,16 @@ config = XYZConfig.for_openstreetmap(zoom=16)
 
 da = create_array(
     config,
-    bbox=(-0.005, 51.495, 0.005, 51.505),  # small bbox near central London
+    bbox=(-0.005, 51.495, 0.005, 51.505),  # small window near central London
     crs=CRS.EPSG_4326,
 )
 print(da.shape, da.attrs["service_type"])
-# Still lazy until you compute — prefer compute_with_policy for multi-tile mosaics
+# Lazy until you compute — prefer compute_with_policy for multi-tile mosaics
 ```
 
-`XYZConfig.for_openstreetmap()` sets an identifiable User-Agent and polite fixed limits (max 2 in-flight, ~2 req/s). Include © OpenStreetMap contributors attribution when displaying map imagery.
+The OSM preset sets an identifiable User-Agent and polite limits (max 2 in-flight, ~2 req/s). Include © OpenStreetMap contributors when displaying map imagery.
 
-## WCS coverage (Environment Agency Lidar)
+## WCS — Environment Agency Lidar
 
 ```python
 from tilearray import create_array
@@ -51,11 +51,11 @@ elevation = da.compute()
 print(elevation.shape, float(elevation.mean()))
 ```
 
-More endpoints live in [`example-sources.md`](https://github.com/MatthewJWhittle/tilearray/blob/main/example-sources.md) in the repository.
+More public endpoints: [`example-sources.md`](https://github.com/MatthewJWhittle/tilearray/blob/main/example-sources.md).
 
 ## Large mosaics — `compute_with_policy`
 
-For multi-tile lazy mosaics, prefer {py:func}`tilearray.compute_with_policy` over plain `.compute()` so Dask worker count matches the AIMD fetch ceiling:
+For multi-tile lazy mosaics, prefer {py:func}`tilearray.compute_with_policy` so Dask workers match the fetch ceiling:
 
 ```python
 from tilearray import compute_with_policy, create_array

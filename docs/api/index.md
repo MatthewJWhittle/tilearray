@@ -1,7 +1,5 @@
 # API reference
 
-High-level public surface. Full signatures come from the installed package.
-
 ```{eval-rst}
 .. currentmodule:: tilearray
 
@@ -20,4 +18,4 @@ High-level public surface. Full signatures come from the installed package.
    types.Format
 ```
 
-Service helpers also live under `tilearray.service` (`WCSService`, `WMSService`, `WMTSService`, `XYZService`, registry helpers). Arrays from `create_array` are north-up (row 0 = north).
+Lower-level service clients live under `tilearray.service` (`WCSService`, `WMSService`, `WMTSService`, `XYZService`, plus registry helpers). Arrays from `create_array` are north-up (row 0 = north).
