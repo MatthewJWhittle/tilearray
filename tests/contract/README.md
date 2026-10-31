@@ -14,8 +14,14 @@ tests/contract/
     └── cassettes/          # one YAML per test method
         ├── TestEALidarWCSContract.test_get_capabilities.yaml
         ├── TestEALidarWCSContract.test_describe_coverage.yaml
-        └── TestEALidarWCSContract.test_get_coverage.yaml
+        ├── TestEALidarWCSContract.test_get_coverage.yaml
+        ├── TestUSGS3DEPWCSContract.test_describe_coverage_axis_labels.yaml
+        └── TestUSGS3DEPWCSContract.test_get_coverage_multipart_geotiff.yaml
 ```
+
+Keep cassettes small (CI enforces a per-file size budget via
+`scripts/check_cassettes.py`). Prefer tiny request windows when recording;
+multipart GeoTIFF bodies bloat YAML quickly.
 
 ## Running
 

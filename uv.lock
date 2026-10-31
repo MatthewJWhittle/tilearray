@@ -3996,13 +3996,13 @@ wheels = [
 
 [[package]]
 name = "tilearray"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "dask" },
     { name = "eval-type-backport", marker = "python_full_version < '3.10'" },
     { name = "geotiff" },
     { name = "httpx" },
+    { name = "numcodecs" },
     { name = "numpy" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -4011,16 +4011,25 @@ dependencies = [
     { name = "tenacity", version = "9.1.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
     { name = "tenacity", version = "9.1.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "xarray" },
+    { name = "zarr" },
 ]
 
 [package.optional-dependencies]
 dev = [
+    { name = "coverage" },
+    { name = "hypothesis" },
     { name = "ipykernel" },
     { name = "jupyter" },
+    { name = "matplotlib" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "pytest-httpserver" },
+    { name = "pytest-timeout" },
+    { name = "pytest-vcr" },
+    { name = "pytest-xdist" },
+    { name = "respx" },
     { name = "ruff" },
 ]
 docs = [
@@ -4047,6 +4056,8 @@ dev = [
     { name = "jupyter" },
     { name = "matplotlib" },
     { name = "mypy" },
+    { name = "pre-commit" },
+    { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-httpserver" },
     { name = "pytest-timeout" },
@@ -4058,15 +4069,19 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.10.7" },
     { name = "dask", specifier = ">=2024.8.0" },
     { name = "eval-type-backport", marker = "python_full_version < '3.10'", specifier = ">=0.2.0" },
     { name = "geotiff", specifier = ">=0.2.10" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.0.0" },
-    { name = "jupyter", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.141.1" },
+    { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.31.0" },
+    { name = "jupyter", marker = "extra == 'dev'", specifier = ">=1.1.1" },
+    { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.9.4" },
     { name = "matplotlib", marker = "extra == 'docs'", specifier = ">=3.9.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=3.0.0" },
+    { name = "numcodecs", specifier = ">=0.12.1,<0.16" },
     { name = "numpy", specifier = ">=2.0.2" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },
@@ -4074,14 +4089,20 @@ requires-dist = [
     { name = "pydata-sphinx-theme", marker = "extra == 'docs'", specifier = ">=0.15.0" },
     { name = "pyproj", specifier = ">=3.6.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.0.0" },
+    { name = "pytest-httpserver", marker = "extra == 'dev'", specifier = ">=1.1.3" },
+    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
+    { name = "pytest-vcr", marker = "extra == 'dev'", specifier = ">=1.0.2" },
+    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "requests", specifier = ">=2.32.5" },
+    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.22.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=6.0.0" },
     { name = "sphinx-copybutton", marker = "extra == 'docs'", specifier = ">=0.5.0" },
     { name = "sphinx-design", marker = "extra == 'docs'", specifier = ">=0.5.0" },
     { name = "tenacity", specifier = ">=9.0.0" },
     { name = "xarray", specifier = ">=2024.7.0" },
+    { name = "zarr", specifier = ">=2.12.0,<2.13" },
 ]
 provides-extras = ["dev", "docs"]
 
@@ -4093,6 +4114,8 @@ dev = [
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "matplotlib", specifier = ">=3.9.4" },
     { name = "mypy", specifier = ">=1.0.0" },
+    { name = "pre-commit", specifier = ">=3.0.0" },
+    { name = "pytest", specifier = ">=7.0.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pytest-httpserver", specifier = ">=1.1.3" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },

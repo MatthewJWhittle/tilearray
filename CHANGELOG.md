@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Public top-level exports now include `WCSConfig`, `ServiceConfig`, and the core error types (`TileArrayError`, `NetworkError`, …)
+- Package version is sourced solely from `src/tilearray/_version.py` via hatch
+- Runtime pins for `zarr` / `numcodecs` keep plain `pip install` + `import tilearray` working with `geotiff`
+- Sdist excludes `uv.lock`, notebooks, benchmarks/scripts, and internal review notes; USGS multipart cassette shrunk for packaging hygiene
+- `[project.optional-dependencies].dev` aligned with uv `dependency-groups.dev`
+
 ## [0.1.0] - TBD
 
 Initial alpha release: lazy WCS- and XYZ-backed xarray arrays, shared fetch engine, Sphinx docs.
