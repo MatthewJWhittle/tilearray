@@ -1,0 +1,30 @@
+name: Nightly
+
+on:
+  schedule:
+    # 05:17 UTC daily — off-peak, avoids top-of-hour congestion
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  net-slow:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.11
+
+    - name: Install dependencies
+      run: |
+        uv sync --dev
+
+    - name: Run net/slow tests
+      run: |
+        # Override default addopts marker/timeout/coverage gate: this job is live/slow only.
+        uv run pytest -m "net or slow" --timeout=300 --cov-fail-under=0

@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   test:
@@ -28,9 +28,24 @@ jobs:
       run: |
         uv sync --dev
 
+    - name: Assert net/slow tests are deselected on PRs
+      if: github.event_name == 'pull_request'
+      run: |
+        out="$(uv run pytest --collect-only -q -m "not slow and not net" --cov-fail-under=0 2>&1)"
+        echo "$out"
+        echo "$out" | grep -Eq '[1-9][0-9]* deselected' || {
+          echo "Expected at least one net/slow test to be deselected under PR markers"
+          exit 1
+        }
+        if echo "$out" | grep -q 'test_live_endpoints'; then
+          echo "Live endpoint tests must not be selected on PRs"
+          exit 1
+        fi
+        echo "OK: net/slow tests are deselected on PRs"
+
     - name: Run tests
       run: |
-        uv run pytest --cov=src/tilearray --cov-report=xml
+        uv run pytest -m "not slow and not net" --cov=src/tilearray --cov-branch --cov-report=xml --cov-fail-under=85
 
     - name: Upload coverage to Codecov
       if: matrix.python-version == '3.11'
