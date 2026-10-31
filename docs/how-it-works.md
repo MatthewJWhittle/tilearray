@@ -2,91 +2,124 @@
 
 tilearray’s job is simple to say and fiddly to do well: turn **tiled** WCS / WMS / WMTS / XYZ sources into **analysis-ready** [xarray](https://docs.xarray.dev/) arrays — efficiently, politely, and with the **same API** on a laptop or a bigger box.
 
-You bring a bounding box and a service config. The library plans the tile grid, fetches under a concurrency ceiling, decodes, and assembles a mosaic. You keep working in the usual scientific-Python array stack (xarray + Dask + NumPy), whether the window is a few tiles or a large AOI.
+You bring a bounding box and a service config. The library plans the tile grid, fetches under a concurrency ceiling, decodes, and assembles a mosaic. Below is that pipeline as a visual walkthrough — claims match the real fetch engine and `create_array` API.
 
 ```{image} _static/guides/how-it-works-pipeline.png
-:alt: Pipeline from AOI and config through tile planning, polite fetch, decode/mosaic, to an xarray DataArray
-:width: 720px
+:alt: Overview strip of plan, fetch, decode, mosaic, then lazy/compute use
+:width: 740px
 ```
-
-## One call, big AOI
 
 ```python
 from tilearray import create_array, compute_with_policy
-from tilearray.service import WCSConfig
-from tilearray.types import CRS, Format
 
-da = create_array(config, bbox, CRS.EPSG_27700)   # lazy Dask-backed DataArray
-elevation = compute_with_policy(da)               # fetch + assemble when you need values
+da = create_array(config, bbox, crs)   # lazy Dask-backed DataArray by default
+result = compute_with_policy(da)       # fetch + assemble when you need values
 ```
 
-For a large area of interest the clever work is mostly **inside** that path:
+WCS, WMS, WMTS, and XYZ share one request-and-decode base. Thin **presets** (`XYZConfig.for_openstreetmap`, `WCSConfig.for_ea_dsp`) only appear when a public host needs different politeness — not as a catalogue of every layer id.
 
-| Stage | What tilearray does |
-|-------|---------------------|
-| **Plan** | Service adapters turn your bbox + chunk/grid settings into a list of `TileRequest`s (origin-aware tiling for XYZ/WMTS; coverage subsets for WCS). |
-| **Fetch** | Shared `TileFetcher` pulls tiles with **bounded concurrency** (sync `httpx` + threads — not asyncio). Optional per-host rate limits; EA-style hosts can use **AIMD** concurrency under a hard ceiling plus a pressure circuit breaker. |
-| **Decode** | Shared JPEG/PNG/GeoTIFF (and multipart WCS) decode → `float32` arrays with a consistent band policy. |
-| **Assemble** | Tiles become Dask delayed blocks, stitched north-up into one `xarray.DataArray`. |
+---
 
-WCS, WMS, WMTS, and XYZ share that request-and-decode base. Thin **presets** (`XYZConfig.for_openstreetmap`, `WCSConfig.for_ea_dsp`) only appear when a public host needs different politeness — not as a catalogue of every layer id.
+## 1 · Plan tiles
 
-## Memory, concurrency, and “when does work happen?”
+```{image} _static/guides/how-it-works-01-plan.png
+:alt: AOI over a tile grid producing an ordered TileRequest list
+:width: 720px
+```
 
-### Lazy by default
+Service adapters turn your bbox + chunk/grid settings into an ordered list of `TileRequest`s (XYZ/WMTS grids, WCS coverage subsets). A large AOI is mostly **more requests in that list** — not a different client API.
 
-`create_array(..., compute=False)` (the default) builds a **Dask graph**: each tile is a delayed fetch/decode. The DataArray’s shape, coordinates, and attrs are known up front; **tile bytes are not all in RAM** until something computes them.
+---
 
-That matters for a big AOI:
+## 2 · Polite concurrent fetch
 
-- You can attach reductions (`.mean()`, windowed stats, ML sampling) **before** pulling every pixel.
-- Memory pressure tracks **what you compute**, not necessarily the full mosaic footprint.
-- Chunking follows the tile grid you planned — natural for Dask and for “same code, larger machine.”
+```{image} _static/guides/how-it-works-02-fetch.png
+:alt: Dask thread pool feeding a fetch gate into a tile host via sync httpx
+:width: 740px
+```
 
-### When you compute
+The fetch engine is **synchronous HTTP** (`httpx.Client`) gated by a concurrency limit:
 
-| Path | Behaviour |
-|------|-----------|
-| `create_array(..., compute=True)` | Builds the lazy array, then computes immediately with a thread pool sized for the fetch policy. |
-| `load_array(...)` | Convenience wrapper; defaults to `compute=True`. |
-| `da.compute()` | Standard Dask — workers default toward CPU count, which can **under-use** a high fetch ceiling. |
-| {py:func}`tilearray.compute_with_policy` | Preferred for multi-tile mosaics: threaded scheduler with `num_workers` aligned to the fetch ceiling stored on `da.attrs`. |
+- Dask’s **thread** pool runs tile tasks; a fetch gate caps in-flight HTTP (not asyncio).
+- Fixed ceiling + optional rate limit when adaptive mode is off (OSM preset).
+- **AIMD** when enabled: ramp under `max_concurrent`, back off on classified pressure (403/408/429/5xx and known OGC transient bodies).
+- Optional **circuit breaker** (EA DSP preset): burst pressure freezes concurrency at the floor for a cooldown.
+- Retries via Tenacity; `Retry-After` honoured; hard failure → `NetworkError` (no silent NaN holes).
 
-So: **lazy graph → optional compute**. On a laptop, keep windows modest or reduce first. On a bigger machine, raise workers *with* the policy ceiling — don’t confuse “more Dask threads” with “ignore the host’s don’t-cross line.”
+AIMD only helps if Dask can schedule enough tile loads — hence `compute_with_policy` later.
 
-### Concurrent requests (threaded, not async)
+---
 
-The fetch engine is **synchronous HTTP** (`httpx.Client`) gated by a per-policy concurrency limit:
+## 3 · Decode
 
-- Fixed ceiling via a semaphore when adaptive mode is off (e.g. OSM preset: low in-flight + rate limit).
-- **AIMD** when enabled: start at `initial_concurrent`, additive increase on success, multiplicative decrease on classified pressure (403/408/429/5xx and known OGC transient bodies), never above `max_concurrent`.
-- Optional **circuit breaker**: a burst of breaker-classified events freezes concurrency at the floor for a cooldown (used by the EA DSP preset).
-- Retries via Tenacity; `Retry-After` honoured when present.
-- After retries fail, tiles raise `NetworkError` — mosaics do **not** succeed with silent NaN holes.
+```{image} _static/guides/how-it-works-03-decode.png
+:alt: HTTP bytes through shared decode into float32 y,x band arrays
+:width: 700px
+```
 
-Dask’s thread pool runs tile tasks; the fetch gate caps how many HTTP calls are in flight. AIMD only helps if Dask can actually schedule that many tile loads — hence `compute_with_policy`.
+Shared `tilearray.decode` unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS payloads) into `float32` arrays. JPEG/PNG keep bands `(y, x, band)` when present; GeoTIFF elevation uses the first band. Same path for every service adapter.
 
-### Disk cache
+---
 
-Pass `cache_dir=` to `create_array` to store successful tile payloads (content-addressed `.tile` + `.meta`). Warm runs skip the network for cache hits. Cache is **optional disk**, not an automatic store; cold runs still hit the host under the same politeness rules.
+## 4 · Dask mosaic
 
-## What you get
+```{image} _static/guides/how-it-works-04-mosaic.png
+:alt: Delayed tile blocks assembling into a north-up xarray DataArray
+:width: 740px
+```
+
+Each tile becomes a Dask delayed block; blocks are stitched **north-up** into one `xarray.DataArray` with spatial coordinates and attrs (`crs`, `service_type`, fetch-policy summary, …). Shape is known when the graph is built; tile bytes load when something computes.
+
+---
+
+## 5 · Lazy · compute · cache
+
+```{image} _static/guides/how-it-works-05-lazy-compute-cache.png
+:alt: Three panels for lazy create_array, compute_with_policy, and optional disk cache
+:width: 740px
+```
+
+| Path | What happens |
+|------|----------------|
+| `create_array(...)` (default) | **Lazy** Dask graph — coords/attrs ready; pixels not all in RAM. |
+| `create_array(..., compute=True)` / `load_array(...)` | Build then compute; workers sized for the fetch policy when using the eager path. |
+| `da.compute()` | Works, but default Dask worker count can **under-use** a high fetch ceiling. |
+| {py:func}`tilearray.compute_with_policy` | Preferred for multi-tile mosaics: threaded scheduler aligned to `FetchPolicy.max_concurrent`. |
+| `cache_dir=...` | Optional disk cache of successful tile payloads (`.tile` + `.meta`); warm hits skip the network; cold fills still obey politeness. |
+
+Memory tracks **what you compute** (full mosaic, a reduction, a window), not automatically the whole AOI footprint. Same code path on a laptop or a bigger machine — scale via bbox, chunks, and policy.
+
+---
+
+## 6 · Downstream use
+
+```{image} _static/guides/how-it-works-06-downstream.png
+:alt: DataArray feeding plot, analyse, and ML consumers
+:width: 720px
+```
 
 ```{image} _static/guides/ea-lidar-elevation.png
-:alt: Example analysis-ready EA Lidar elevation mosaic and histogram from a small OSGB window
+:alt: Example EA Lidar elevation mosaic and histogram after compute
 :width: 640px
 ```
 
-A north-up `xarray.DataArray` with spatial coordinates and useful attrs (`crs`, `service_type`, fetch-policy summary, …). From there the usual stack applies:
+Once you have the DataArray, the usual stack applies without re-implementing tile I/O per host:
 
-- **Plot** with matplotlib / holoviews / etc. on a computed window or a reduction.
-- **Analyse** with xarray/Dask (`groupby`, resampling, terrain derivatives) without rewriting I/O for each host.
-- **ML** — sample chips, batch from chunks, or materialise tensors from the same array API whether the source was XYZ basemap tiles or WCS elevation.
+- **Plot** a computed window or a reduction.
+- **Analyse** with xarray/Dask (stats, terrain, resample).
+- **ML** — sample chips or materialise tensors from the same chunked array API.
 
-Scale story for a geo data engineer: **one mental model**. Small AOI on a laptop and a large AOI on a workstation differ in bbox, chunking, and fetch policy — not in “which client library do I use?”
+---
 
 ## North star
 
 Make tiled OGC / slippy sources **easy to get into formats people already use for analysis, plotting, and ML** — without each project re-implementing tile math, polite HTTP, decode quirks, and mosaic assembly.
 
-See {doc}`guides/index` for visual loads from OSM, NASA GIBS, and EA Lidar, and {doc}`quickstart` for copy-paste recipes.
+Regenerate these diagrams (offline):
+
+```bash
+uv run --extra docs python scripts/generate_how_it_works_figures.py
+# or: make docs-how-it-works-figures
+```
+
+See {doc}`guides/index` for live-host usage guides and {doc}`quickstart` for copy-paste recipes.

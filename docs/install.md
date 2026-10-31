@@ -31,13 +31,14 @@ make docs
 
 Rendered HTML lands in `docs/_build/html/`. Open `docs/_build/html/index.html` locally.
 
-### Regenerating usage-guide figures (network)
+### Regenerating figures
 
-Visual guides embed committed PNGs under `docs/_static/guides/`. Refresh them against live public hosts with polite presets:
+Committed PNGs live under `docs/_static/guides/`.
 
 ```bash
-make docs-artifacts
-# or: uv run --extra docs python scripts/generate_docs_artifacts.py
+make docs-how-it-works-figures   # offline stage diagrams for How it works
+make docs-artifacts              # live hosts → usage-guide mosaics (network)
+make docs                        # offline HTML build
 ```
 
-Then rebuild HTML with `make docs`. The Sphinx build itself does **not** fetch tiles.
+The Sphinx build itself does **not** fetch tiles.
