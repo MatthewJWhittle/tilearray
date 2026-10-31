@@ -51,8 +51,8 @@ docs-artifacts: ## Regenerate all committed docs assets (diagrams + live guide f
 docs-clean: ## Remove Sphinx build output
 	rm -rf docs/_build docs/api/generated
 
-publish: ## Publish to PyPI (requires PYPI_API_TOKEN)
-	uv run twine upload dist/*
+publish: ## Publish to PyPI (UV_PUBLISH_TOKEN or trusted publishing)
+	uv publish
 
 pre-commit: ## Install pre-commit hooks
 	uv run pre-commit install
