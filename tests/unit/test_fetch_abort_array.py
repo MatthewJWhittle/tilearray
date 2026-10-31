@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -33,22 +31,21 @@ def _decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
 
 @respx.mock
 def test_load_tile_array_abort_stops_sibling_workers() -> None:
+    """After one tile aborts progress, sibling loads sharing it must fail fast.
+
+    Earlier versions raced a Barrier(3) with only two waiters and wall-clock
+    sleeps; under xdist that raised BrokenBarrierError. Abort is checked before
+    HTTP, so the reliable contract is: once aborted, further siblings raise.
+    """
     progress = FetchProgress(total=3)
     policy = FetchPolicy(max_concurrent=3, rate_limit_per_second=None, retries=0)
-    start_gate = threading.Barrier(3)
-    ok_calls = {"count": 0}
 
     respx.get("https://example.com/fail").mock(
         return_value=httpx.Response(500, text="fail")
     )
-
-    def ok_handler(request: httpx.Request) -> httpx.Response:
-        start_gate.wait(timeout=1)
-        ok_calls["count"] += 1
-        time.sleep(0.05)
-        return httpx.Response(200, content=b"x")
-
-    respx.get("https://example.com/ok").mock(side_effect=ok_handler)
+    respx.get("https://example.com/ok").mock(
+        return_value=httpx.Response(200, content=b"x")
+    )
 
     fail_request = TileRequest(
         url="https://example.com/fail",
@@ -67,9 +64,8 @@ def test_load_tile_array_abort_stops_sibling_workers() -> None:
         retries=0,
     )
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        fail_future = pool.submit(
-            _load_tile_array,
+    with pytest.raises(NetworkError):
+        _load_tile_array(
             fail_request,
             None,
             _decoder,
@@ -77,6 +73,10 @@ def test_load_tile_array_abort_stops_sibling_workers() -> None:
             policy,
             progress,
         )
+
+    assert progress.is_aborted() is True
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
         ok_futures = [
             pool.submit(
                 _load_tile_array,
@@ -89,17 +89,6 @@ def test_load_tile_array_abort_stops_sibling_workers() -> None:
             )
             for _ in range(2)
         ]
-
-        with pytest.raises(NetworkError):
-            fail_future.result()
-
-        aborted = 0
         for future in ok_futures:
-            try:
-                future.result()
-            except NetworkError:
-                aborted += 1
-
-    assert progress.is_aborted() is True
-    assert aborted >= 1
-    assert ok_calls["count"] <= 1
+            with pytest.raises(NetworkError):
+                future.result(timeout=2)

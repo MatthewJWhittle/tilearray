@@ -683,49 +683,36 @@ def test_fetch_stats_expose_live_aimd_limit() -> None:
 
 @respx.mock
 def test_fetch_abort_stops_sibling_tile_requests() -> None:
+    """After progress.abort(), sibling fetches sharing it must raise NetworkError.
+
+    Avoids the old Barrier(3)/sleep race (only two waiters) that flakes under xdist.
+    """
     progress = FetchProgress(total=3)
     policy = FetchPolicy(max_concurrent=3, rate_limit_per_second=None, retries=0)
     fetcher = TileFetcher.for_policy(policy)
 
-    fail_route = respx.get("https://example.com/fail")
-    fail_route.mock(return_value=httpx.Response(500, text="fail"))
-    ok_calls = {"count": 0}
-    start_gate = threading.Barrier(3)
-
-    def ok_handler(request: httpx.Request) -> httpx.Response:
-        start_gate.wait(timeout=1)
-        ok_calls["count"] += 1
-        time.sleep(0.05)
-        return httpx.Response(200, content=b"x")
-
-    respx.get("https://example.com/ok").mock(side_effect=ok_handler)
+    respx.get("https://example.com/fail").mock(
+        return_value=httpx.Response(500, text="fail")
+    )
+    respx.get("https://example.com/ok").mock(
+        return_value=httpx.Response(200, content=b"x")
+    )
 
     fail_request = _tile_request(url="https://example.com/fail", retries=0)
     ok_request = _tile_request(url="https://example.com/ok", retries=0)
 
-    def fail_and_abort() -> TileResponse:
-        response = fetcher.fetch(fail_request, progress=progress)
-        if not response.success:
-            progress.abort(response.error_message or "fail")
-        return response
+    fail_response = fetcher.fetch(fail_request, progress=progress)
+    assert fail_response.success is False
+    progress.abort(fail_response.error_message or "fail")
+    assert progress.is_aborted() is True
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        fail_future = pool.submit(fail_and_abort)
+    with ThreadPoolExecutor(max_workers=2) as pool:
         ok_futures = [
             pool.submit(fetcher.fetch, ok_request, progress=progress) for _ in range(2)
         ]
-        fail_response = fail_future.result()
-        aborted = 0
         for future in ok_futures:
-            try:
-                future.result()
-            except NetworkError:
-                aborted += 1
-
-    assert fail_response.success is False
-    assert progress.is_aborted() is True
-    assert aborted >= 1
-    assert ok_calls["count"] <= 1
+            with pytest.raises(NetworkError):
+                future.result(timeout=2)
 
 
 def test_fetch_progress_abort_blocks_new_fetches() -> None:
