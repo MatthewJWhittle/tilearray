@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-Generate visual assets for Sphinx usage guides from live public tile hosts.
+Generate live usage-guide mosaics for Sphinx docs from public tile hosts.
 
 Uses polite fetch presets and small bboxes. Requires network. Not run in default CI.
 
-Usage:
+Prefer the umbrella Make target (diagrams + live figures):
+
+    make docs-artifacts
+
+Direct invoke (live mosaics only):
+
     uv run --extra docs python scripts/generate_docs_artifacts.py
     uv run --extra docs python scripts/generate_docs_artifacts.py --only osm
-    uv run --extra docs python scripts/generate_docs_artifacts.py --only ea
 
-Outputs land in docs/_static/guides/ (PNG figures + JSON stats). Commit those
-files so ``make docs`` stays offline.
+Outputs land in docs/_static/guides/. Commit those files so ``make docs`` stays offline.
 """
 
 from __future__ import annotations

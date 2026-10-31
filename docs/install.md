@@ -36,9 +36,8 @@ Rendered HTML lands in `docs/_build/html/`. Open `docs/_build/html/index.html` l
 Committed PNGs live under `docs/_static/guides/`.
 
 ```bash
-make docs-how-it-works-figures   # offline stage diagrams for How it works
-make docs-artifacts              # live hosts → usage-guide mosaics (network)
-make docs                        # offline HTML build
+make docs-artifacts   # all assets: How it works diagrams + live usage-guide figures
+make docs             # offline Sphinx HTML (no tile fetches)
 ```
 
-The Sphinx build itself does **not** fetch tiles.
+`docs-artifacts` needs network for the live mosaics; stage diagrams are generated offline in the same target. The Sphinx build itself does **not** fetch tiles.

@@ -4,7 +4,12 @@ Generate offline stage diagrams for docs/how-it-works.md.
 
 No network. Writes PNGs under docs/_static/guides/.
 
-Usage:
+Prefer the umbrella Make target (also runs live usage-guide figures):
+
+    make docs-artifacts
+
+Direct invoke (diagrams only, offline):
+
     uv run --extra docs python scripts/generate_how_it_works_figures.py
 """
 

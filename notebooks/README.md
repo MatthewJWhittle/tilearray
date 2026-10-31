@@ -5,7 +5,7 @@ Prefer the Sphinx **usage guides** under [`docs/guides/`](../docs/guides/) for d
 Figures for those guides are regenerated with:
 
 ```bash
-make docs-artifacts   # live network, polite presets
+make docs-artifacts   # all docs assets (diagrams + live mosaics)
 make docs             # static HTML; no tile fetches
 ```
 

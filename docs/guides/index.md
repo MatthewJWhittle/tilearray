@@ -2,7 +2,7 @@
 
 Visual walkthroughs: load tiles from public hosts, plot the array, and run a little analysis. For the mental model behind them, see {doc}`../how-it-works`.
 
-Figures are produced by a **live** artifact script (`scripts/generate_docs_artifacts.py`) using polite fetch presets and small bboxes, then **committed** under `docs/_static/guides/`. Sphinx only embeds those assets — the HTML docs build does not contact tile hosts.
+Figures are produced by `make docs-artifacts` (How it works diagrams offline, then live mosaics via polite presets), then **committed** under `docs/_static/guides/`. Sphinx only embeds those assets — `make docs` does not contact tile hosts.
 
 ```{toctree}
 :maxdepth: 1
@@ -18,9 +18,8 @@ ea-lidar
 | {doc}`gibs-bluemarble` | NASA GIBS XYZ · mid-Atlantic | RGB Blue Marble glance |
 | {doc}`ea-lidar` | EA Lidar WCS · OSGB window | Elevation map + histogram |
 
-Regenerate figures (network required):
+Regenerate all committed docs assets:
 
 ```bash
-make docs-artifacts
-# or: uv run --extra docs python scripts/generate_docs_artifacts.py
+make docs-artifacts   # network for live mosaics; diagrams are offline
 ```

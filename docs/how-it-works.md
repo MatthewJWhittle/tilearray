@@ -115,11 +115,10 @@ Once you have the DataArray, the usual stack applies without re-implementing til
 
 Make tiled OGC / slippy sources **easy to get into formats people already use for analysis, plotting, and ML** — without each project re-implementing tile math, polite HTTP, decode quirks, and mosaic assembly.
 
-Regenerate these diagrams (offline):
+Regenerate committed docs assets (diagrams + live usage-guide figures):
 
 ```bash
-uv run --extra docs python scripts/generate_how_it_works_figures.py
-# or: make docs-how-it-works-figures
+make docs-artifacts
 ```
 
 See {doc}`guides/index` for live-host usage guides and {doc}`quickstart` for copy-paste recipes.
