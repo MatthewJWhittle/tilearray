@@ -18,7 +18,7 @@ version = __version__
 release = __version__
 
 extensions = [
-    "myst_nb",
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
@@ -29,7 +29,17 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = [
+    "_build",
+    "Thumbs.db",
+    ".DS_Store",
+    "**/.ipynb_checkpoints",
+]
+
+source_suffix = {
+    ".md": "markdown",
+    ".rst": "restructuredtext",
+}
 
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
@@ -47,13 +57,6 @@ myst_enable_extensions = [
     "fieldlist",
 ]
 myst_heading_anchors = 3
-
-# Execute vignettes in CI/local builds without hitting live tile hosts.
-# Offline notebooks mock HTTP; live demos stay out of the docs build.
-nb_execution_mode = "force"
-nb_execution_timeout = 120
-nb_execution_raise_on_error = True
-nb_merge_streams = True
 
 autosummary_generate = True
 autodoc_typehints = "description"

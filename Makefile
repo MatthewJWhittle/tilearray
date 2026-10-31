@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build publish docs docs-clean
+.PHONY: help install install-dev test test-cov lint format clean build publish docs docs-artifacts docs-clean
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -39,12 +39,16 @@ clean: ## Clean build artifacts
 build: ## Build the package
 	uv build
 
-docs: ## Build Sphinx HTML docs (offline-safe vignettes)
+docs: ## Build Sphinx HTML docs (no live tile fetches)
 	uv sync --extra docs --dev
 	uv run --extra docs sphinx-build -W -b html docs docs/_build/html
 
+docs-artifacts: ## Regenerate usage-guide figures via live public hosts
+	uv sync --extra docs --dev
+	uv run --extra docs python scripts/generate_docs_artifacts.py
+
 docs-clean: ## Remove Sphinx build output
-	rm -rf docs/_build docs/api/generated docs/vignettes/.ipynb_checkpoints
+	rm -rf docs/_build docs/api/generated
 
 publish: ## Publish to PyPI (requires PYPI_API_TOKEN)
 	uv run twine upload dist/*

@@ -11,8 +11,8 @@ The API may change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one requ
 ## Start here
 
 - {doc}`install` — Python 3.9+, `uv` or `pip`
-- {doc}`quickstart` — WCS elevation and XYZ slippy tiles (live network)
-- {doc}`vignettes/index` — offline-safe guides that build in CI
+- {doc}`quickstart` — WCS elevation and XYZ slippy tiles (live network recipes)
+- {doc}`guides/index` — visual usage guides (OSM London, EA Lidar, …)
 - {doc}`api/index` — public exports and configuration helpers
 
 ```{toctree}
@@ -21,6 +21,6 @@ The API may change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one requ
 
 install
 quickstart
-vignettes/index
+guides/index
 api/index
 ```

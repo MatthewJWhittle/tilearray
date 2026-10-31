@@ -20,7 +20,9 @@ cd tilearray
 uv sync --dev
 ```
 
-Docs extras (Sphinx + MyST-NB + theme):
+## Documentation
+
+Docs extras (Sphinx + MyST + theme + matplotlib for regenerating figures):
 
 ```bash
 uv sync --extra docs --dev
@@ -29,6 +31,13 @@ make docs
 
 Rendered HTML lands in `docs/_build/html/`. Open `docs/_build/html/index.html` locally.
 
-## Optional plotting
+### Regenerating usage-guide figures (network)
 
-Vignettes that plot mosaics need `matplotlib` (already in the project `dev` dependency group). Install docs + dev extras together as above.
+Visual guides embed committed PNGs under `docs/_static/guides/`. Refresh them against live public hosts with polite presets:
+
+```bash
+make docs-artifacts
+# or: uv run --extra docs python scripts/generate_docs_artifacts.py
+```
+
+Then rebuild HTML with `make docs`. The Sphinx build itself does **not** fetch tiles.

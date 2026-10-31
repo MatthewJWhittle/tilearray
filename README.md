@@ -8,7 +8,7 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays for 
 
 > **Alpha.** The API may change. Today **Web Coverage Service (WCS)**, **Web Map Service (WMS)**, **Web Map Tile Service (WMTS)**, and **XYZ slippy-map tile URLs** are implemented as thin adapters behind one `create_array` entry point.
 
-**Docs:** Sphinx site in [`docs/`](docs/) — install, quick start, offline vignettes, and API stubs. Build locally with `make docs` (HTML in `docs/_build/html/`).
+**Docs:** Sphinx site in [`docs/`](docs/) — install, quick start, visual [usage guides](docs/guides/), and API stubs. Build HTML with `make docs` (offline). Regenerate guide figures from live hosts with `make docs-artifacts`.
 
 ## What it does
 
@@ -272,8 +272,8 @@ tilearray/
 ├── tests/
 │   ├── unit/
 │   └── integration/
-├── docs/                   # Sphinx + MyST-NB site (`make docs`)
-├── notebooks/examples/     # legacy notebooks; prefer docs/vignettes/
+├── docs/                   # Sphinx + MyST site (`make docs`)
+├── notebooks/examples/     # legacy notebooks; prefer docs/guides/
 ├── guidelines.md
 └── example-sources.md
 ```

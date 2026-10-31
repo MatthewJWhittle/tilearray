@@ -1,0 +1,25 @@
+{
+  "attribution": "\u00a9 OpenStreetMap contributors",
+  "bbox": [
+    -0.005,
+    51.495,
+    0.005,
+    51.505
+  ],
+  "crs": "EPSG:4326",
+  "dims": [
+    "y",
+    "x"
+  ],
+  "elapsed_s": 3.532,
+  "figure": "osm-london.png",
+  "host": "openstreetmap",
+  "mean": 186.34127807617188,
+  "note": "OSM PNGs are often palette mode; decoded mosaic is single-band today",
+  "service": "XYZ",
+  "shape": [
+    1024,
+    512
+  ],
+  "zoom": 16
+}

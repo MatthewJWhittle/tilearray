@@ -1,6 +1,6 @@
 # Quick start
 
-These snippets match the README. They talk to **live** public hosts — run them locally when you intend to hit the network. Docs vignettes stay offline; see {doc}`vignettes/index`.
+These snippets match the README. They talk to **live** public hosts — run them locally when you intend to hit the network. For plotted walkthroughs with committed figures, see {doc}`guides/index`.
 
 ## XYZ slippy-map tiles
 

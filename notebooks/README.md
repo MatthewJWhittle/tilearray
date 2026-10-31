@@ -1,12 +1,19 @@
 # Development Notebooks
 
-Prefer the Sphinx vignettes under [`docs/vignettes/`](../docs/vignettes/) for durable, CI-built guides.
+Prefer the Sphinx **usage guides** under [`docs/guides/`](../docs/guides/) for durable, visual documentation.
+
+Figures for those guides are regenerated with:
+
+```bash
+make docs-artifacts   # live network, polite presets
+make docs             # static HTML; no tile fetches
+```
 
 This directory remains available for local experimentation.
 
 ## Layout
 
-- `examples/` — older exploratory notebooks (superseded by `docs/vignettes/`)
+- `examples/` — older exploratory notebooks (superseded by `docs/guides/`)
 - `experiments/` — optional prototyping scratch space
 
 ## Usage
