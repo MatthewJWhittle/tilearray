@@ -45,4 +45,4 @@ print(elevation.shape, float(elevation.mean()))
 :width: 720px
 ```
 
-Example stats for this window: shape `(256, 256)`, mean elevation about 176 m (see histogram). More public endpoints: [`example-sources.md`](https://github.com/MatthewJWhittle/tilearray/blob/main/example-sources.md).
+Example stats for this window: shape `(256, 256)`, mean elevation about 176 m (see histogram). More public endpoints: {doc}`../example-sources`.
