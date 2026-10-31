@@ -11,6 +11,7 @@ The API may change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one requ
 ## Start here
 
 - {doc}`install` — Python 3.9+, `uv` or `pip`
+- {doc}`how-it-works` — mental model for geo data engineers (lazy mosaics, fetch, scale)
 - {doc}`quickstart` — WCS elevation and XYZ slippy tiles (live network recipes)
 - {doc}`guides/index` — visual usage guides (OSM London, EA Lidar, …)
 - {doc}`api/index` — public exports and configuration helpers
@@ -20,6 +21,7 @@ The API may change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one requ
 :maxdepth: 2
 
 install
+how-it-works
 quickstart
 guides/index
 api/index
