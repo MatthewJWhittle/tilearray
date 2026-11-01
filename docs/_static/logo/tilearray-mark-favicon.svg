@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="tilearray" shape-rendering="geometricPrecision">
+  <!-- Pixel-grid favicon: viewBox units == pixels at 32px.
+       tile=8, gutter=2, pad=2. Axis-aligned. No stroke — gaps are clear gutters. -->
+  <!-- Assembled (teal) -->
+  <rect x="2" y="2" width="8" height="8" rx="1" fill="#2a9d8f"/>
+  <rect x="12" y="2" width="8" height="8" rx="1" fill="#258f82"/>
+  <rect x="22" y="2" width="8" height="8" rx="1" fill="#2faba0"/>
+  <rect x="2" y="12" width="8" height="8" rx="1" fill="#278a7e"/>
+  <rect x="12" y="12" width="8" height="8" rx="1" fill="#2a9d8f"/>
+  <!-- Incoming (lighter), on-grid -->
+  <rect x="22" y="12" width="8" height="8" rx="1" fill="#8fd4cb"/>
+  <rect x="12" y="22" width="8" height="8" rx="1" fill="#7eccc2"/>
+  <rect x="22" y="22" width="8" height="8" rx="1" fill="#9edbd3"/>
+</svg>

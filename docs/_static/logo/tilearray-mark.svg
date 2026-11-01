@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="tilearray">
+  <!-- Full mark: assembling staircase + fewer scatter tiles. Comfortable padding.
+       Mild rotation only on scatter. Solid fills (no opacity) to avoid muddy halo. -->
+  <!-- Assembled grid (staircase 4+3+2+1), teal family + dark stroke -->
+  <rect x="22" y="22" width="16" height="16" rx="2.5" fill="#2a9d8f" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="41" y="22" width="16" height="16" rx="2.5" fill="#258f82" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="60" y="22" width="16" height="16" rx="2.5" fill="#2faba0" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="79" y="22" width="16" height="16" rx="2.5" fill="#278a7e" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="41" width="16" height="16" rx="2.5" fill="#2a9d8f" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="41" y="41" width="16" height="16" rx="2.5" fill="#2c9f92" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="60" y="41" width="16" height="16" rx="2.5" fill="#247d72" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="60" width="16" height="16" rx="2.5" fill="#2a9d8f" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="41" y="60" width="16" height="16" rx="2.5" fill="#2ea89c" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="79" width="16" height="16" rx="2.5" fill="#2a9d8f" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Scatter / incoming (lighter), mild rotation, solid fills -->
+  <rect x="96" y="46" width="14" height="14" rx="2.5" fill="#8fd4cb" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round" transform="rotate(10 103 53)"/>
+  <rect x="68" y="74" width="14" height="14" rx="2.5" fill="#8fd4cb" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round" transform="rotate(-8 75 81)"/>
+  <rect x="94" y="72" width="14" height="14" rx="2.5" fill="#7eccc2" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round" transform="rotate(12 101 79)"/>
+  <rect x="48" y="98" width="14" height="14" rx="2.5" fill="#9edbd3" stroke="#0b3d3a" stroke-width="1.5" stroke-linejoin="round" transform="rotate(-7 55 105)"/>
+</svg>

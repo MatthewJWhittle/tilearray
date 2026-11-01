@@ -44,12 +44,18 @@ source_suffix = {
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_title = "tilearray"
+html_logo = "_static/logo/tilearray-mark.svg"
+html_favicon = "_static/logo/tilearray-mark-favicon.svg"
 html_baseurl = "https://matthewjwhittle.github.io/tilearray/"
 html_theme_options = {
     "github_url": "https://github.com/MatthewJWhittle/tilearray",
     "show_toc_level": 2,
     "navigation_with_keys": False,
-    "logo": {"text": "tilearray"},
+    "logo": {
+        "text": "tilearray",
+        "image_light": "_static/logo/tilearray-mark.svg",
+        "image_dark": "_static/logo/tilearray-mark-on-dark.svg",
+    },
 }
 
 myst_enable_extensions = [
