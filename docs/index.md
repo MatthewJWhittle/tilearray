@@ -29,6 +29,7 @@ guides/index
 example-sources
 troubleshooting
 api/index
+roadmap
 ```
 
 ```{toctree}
