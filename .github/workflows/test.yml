@@ -107,8 +107,8 @@ jobs:
         # Search user-facing / package paths only — not .github (workflow pattern
         # strings would self-match) or CHANGELOG (rename history is intentional).
         if grep -RInE 'ogc-array|OGC Array' \
-          src docs notebooks tests README.md example-sources.md guidelines.md \
-          Makefile tox.ini pyproject.toml; then
+          src docs notebooks tests README.md CONTRIBUTING.md example-sources.md \
+          guidelines.md Makefile tox.ini pyproject.toml; then
           echo "Found ogc-array / OGC Array leftovers outside CHANGELOG"
           exit 1
         fi
@@ -118,21 +118,13 @@ jobs:
       run: |
         uv build
 
-    - name: Assert sdist excludes lockfile and review notes
+    - name: Assert sdist excludes lockfile and notebooks
       run: |
         tar_path="$(ls dist/tilearray-*.tar.gz | head -1)"
         listing="$(tar -tzf "$tar_path")"
         fail=0
         if echo "$listing" | grep -Eq '(^|/)uv\.lock$'; then
           echo "uv.lock must not be in the sdist"
-          fail=1
-        fi
-        if echo "$listing" | grep -Eq '(^|/)ENGINE_REVIEW\.md$'; then
-          echo "ENGINE_REVIEW.md must not be in the sdist"
-          fail=1
-        fi
-        if echo "$listing" | grep -Eq '(^|/)TEST_IMPROVEMENT_PLAN\.md$'; then
-          echo "TEST_IMPROVEMENT_PLAN.md must not be in the sdist"
           fail=1
         fi
         if echo "$listing" | grep -Eq '(^|/)notebooks/'; then
@@ -142,7 +134,7 @@ jobs:
         if [ "$fail" -ne 0 ]; then
           exit 1
         fi
-        echo "OK: sdist excludes lockfile, notebooks, and internal review notes"
+        echo "OK: sdist excludes lockfile and notebooks"
 
     - name: Clean-env wheel import smoke
       run: |

@@ -59,4 +59,4 @@ To force a live run without playback (e.g. debugging), use `--disable-vcr`.
 
 - **Service**: EA Lidar Composite DTM 1 m WCS
 - **URL**: `https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs`
-- Documented in `example-sources.md` at the repo root.
+- Documented in [`docs/example-sources.md`](../../docs/example-sources.md) (stub at repo root points at the hosted page).
