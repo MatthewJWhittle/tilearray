@@ -61,11 +61,14 @@ jobs:
 
     - name: Publish to PyPI
       env:
+        # May be empty when the secret is unset — an empty UV_PUBLISH_TOKEN
+        # in the environment makes uv attempt token auth and skip OIDC.
         UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
       run: |
         if [ -n "${UV_PUBLISH_TOKEN}" ]; then
           uv publish --token "${UV_PUBLISH_TOKEN}"
         else
           # Trusted Publishing (OIDC) when PYPI_API_TOKEN is unset
-          uv publish
+          unset UV_PUBLISH_TOKEN
+          uv publish --trusted-publishing always
         fi
