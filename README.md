@@ -1,4 +1,4 @@
-# tilearray
+# <img src="docs/_static/logo/tilearray-mark.svg" alt="" width="36" height="36"> tilearray
 
 tilearray turns remote tile services into **Dask**-backed **xarray** arrays — one `create_array` call for WCS, WMS, WMTS, or XYZ. Shared fetch and decode keep mosaics polite to servers and analysis-ready on a laptop or a larger machine.
 

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="tilearray">
+  <!-- On-dark companion: same geometry as tilearray-mark.svg, brighter fills for dark UI -->
+  <rect x="22" y="22" width="16" height="16" rx="2.5" fill="#3db5a6" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="41" y="22" width="16" height="16" rx="2.5" fill="#36a898" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="60" y="22" width="16" height="16" rx="2.5" fill="#45c0b0" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="79" y="22" width="16" height="16" rx="2.5" fill="#2f9f90" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="41" width="16" height="16" rx="2.5" fill="#3db5a6" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="41" y="41" width="16" height="16" rx="2.5" fill="#40b8a9" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="60" y="41" width="16" height="16" rx="2.5" fill="#349a8c" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="60" width="16" height="16" rx="2.5" fill="#3db5a6" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="41" y="60" width="16" height="16" rx="2.5" fill="#48c4b4" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="22" y="79" width="16" height="16" rx="2.5" fill="#3db5a6" stroke="#083533" stroke-width="1.5" stroke-linejoin="round"/>
+  <rect x="96" y="46" width="14" height="14" rx="2.5" fill="#a8e0d8" stroke="#083533" stroke-width="1.5" stroke-linejoin="round" transform="rotate(10 103 53)"/>
+  <rect x="68" y="74" width="14" height="14" rx="2.5" fill="#a8e0d8" stroke="#083533" stroke-width="1.5" stroke-linejoin="round" transform="rotate(-8 75 81)"/>
+  <rect x="94" y="72" width="14" height="14" rx="2.5" fill="#98d9d0" stroke="#083533" stroke-width="1.5" stroke-linejoin="round" transform="rotate(12 101 79)"/>
+  <rect x="48" y="98" width="14" height="14" rx="2.5" fill="#b6e8e1" stroke="#083533" stroke-width="1.5" stroke-linejoin="round" transform="rotate(-7 55 105)"/>
+</svg>
