@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-01
+
+### Fixed
+
+- README header logo uses an absolute HTTPS PNG URL so PyPI / Warehouse renders the mark (relative `docs/_static/...` paths do not resolve in the uploaded long description)
+
 ## [0.1.0] - 2026-10-31
 
 Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
@@ -63,5 +69,6 @@ Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
 - Package renamed from scaffold `ogc-array` to `tilearray`; README, CI, and metadata aligned with shipped API
 - EA Lidar WCS GeoTIFF decode and non-divisible tile resize for native-resolution tiles
 
-[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/MatthewJWhittle/tilearray/releases/tag/v0.1.0
