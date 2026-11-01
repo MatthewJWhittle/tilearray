@@ -100,8 +100,6 @@ packages = ["src/tilearray"]
 exclude = [
     "/.github",
     "/uv.lock",
-    "/ENGINE_REVIEW.md",
-    "/TEST_IMPROVEMENT_PLAN.md",
     "/benchmarks",
     "/scripts",
     "/notebooks",

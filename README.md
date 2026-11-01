@@ -74,20 +74,7 @@ The EA Lidar preset caps sustained concurrency at **10** (AIMD ceiling). More ho
 
 ## Development
 
-```bash
-git clone https://github.com/MatthewJWhittle/tilearray.git
-cd tilearray
-uv sync --dev
-make pre-commit
-make test
-make lint
-```
-
-## Contributing
-
-1. Fork and branch from `main`.
-2. Change code; run `make test && make lint`.
-3. Open a pull request.
+Clone, `uv sync --dev`, then `make test` / `make lint`. Full setup, docs builds, and project conventions: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
