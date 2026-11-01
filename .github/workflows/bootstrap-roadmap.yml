@@ -1,0 +1,99 @@
+# One-shot: create roadmap milestones/labels (cursor[bot] lacks these API scopes).
+# Removed from the branch after it succeeds; do not merge this file to main.
+name: Bootstrap roadmap structure
+
+on:
+  push:
+    branches: [cursor/docs-roadmap-7d9a]
+    paths:
+      - .github/workflows/bootstrap-roadmap.yml
+
+permissions:
+  issues: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create milestones, labels, close probes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const milestones = [
+              {
+                title: '0.2 Trustworthy core',
+                description:
+                  'Make the installed library boringly reliable for documented paths: decode/deps, analysis-ready arrays, one compute habit, large-AOI politeness evidence, HTTP consolidation start. Prefer fewer meaningful PyPI cuts — tag 0.2.0 when exit criteria clear.',
+              },
+              {
+                title: '0.3 Scale & hosts',
+                description:
+                  'Big AOI on more real hosts, safely — host preset pack, larger-machine don’t-stampede story, WMTS productization, AOI/grid ergonomics + fetch UX. Tag 0.3.0 when exit criteria clear.',
+              },
+              {
+                title: '1.0 Stable contract',
+                description:
+                  'Freeze the public API users already rely on; graduate from Alpha. API stability, hardening, docs maturity. Tag 1.0.0 when exit criteria clear.',
+              },
+            ];
+
+            const existingMilestones = await github.paginate(
+              github.rest.issues.listMilestones,
+              { owner, repo, state: 'all', per_page: 100 },
+            );
+            const byTitle = new Map(existingMilestones.map((m) => [m.title, m]));
+
+            for (const m of milestones) {
+              if (byTitle.has(m.title)) {
+                core.info(`Milestone exists: ${m.title} (#${byTitle.get(m.title).number})`);
+                continue;
+              }
+              const created = await github.rest.issues.createMilestone({
+                owner,
+                repo,
+                title: m.title,
+                description: m.description,
+                state: 'open',
+              });
+              core.info(`Created milestone: ${m.title} (#${created.data.number}) ${created.data.html_url}`);
+            }
+
+            const labels = [
+              { name: 'roadmap', color: '0E8A16', description: 'Product roadmap workstream' },
+              { name: '0.2', color: '1D76DB', description: 'Milestone 0.2 Trustworthy core' },
+              { name: '0.3', color: '5319E7', description: 'Milestone 0.3 Scale & hosts' },
+              { name: '1.0', color: 'B60205', description: 'Milestone 1.0 Stable contract' },
+              { name: 'deps', color: 'FEF2C0', description: 'Dependency / packaging' },
+              { name: 'fetch', color: 'C5DEF5', description: 'Fetch / politeness / HTTP' },
+              { name: 'api', color: 'D4C5F9', description: 'Public API / array contract' },
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: label.name });
+                core.info(`Label exists: ${label.name}`);
+              } catch (err) {
+                if (err.status !== 404) throw err;
+                await github.rest.issues.createLabel({ owner, repo, ...label });
+                core.info(`Created label: ${label.name}`);
+              }
+            }
+
+            // Close permission-probe issues left by the agent
+            for (const number of [51, 52]) {
+              try {
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: number,
+                  state: 'closed',
+                  state_reason: 'not_planned',
+                });
+                core.info(`Closed probe issue #${number}`);
+              } catch (err) {
+                core.warning(`Could not close #${number}: ${err.message}`);
+              }
+            }
