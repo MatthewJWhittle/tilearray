@@ -59,6 +59,11 @@ jobs:
         name: dist
         path: dist/
 
+    # Generate PEP 740 publish attestations for dist/* before uv publish.
+    # uv uploads matching *.publish.attestation files but does not create them.
+    - name: Generate PEP 740 attestations
+      uses: astral-sh/attest-action@v0.0.7
+
     - name: Publish to PyPI
       env:
         # May be empty when the secret is unset — an empty UV_PUBLISH_TOKEN
