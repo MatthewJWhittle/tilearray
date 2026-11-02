@@ -40,7 +40,7 @@ from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .service import get_service
 from .service.base import BaseService
 from .service.config import ServiceConfig as ServiceConfigModel
-from .tiles import fetch_tile
+from .tiles import fetch_tile, snap_bbox_outward
 from .types import (
     CRS,
     BBoxTuple,
@@ -71,6 +71,8 @@ class ArrayRequest(BaseModel):
     output_format: Format | None = None
     cache_dir: Path | None = None
     service_options: dict[str, Any] = Field(default_factory=dict)
+    requested_bbox: BoundingBox | None = None
+    bbox_snap_delta: dict[str, float] | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -127,6 +129,25 @@ class ArrayRequest(BaseModel):
         user_resolution = user_options.pop("resolution", None)
         resolution = user_resolution or defaults.get("resolution")
 
+        requested_bbox = normalized_bbox
+        bbox_snap_delta: dict[str, float] | None = None
+        if resolution is not None:
+            res_x, res_y = resolution
+            if res_x <= 0 or res_y <= 0:
+                raise ValueError("resolution values must be positive")
+            origin = _coerce_array_origin(user_options.get("origin"))
+            snapped_bbox = snap_bbox_outward(normalized_bbox, resolution, origin)
+            bbox_snap_delta = {
+                "min_x": snapped_bbox.min_x - normalized_bbox.min_x,
+                "min_y": snapped_bbox.min_y - normalized_bbox.min_y,
+                "max_x": snapped_bbox.max_x - normalized_bbox.max_x,
+                "max_y": snapped_bbox.max_y - normalized_bbox.max_y,
+            }
+            if any(abs(delta) > 0.0 for delta in bbox_snap_delta.values()):
+                normalized_bbox = snapped_bbox
+            else:
+                bbox_snap_delta = None
+
         fallback_grid = defaults.get("grid_shape")
         grid = _resolve_grid_shape(grid_shape_input, fallback_grid)
         if (
@@ -135,8 +156,6 @@ class ArrayRequest(BaseModel):
             and resolution is not None
         ):
             res_x, res_y = resolution
-            if res_x <= 0 or res_y <= 0:
-                raise ValueError("resolution values must be positive")
             span_x = normalized_bbox.max_x - normalized_bbox.min_x
             span_y = normalized_bbox.max_y - normalized_bbox.min_y
             cols = (
@@ -175,6 +194,8 @@ class ArrayRequest(BaseModel):
             output_format=effective_format,
             cache_dir=cache_path,
             service_options=user_options,
+            requested_bbox=requested_bbox,
+            bbox_snap_delta=bbox_snap_delta,
         )
 
     def build_service(self, service_type: ServiceTypeEnum | None) -> BaseService:
@@ -249,6 +270,15 @@ class ArrayRequest(BaseModel):
         )
         if coverage_id:
             attrs["coverage_id"] = coverage_id
+        if self.bbox_snap_delta is not None:
+            attrs["bbox_snap_delta"] = dict(self.bbox_snap_delta)
+            if self.requested_bbox is not None:
+                attrs["bbox_requested"] = {
+                    "min_x": self.requested_bbox.min_x,
+                    "min_y": self.requested_bbox.min_y,
+                    "max_x": self.requested_bbox.max_x,
+                    "max_y": self.requested_bbox.max_y,
+                }
         return attrs
 
 
@@ -665,6 +695,16 @@ def _coerce_crs(crs: CRS | str | int) -> CRS:
             else CRS.from_integer(int(crs))
         )
     return CRS.from_integer(crs)
+
+
+def _coerce_array_origin(value: object) -> tuple[float, float]:
+    if value is None:
+        return (0.0, 0.0)
+    if isinstance(value, tuple) and len(value) == 2:
+        origin_x = value[0]
+        origin_y = value[1]
+        return (float(origin_x), float(origin_y))
+    raise ValueError("origin must be a tuple of two numbers")
 
 
 def _normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:

@@ -125,6 +125,56 @@ def test_array_request_infers_grid_from_resolution() -> None:
     assert request.resolution == (1.0, 1.0)
 
 
+def test_array_request_snaps_resolution_bbox_outward() -> None:
+    bbox = BoundingBox(
+        min_x=0.0, min_y=0.0, max_x=1024.1, max_y=512.09, crs=CRS.EPSG_27700
+    )
+
+    request = ArrayRequest.from_inputs(
+        service_url="http://example.com/wcs",
+        service_config=None,
+        bbox_input=bbox,
+        crs_input=CRS.EPSG_27700,
+        chunk_size_input=(1024, 512),
+        grid_shape_input=None,
+        output_format_input=Format.GEOTIFF,
+        cache_dir_input=None,
+        service_options_input={"resolution": (1.0, 1.0)},
+    )
+
+    assert request.bbox.max_x == 1025.0
+    assert request.bbox.max_y == 513.0
+    assert request.grid_shape == (2, 2)
+    assert request.bbox_snap_delta == {
+        "min_x": 0.0,
+        "min_y": 0.0,
+        "max_x": pytest.approx(0.9),
+        "max_y": pytest.approx(0.91),
+    }
+    attrs = request.array_attrs(
+        request.build_service(ServiceTypeEnum.WCS),
+        request.tile_options(),
+        Format.GEOTIFF,
+    )
+    assert "bbox_snap_delta" in attrs
+    assert attrs["bbox_requested"]["max_x"] == 1024.1
+
+
+def test_array_request_rejects_invalid_origin() -> None:
+    with pytest.raises(ValueError, match="origin"):
+        ArrayRequest.from_inputs(
+            service_url="http://example.com/wcs",
+            service_config=None,
+            bbox_input=(0.0, 0.0, 10.0, 10.0),
+            crs_input=CRS.EPSG_4326,
+            chunk_size_input=(8, 8),
+            grid_shape_input=None,
+            output_format_input=None,
+            cache_dir_input=None,
+            service_options_input={"resolution": (1.0, 1.0), "origin": "bad"},
+        )
+
+
 def test_create_array_with_custom_decoder(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:

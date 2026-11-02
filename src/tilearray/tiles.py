@@ -28,6 +28,7 @@ __all__ = [
     "fetch_tile",
     "get_fetcher",
     "save_tile",
+    "snap_bbox_outward",
 ]
 
 
@@ -82,6 +83,43 @@ def save_tile(tile_response: TileResponse, output_path: str | Path) -> bool:
     except Exception as e:
         logger.error(f"Failed to save tile to {output_path}: {e}")
         return False
+
+
+def snap_bbox_outward(
+    bbox: BoundingBox,
+    resolution: tuple[float, float],
+    origin: tuple[float, float] = (0.0, 0.0),
+) -> BoundingBox:
+    """
+    Expand ``bbox`` outward to the nearest pixel edges on an origin-aligned grid.
+
+    Uses the same floor/ceil index arithmetic as :func:`create_tile_grid` with
+    ``tile_size=(1, 1)``, so the snapped box is exactly the union of native
+    pixels that intersect the request. Already-aligned boxes are unchanged.
+    """
+    res_x, res_y = resolution
+    if res_x <= 0 or res_y <= 0:
+        raise ValueError("resolution values must be positive")
+
+    origin_x, origin_y = origin
+    col_min = math.floor((bbox.min_x - origin_x) / res_x)
+    col_max = math.ceil((bbox.max_x - origin_x) / res_x) - 1
+    row_min = math.floor((bbox.min_y - origin_y) / res_y)
+    row_max = math.ceil((bbox.max_y - origin_y) / res_y) - 1
+
+    # Point-like remnants still need at least one native pixel of coverage.
+    if col_max < col_min:
+        col_max = col_min
+    if row_max < row_min:
+        row_max = row_min
+
+    return BoundingBox(
+        min_x=origin_x + col_min * res_x,
+        min_y=origin_y + row_min * res_y,
+        max_x=origin_x + (col_max + 1) * res_x,
+        max_y=origin_y + (row_max + 1) * res_y,
+        crs=bbox.crs,
+    )
 
 
 def create_tile_grid(

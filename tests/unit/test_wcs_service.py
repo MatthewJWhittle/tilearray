@@ -3,6 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 import requests
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WCSConfig, XYZConfig
@@ -119,6 +121,157 @@ def test_wcs_plan_tiles_with_resolution():
     assert len(tiles) == 4
     assert {tile.width for tile in tiles} == {500}
     assert {tile.height for tile in tiles} == {500}
+
+
+def test_wcs_plan_tiles_fractional_leftover_is_not_subpixel():
+    """~0.1 m remainder at 1 m res must not emit a sub-pixel WCS request."""
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_27700,
+    )
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=1024.1, max_y=1024.1, crs=CRS.EPSG_27700)
+    res = (1.0, 1.0)
+    tiles = list(service.plan_tiles(bbox, (1024, 1024), resolution=res))
+
+    assert tiles
+    assert max(tile.bbox.max_x for tile in tiles) >= bbox.max_x
+    assert max(tile.bbox.max_y for tile in tiles) >= bbox.max_y
+    for tile in tiles:
+        assert tile.bbox.max_x - tile.bbox.min_x >= res[0] - 1e-9
+        assert tile.bbox.max_y - tile.bbox.min_y >= res[1] - 1e-9
+        assert tile.width >= 1
+        assert tile.height >= 1
+
+
+def test_wcs_plan_tiles_epsilon_boundary_still_covers_request():
+    """Remainders at/under the old res/10 epsilon must not silently shrink coverage."""
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_27700,
+    )
+    for leftover in (0.1, 0.09, 0.05):
+        bbox = BoundingBox(
+            min_x=0,
+            min_y=0,
+            max_x=1024.0 + leftover,
+            max_y=512.0 + leftover,
+            crs=CRS.EPSG_27700,
+        )
+        tiles = list(service.plan_tiles(bbox, (1024, 512), resolution=(1.0, 1.0)))
+        assert max(tile.bbox.max_x for tile in tiles) >= bbox.max_x
+        assert max(tile.bbox.max_y for tile in tiles) >= bbox.max_y
+        for tile in tiles:
+            assert tile.bbox.max_x - tile.bbox.min_x >= 1.0 - 1e-9
+            assert tile.bbox.max_y - tile.bbox.min_y >= 1.0 - 1e-9
+
+
+def test_wcs_plan_tiles_already_on_grid_unchanged():
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_4326,
+    )
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=1024, max_y=1024, crs=CRS.EPSG_4326)
+    tiles = list(service.plan_tiles(bbox, (1024, 1024), resolution=(1.0, 1.0)))
+
+    assert len(tiles) == 1
+    tile = tiles[0]
+    assert tile.bbox.min_x == bbox.min_x
+    assert tile.bbox.min_y == bbox.min_y
+    assert tile.bbox.max_x == bbox.max_x
+    assert tile.bbox.max_y == bbox.max_y
+    assert tile.width == 1024
+    assert tile.height == 1024
+
+
+def test_wcs_plan_tiles_rejects_non_positive_resolution():
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_4326,
+    )
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=10, max_y=10, crs=CRS.EPSG_4326)
+    with pytest.raises(ValueError, match="resolution"):
+        list(service.plan_tiles(bbox, (8, 8), resolution=(0.0, 1.0)))
+
+
+def test_wcs_plan_tiles_rejects_invalid_origin():
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_4326,
+    )
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=10, max_y=10, crs=CRS.EPSG_4326)
+    with pytest.raises(ValueError, match="origin"):
+        list(service.plan_tiles(bbox, (8, 8), resolution=(1.0, 1.0), origin="bad"))
+
+
+def test_wcs_plan_tiles_respects_custom_origin():
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_27700,
+    )
+    bbox = BoundingBox(
+        min_x=105.2, min_y=205.2, max_x=115.2, max_y=215.2, crs=CRS.EPSG_27700
+    )
+    tiles = list(
+        service.plan_tiles(bbox, (10, 10), resolution=(1.0, 1.0), origin=(100.0, 200.0))
+    )
+    assert tiles
+    assert min(tile.bbox.min_x for tile in tiles) == 105.0
+    assert min(tile.bbox.min_y for tile in tiles) == 205.0
+    assert max(tile.bbox.max_x for tile in tiles) == 116.0
+    assert max(tile.bbox.max_y for tile in tiles) == 216.0
+
+
+@given(
+    min_x=st.floats(min_value=-1_000.0, max_value=1_000.0, allow_nan=False),
+    min_y=st.floats(min_value=-1_000.0, max_value=1_000.0, allow_nan=False),
+    width=st.floats(min_value=0.01, max_value=3_000.0, allow_nan=False),
+    height=st.floats(min_value=0.01, max_value=3_000.0, allow_nan=False),
+    chunk=st.integers(min_value=1, max_value=1024),
+    res=st.floats(min_value=0.25, max_value=4.0, allow_nan=False),
+)
+@settings(max_examples=40, deadline=None)
+def test_wcs_plan_tiles_never_emits_subpixel_requests_property(
+    min_x: float,
+    min_y: float,
+    width: float,
+    height: float,
+    chunk: int,
+    res: float,
+) -> None:
+    service = WCSService(
+        "http://example.com/wcs",
+        coverage_id="coverage-1",
+        output_format=Format.GEOTIFF,
+        crs=CRS.EPSG_27700,
+    )
+    bbox = BoundingBox(
+        min_x=min_x,
+        min_y=min_y,
+        max_x=min_x + width,
+        max_y=min_y + height,
+        crs=CRS.EPSG_27700,
+    )
+    tiles = list(service.plan_tiles(bbox, (chunk, chunk), resolution=(res, res)))
+    assert tiles
+    assert max(tile.bbox.max_x for tile in tiles) >= bbox.max_x - 1e-9
+    assert max(tile.bbox.max_y for tile in tiles) >= bbox.max_y - 1e-9
+    for tile in tiles:
+        assert tile.bbox.max_x - tile.bbox.min_x >= res - 1e-9
+        assert tile.bbox.max_y - tile.bbox.min_y >= res - 1e-9
+        assert tile.width >= 1
+        assert tile.height >= 1
 
 
 def test_wcs_config_build_service_raises_for_missing_coverage(monkeypatch):
