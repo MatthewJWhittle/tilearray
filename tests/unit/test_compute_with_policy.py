@@ -166,6 +166,34 @@ def test_compute_with_policy_max_concurrent_shorthand(
     assert recorded["num_workers"] == expected
 
 
+def test_compute_with_policy_max_concurrent_preserves_attrs_policy(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """max_concurrent= merges into attrs policy; does not strip AIMD/breaker."""
+
+    da = _lazy_array(monkeypatch)
+    da.attrs[_FETCH_POLICY_ATTR] = {
+        **da.attrs[_FETCH_POLICY_ATTR],
+        "adaptive_concurrency": True,
+        "forbidden_circuit_breaker": True,
+        "initial_concurrent": 8,
+        "min_concurrent": 4,
+        "max_concurrent": 10,
+    }
+    recorded = _patch_dataarray_compute(monkeypatch)
+
+    policy = array_module._resolve_fetch_policy_for_compute(da, max_concurrent=1)
+
+    assert policy.max_concurrent == 1
+    assert policy.adaptive_concurrency is True
+    assert policy.forbidden_circuit_breaker is True
+    assert policy.initial_concurrent == 8
+    assert policy.min_concurrent == 4
+
+    compute_with_policy(da, max_concurrent=1)
+    assert recorded["num_workers"] == compute_thread_pool_size(policy)
+
+
 def test_compute_with_policy_merges_user_compute_kwargs(
     monkeypatch: MonkeyPatch,
 ) -> None:

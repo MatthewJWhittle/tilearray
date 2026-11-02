@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Protocol, runtime_checkable
 from urllib.parse import urlparse
 
@@ -433,7 +433,17 @@ class FetchStats:
 
 @dataclass(frozen=True)
 class FetchPolicy:
-    """Configuration for :class:`TileFetcher`."""
+    """Configuration for :class:`TileFetcher`.
+
+    ``max_concurrent`` is the **shared process-gate ceiling** (host / preset limit).
+    It participates in :meth:`cache_key` so callers that intentionally configure the
+    same host ceiling share one fetcher and concurrency gate.
+
+    ``call_max_concurrent`` is an optional **per-call / per-session** limit. It is
+    not part of :meth:`cache_key`, so one caller's local politeness cannot shrink
+    the shared gate for siblings. Apply it via :class:`FetchProgress` (see
+    ``call_max_concurrent`` there) so each mosaic / call gets its own limiter.
+    """
 
     max_concurrent: int = _DEFAULT_MAX_CONCURRENT
     max_connections: int | None = None
@@ -451,9 +461,14 @@ class FetchPolicy:
     forbidden_threshold: int = 6
     forbidden_cooldown_seconds: float = 15.0
     pressure_classifier: PressureClassifier | None = None
+    call_max_concurrent: int | None = None
 
     def cache_key(self) -> tuple[Any, ...]:
-        """Hashable key for sharing fetcher instances."""
+        """Hashable key for sharing fetcher instances (shared gate identity).
+
+        Excludes ``call_max_concurrent`` so per-call limits do not create a
+        separate process-wide gate or collide siblings onto a Semaphore(1).
+        """
 
         return (
             self.max_concurrent,
@@ -475,17 +490,32 @@ class FetchPolicy:
 
 @dataclass
 class FetchProgress:
-    """Thread-safe progress tracker for tile acquisition."""
+    """Thread-safe progress tracker for tile acquisition.
+
+    Optional ``call_max_concurrent`` limits in-flight fetches for **this**
+    progress session only (one mosaic / one logical call). It does not redefine
+    the process-wide :class:`TileFetcher` gate.
+    """
 
     total: int
     on_progress: ProgressCallback | None = None
+    call_max_concurrent: int | None = None
     done: int = field(default=0, init=False)
     errors: list[str] = field(default_factory=list, init=False)
     _aborted: bool = field(default=False, init=False)
     _abort_reason: str | None = field(default=None, init=False)
+    _call_semaphore: threading.Semaphore | None = field(
+        default=None, init=False, repr=False
+    )
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+
+    def __post_init__(self) -> None:
+        if self.call_max_concurrent is not None:
+            if self.call_max_concurrent < 1:
+                raise ValueError("call_max_concurrent must be >= 1")
+            self._call_semaphore = threading.Semaphore(self.call_max_concurrent)
 
     def abort(self, reason: str) -> None:
         """Stop sibling tile fetches after a hard failure."""
@@ -507,6 +537,18 @@ class FetchProgress:
                 raise NetworkError(
                     self._abort_reason or "Tile fetch aborted after earlier failure"
                 )
+
+    def acquire_call_slot(self) -> None:
+        """Acquire this session's local concurrency slot (no-op if unlimited)."""
+
+        if self._call_semaphore is not None:
+            self._call_semaphore.acquire()
+
+    def release_call_slot(self) -> None:
+        """Release this session's local concurrency slot (no-op if unlimited)."""
+
+        if self._call_semaphore is not None:
+            self._call_semaphore.release()
 
     def tick(self, request: TileRequest, response: TileResponse) -> None:
         with self._lock:
@@ -567,6 +609,8 @@ class TileFetcher:
 
     _instances: dict[tuple[Any, ...], TileFetcher] = {}
     _instances_lock = threading.Lock()
+    _serial_warn_lock = threading.Lock()
+    _serial_warned_keys: set[tuple[Any, ...]] = set()
 
     def __init__(self, policy: FetchPolicy | None = None) -> None:
         self._policy = policy or FetchPolicy()
@@ -606,14 +650,25 @@ class TileFetcher:
 
     @classmethod
     def for_policy(cls, policy: FetchPolicy | None = None) -> TileFetcher:
-        """Return a shared fetcher instance for the given policy."""
+        """Return a shared fetcher instance for the given policy.
+
+        Instances are keyed by :meth:`FetchPolicy.cache_key` (shared gate
+        identity). ``call_max_concurrent`` is ignored for sharing — apply it on
+        :class:`FetchProgress` so it stays local to one call/session.
+        """
 
         effective = policy or FetchPolicy()
         key = effective.cache_key()
         with cls._instances_lock:
             fetcher = cls._instances.get(key)
             if fetcher is None:
-                fetcher = cls(effective)
+                # Shared gate uses max_concurrent only; strip call-local limit.
+                gate_policy = (
+                    replace(effective, call_max_concurrent=None)
+                    if effective.call_max_concurrent is not None
+                    else effective
+                )
+                fetcher = cls(gate_policy)
                 cls._instances[key] = fetcher
             return fetcher
 
@@ -629,15 +684,42 @@ class TileFetcher:
             for fetcher in cls._instances.values():
                 fetcher.close()
             cls._instances.clear()
+            cls._serial_warned_keys.clear()
         reset_adaptive_gates()
         _default_fetcher = TileFetcher.for_policy(FetchPolicy())
 
+    def _warn_if_serial_multi_waiter(self) -> None:
+        """Log once when a shared gate of 1 has another waiter contending."""
+
+        if self._policy.max_concurrent != 1:
+            return
+        key = self._policy.cache_key()
+        with self._serial_warn_lock:
+            if key in self._serial_warned_keys:
+                return
+            self._serial_warned_keys.add(key)
+        logger.warning(
+            "Shared fetch concurrency is 1 while multiple callers are waiting. "
+            "FetchPolicy.max_concurrent is the process-wide gate (host/preset "
+            "ceiling); use FetchProgress(call_max_concurrent=...) or "
+            "FetchPolicy.call_max_concurrent for per-call politeness so siblings "
+            "are not serialised."
+        )
+
     def _acquire_concurrency(self, host: str) -> None:
         if self._adaptive_gate is not None:
-            self._adaptive_gate.acquire(host)
+            gate = self._adaptive_gate
+            state = gate._state_for(host)
+            with state.condition:
+                if state.inflight >= state.limit and state.limit <= 1:
+                    self._warn_if_serial_multi_waiter()
+            gate.acquire(host)
             return
         assert self._semaphore is not None
-        self._semaphore.acquire()
+        acquired = self._semaphore.acquire(blocking=False)
+        if not acquired:
+            self._warn_if_serial_multi_waiter()
+            self._semaphore.acquire()
 
     def _finish_success(self, host: str) -> None:
         if self._adaptive_gate is not None:
@@ -702,35 +784,40 @@ class TileFetcher:
         def _perform_get() -> httpx.Response:
             if progress is not None:
                 progress.check_not_aborted()
-            self._acquire_concurrency(host)
+                progress.acquire_call_slot()
             try:
-                if progress is not None:
-                    progress.check_not_aborted()
-                self._rate_limiter.before_request(host)
-                self.stats._enter_inflight()
+                self._acquire_concurrency(host)
                 try:
-                    self.stats._record_request()
-                    logger.debug("Fetching tile: %s", request.url)
-                    response = self._client.get(
-                        request.url,
-                        params=request.params or None,
-                        headers=headers,
-                    )
-                finally:
-                    self.stats._leave_inflight()
-            except httpx.TransportError:
-                self._finish_pressure(host)
-                raise
+                    if progress is not None:
+                        progress.check_not_aborted()
+                    self._rate_limiter.before_request(host)
+                    self.stats._enter_inflight()
+                    try:
+                        self.stats._record_request()
+                        logger.debug("Fetching tile: %s", request.url)
+                        response = self._client.get(
+                            request.url,
+                            params=request.params or None,
+                            headers=headers,
+                        )
+                    finally:
+                        self.stats._leave_inflight()
+                except httpx.TransportError:
+                    self._finish_pressure(host)
+                    raise
 
-            classification = self._classify_response(response)
-            if classification.retryable:
-                self._finish_pressure(host)
-                if classification.circuit_breaker:
-                    self._record_circuit_breaker_pressure(host)
-                raise RetryableHTTPError(response, _parse_retry_after(response))
+                classification = self._classify_response(response)
+                if classification.retryable:
+                    self._finish_pressure(host)
+                    if classification.circuit_breaker:
+                        self._record_circuit_breaker_pressure(host)
+                    raise RetryableHTTPError(response, _parse_retry_after(response))
 
-            self._finish_success(host)
-            return response
+                self._finish_success(host)
+                return response
+            finally:
+                if progress is not None:
+                    progress.release_call_slot()
 
         try:
             response = _perform_get()

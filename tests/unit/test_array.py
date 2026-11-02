@@ -903,6 +903,30 @@ def test_compute_thread_pool_size_at_least_fetch_ceiling() -> None:
     assert compute_thread_pool_size(policy, override=4) == 4
 
 
+def test_resolve_fetch_policy_keeps_host_ceiling_on_lower_override() -> None:
+    """Lower max_concurrent_requests on a preset config is call-local, not shared."""
+
+    config = WCSConfig.for_ea_dsp(
+        "https://environment.data.gov.uk/example/wcs",
+        coverage_id="test-coverage",
+    )
+    assert config.max_concurrent_requests == 10
+
+    polite = array_module._resolve_fetch_policy(config, {"max_concurrent_requests": 1})
+    assert polite.max_concurrent == 10
+    assert polite.call_max_concurrent == 1
+    assert polite.adaptive_concurrency is True
+    assert polite.forbidden_circuit_breaker is True
+
+    raised = array_module._resolve_fetch_policy(config, {"max_concurrent_requests": 12})
+    assert raised.max_concurrent == 12
+    assert raised.call_max_concurrent is None
+
+    bare = array_module._resolve_fetch_policy(None, {"max_concurrent_requests": 1})
+    assert bare.max_concurrent == 1
+    assert bare.call_max_concurrent is None
+
+
 def test_create_array_compute_exceeds_cpu_count_inflight(
     monkeypatch: MonkeyPatch,
 ) -> None:

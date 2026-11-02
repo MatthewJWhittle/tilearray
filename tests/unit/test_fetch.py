@@ -820,3 +820,156 @@ def test_circuit_breaker_trips_on_clustered_429s() -> None:
     assert fetcher.stats.pressure_event_count >= 6
     assert fetcher.stats.circuit_breaker_trips >= 1
     assert fetcher.stats.current_limit == 4
+
+
+@respx.mock
+def test_eight_threads_default_policy_run_near_parallel() -> None:
+    """Host/shared ceiling should allow ~N-way overlap for N single-tile callers."""
+
+    latency_s = 0.05
+    n_threads = 8
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        time.sleep(latency_s)
+        return httpx.Response(200, content=b"x")
+
+    respx.get("https://example.com/tile").mock(side_effect=handler)
+    # Shared host ceiling of 8 (not per-call 1).
+    policy = FetchPolicy(max_concurrent=8, rate_limit_per_second=None, retries=0)
+    fetcher = TileFetcher.for_policy(policy)
+    request = _tile_request(retries=0)
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=n_threads) as pool:
+        futures = [pool.submit(fetcher.fetch, request) for _ in range(n_threads)]
+        for future in futures:
+            assert future.result().success is True
+    elapsed = time.monotonic() - started
+
+    # Parallel: ~latency; serial would be ~n_threads * latency.
+    assert elapsed < latency_s * 3
+    assert fetcher.stats.max_inflight >= n_threads // 2
+
+
+@respx.mock
+def test_call_max_concurrent_1_does_not_serialise_sibling_sessions() -> None:
+    """Per-session call_max_concurrent=1 must not shrink the shared gate for peers."""
+
+    latency_s = 0.05
+    n_sessions = 8
+    host_ceiling = 8
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        time.sleep(latency_s)
+        return httpx.Response(200, content=b"x")
+
+    respx.get("https://example.com/tile").mock(side_effect=handler)
+    # Same shared ceiling; each logical call asks for local politeness of 1.
+    shared_policy = FetchPolicy(
+        max_concurrent=host_ceiling,
+        call_max_concurrent=1,
+        rate_limit_per_second=None,
+        retries=0,
+    )
+    fetcher = TileFetcher.for_policy(shared_policy)
+    # call_max is not part of the shared cache key / gate.
+    assert fetcher._policy.call_max_concurrent is None
+    assert fetcher._policy.max_concurrent == host_ceiling
+    assert (
+        shared_policy.cache_key()
+        == FetchPolicy(
+            max_concurrent=host_ceiling, rate_limit_per_second=None, retries=0
+        ).cache_key()
+    )
+
+    request = _tile_request(retries=0)
+
+    def one_session() -> TileResponse:
+        # Fresh progress per call ⇒ local Semaphore(1) does not span siblings.
+        progress = FetchProgress(total=1, call_max_concurrent=1)
+        return fetcher.fetch(request, progress=progress)
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=n_sessions) as pool:
+        futures = [pool.submit(one_session) for _ in range(n_sessions)]
+        for future in futures:
+            assert future.result().success is True
+    elapsed = time.monotonic() - started
+
+    assert elapsed < latency_s * 3
+    assert fetcher.stats.max_inflight >= n_sessions // 2
+
+
+@respx.mock
+def test_shared_gate_max_concurrent_1_warns_with_multiple_waiters(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    latency_s = 0.05
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        time.sleep(latency_s)
+        return httpx.Response(200, content=b"x")
+
+    respx.get("https://example.com/tile").mock(side_effect=handler)
+    policy = FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=0)
+    fetcher = TileFetcher.for_policy(policy)
+    request = _tile_request(retries=0)
+
+    with caplog.at_level("WARNING", logger="tilearray.fetch"):
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(fetcher.fetch, request) for _ in range(4)]
+            for future in futures:
+                future.result()
+
+    assert any(
+        "Shared fetch concurrency is 1" in record.message for record in caplog.records
+    )
+
+
+def test_call_max_concurrent_excluded_from_cache_key() -> None:
+    a = FetchPolicy(
+        max_concurrent=10, call_max_concurrent=1, rate_limit_per_second=None
+    )
+    b = FetchPolicy(
+        max_concurrent=10, call_max_concurrent=None, rate_limit_per_second=None
+    )
+    assert a.cache_key() == b.cache_key()
+    assert TileFetcher.for_policy(a) is TileFetcher.for_policy(b)
+
+
+def test_fetch_progress_rejects_non_positive_call_max_concurrent() -> None:
+    with pytest.raises(ValueError, match="call_max_concurrent"):
+        FetchProgress(total=1, call_max_concurrent=0)
+
+
+@respx.mock
+def test_aimd_shared_gate_max_concurrent_1_warns_with_waiters(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    latency_s = 0.05
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        time.sleep(latency_s)
+        return httpx.Response(200, content=b"x")
+
+    respx.get("https://example.com/tile").mock(side_effect=handler)
+    policy = FetchPolicy(
+        max_concurrent=1,
+        initial_concurrent=1,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+        retries=0,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+    request = _tile_request(retries=0)
+
+    with caplog.at_level("WARNING", logger="tilearray.fetch"):
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(fetcher.fetch, request) for _ in range(4)]
+            for future in futures:
+                future.result()
+
+    assert any(
+        "Shared fetch concurrency is 1" in record.message for record in caplog.records
+    )

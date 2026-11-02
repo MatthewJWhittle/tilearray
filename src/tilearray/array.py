@@ -9,6 +9,7 @@ import json
 import math
 import os
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -328,11 +329,13 @@ def _fetch_policy_summary(policy: FetchPolicy) -> dict[str, Any]:
         "forbidden_window_seconds": policy.forbidden_window_seconds,
         "forbidden_threshold": policy.forbidden_threshold,
         "forbidden_cooldown_seconds": policy.forbidden_cooldown_seconds,
+        "call_max_concurrent": policy.call_max_concurrent,
     }
 
 
 def _fetch_policy_from_summary(summary: dict[str, Any]) -> FetchPolicy:
     defaults = FetchPolicy()
+    call_max = summary.get("call_max_concurrent", defaults.call_max_concurrent)
     return FetchPolicy(
         max_concurrent=int(summary.get("max_concurrent", defaults.max_concurrent)),
         max_connections=summary.get("max_connections", defaults.max_connections),
@@ -368,6 +371,7 @@ def _fetch_policy_from_summary(summary: dict[str, Any]) -> FetchPolicy:
                 "forbidden_cooldown_seconds", defaults.forbidden_cooldown_seconds
             )
         ),
+        call_max_concurrent=int(call_max) if call_max is not None else None,
     )
 
 
@@ -378,6 +382,15 @@ def _attrs_from_compute_target(obj: Any) -> dict[str, Any] | None:
     return None
 
 
+def _policy_from_attrs_or_default(obj: Any) -> FetchPolicy:
+    attrs = _attrs_from_compute_target(obj)
+    if attrs is not None:
+        summary = attrs.get(_FETCH_POLICY_ATTR)
+        if isinstance(summary, dict):
+            return _fetch_policy_from_summary(summary)
+    return FetchPolicy()
+
+
 def _resolve_fetch_policy_for_compute(
     obj: Any,
     *,
@@ -386,14 +399,11 @@ def _resolve_fetch_policy_for_compute(
 ) -> FetchPolicy:
     if fetch_policy is not None:
         return fetch_policy
+    base = _policy_from_attrs_or_default(obj)
     if max_concurrent is not None:
-        return FetchPolicy(max_concurrent=max_concurrent)
-    attrs = _attrs_from_compute_target(obj)
-    if attrs is not None:
-        summary = attrs.get(_FETCH_POLICY_ATTR)
-        if isinstance(summary, dict):
-            return _fetch_policy_from_summary(summary)
-    return FetchPolicy()
+        # Override concurrency for worker sizing only; keep AIMD / breaker / etc.
+        return replace(base, max_concurrent=max_concurrent)
+    return base
 
 
 def compute_thread_pool_size(
@@ -431,9 +441,12 @@ def compute_with_policy(
     when AIMD allows more parallel HTTP. This helper runs the threaded scheduler with
     ``num_workers=compute_thread_pool_size(policy)``.
 
-    Policy resolution order: explicit ``fetch_policy``, then ``max_concurrent`` (builds
-    a minimal policy), then ``tilearray_fetch_policy`` on ``obj.attrs`` (set by
-    :func:`create_array`), else :class:`~tilearray.fetch.FetchPolicy` defaults.
+    Policy resolution order: explicit ``fetch_policy``; else ``tilearray_fetch_policy``
+    on ``obj.attrs`` (set by :func:`create_array`) with optional ``max_concurrent``
+    merged in (preserves AIMD / circuit-breaker fields from attrs); else
+    :class:`~tilearray.fetch.FetchPolicy` defaults. ``max_concurrent`` only adjusts
+    Dask worker sizing here — the HTTP fetch gate was fixed at :func:`create_array`
+    time from the host/preset ceiling.
     """
 
     policy = _resolve_fetch_policy_for_compute(
@@ -460,13 +473,31 @@ def _resolve_fetch_policy(
     service_config: ServiceConfigModel | None,
     service_options: dict[str, Any],
 ) -> FetchPolicy:
+    """Build the fetch policy for :func:`create_array`.
+
+    ``max_concurrent`` on the returned policy is the **shared process-gate
+    ceiling** (host / preset). A lower ``max_concurrent_requests`` override on a
+    configured service becomes ``call_max_concurrent`` so one caller's local
+    politeness cannot shrink the shared gate for siblings. Raising the override
+    (or setting it without a service config) still sets the shared ceiling.
+    """
+
     base = (
         service_config.fetch_policy() if service_config is not None else FetchPolicy()
     )
+    override = service_options.pop("max_concurrent_requests", None)
+    call_max_concurrent: int | None = None
+    if override is None:
+        max_concurrent = base.max_concurrent
+    elif service_config is not None and int(override) < base.max_concurrent:
+        # Local politeness: keep host/preset ceiling as the shared gate.
+        max_concurrent = base.max_concurrent
+        call_max_concurrent = int(override)
+    else:
+        max_concurrent = int(override)
+
     return FetchPolicy(
-        max_concurrent=service_options.pop(
-            "max_concurrent_requests", base.max_concurrent
-        ),
+        max_concurrent=max_concurrent,
         max_connections=service_options.pop("max_connections", base.max_connections),
         retries=service_options.pop("fetch_retries", base.retries),
         timeout=service_options.pop("fetch_timeout", base.timeout),
@@ -498,6 +529,7 @@ def _resolve_fetch_policy(
         forbidden_cooldown_seconds=service_options.pop(
             "forbidden_cooldown_seconds", base.forbidden_cooldown_seconds
         ),
+        call_max_concurrent=call_max_concurrent,
     )
 
 
@@ -575,7 +607,11 @@ def create_array(
     cache_path = request.cache_path
     chunk_height, chunk_width = request.chunk_size
     dtype_np = np.dtype(dtype)
-    progress = FetchProgress(total=len(tile_requests), on_progress=on_progress)
+    progress = FetchProgress(
+        total=len(tile_requests),
+        on_progress=on_progress,
+        call_max_concurrent=fetch_policy.call_max_concurrent,
+    )
 
     effective_format = request.effective_format(service)
     n_bands = _probe_tile_band_count(
