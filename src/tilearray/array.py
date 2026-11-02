@@ -41,6 +41,12 @@ from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .service import get_service
 from .service.base import BaseService
 from .service.config import ServiceConfig as ServiceConfigModel
+from .tile_errors import (
+    TileErrorAction,
+    TileErrorContext,
+    TileErrorHandler,
+    soft_fail_exhausted_tiles,
+)
 from .tiles import fetch_tile, snap_bbox_outward
 from .types import (
     CRS,
@@ -59,6 +65,7 @@ else:  # pragma: no cover - typing aid
 
 _FETCH_POLICY_ATTR = "tilearray_fetch_policy"
 _RECOMMENDED_NUM_WORKERS_ATTR = "tilearray_recommended_num_workers"
+_TILE_ERRORS_ATTR = "tilearray_tile_errors"
 
 
 class ArrayRequest(BaseModel):
@@ -563,6 +570,65 @@ def _resolve_fetch_policy(
     )
 
 
+def _resolve_on_tile_error(
+    on_tile_error: TileErrorHandler | None,
+    *,
+    soft_fail: bool,
+    soft_fail_max_fraction: float | None,
+) -> TileErrorHandler | None:
+    """Bind the plan-time tile error handler (``None`` = hard-fail default)."""
+
+    if on_tile_error is not None:
+        if soft_fail:
+            raise ValueError(
+                "Pass either on_tile_error=... or soft_fail=True, not both"
+            )
+        return on_tile_error
+    if not soft_fail:
+        return None
+
+    # Sugar for the library preset; ``soft_fail_max_fraction`` overrides the
+    # preset default (``0.1``). Pass ``None`` for no fraction threshold.
+    def _preset(ctx: TileErrorContext) -> TileErrorAction:
+        return soft_fail_exhausted_tiles(ctx, max_fraction=soft_fail_max_fraction)
+
+    return _preset
+
+
+def _tile_error_policy_name(handler: TileErrorHandler | None) -> str | None:
+    if handler is None:
+        return None
+    if handler is soft_fail_exhausted_tiles:
+        return "soft_fail_exhausted_tiles"
+    name = getattr(handler, "__name__", "")
+    if name in {"soft_fail_exhausted_tiles", "_preset"}:
+        return "soft_fail_exhausted_tiles"
+    return "custom"
+
+
+def _tile_errors_attr_summary(
+    *,
+    handler: TileErrorHandler | None,
+    soft_fill_value: float,
+    soft_fail_max_fraction: float | None,
+    progress: FetchProgress | None = None,
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "policy": _tile_error_policy_name(handler),
+        "soft_fill_value": soft_fill_value,
+        "soft_fail_max_fraction": soft_fail_max_fraction,
+        "armed": handler is not None,
+        "soft_failed": 0,
+        "aborted": False,
+        "examples": [],
+    }
+    if progress is not None:
+        summary["soft_failed"] = progress.soft_failed_count()
+        summary["aborted"] = progress.is_aborted()
+        summary["examples"] = list(progress.errors[:5])
+    return summary
+
+
 def create_array(
     service_url: str | ServiceConfigModel,
     bbox: BoundingBox | BBoxTuple,
@@ -578,6 +644,10 @@ def create_array(
     dtype: str | np.dtype[Any] = np.dtype("float32"),
     tile_decoder: TileDecoder | None = None,
     on_progress: ProgressCallback | None = None,
+    on_tile_error: TileErrorHandler | None = None,
+    soft_fail: bool = False,
+    soft_fill_value: float = float("nan"),
+    soft_fail_max_fraction: float | None = 0.1,
     **service_options: Any,
 ) -> xr.DataArray:
     """
@@ -590,6 +660,11 @@ def create_array(
     For lazy arrays (``compute=False``), prefer :func:`compute_with_policy` over
     plain ``.compute()`` so Dask worker count matches the fetch ceiling. Fetch
     policy metadata is stored on ``DataArray.attrs`` for that path.
+
+    Tile failures stay loud by default (``NetworkError`` + sibling abort after
+    retries). Opt in to visible soft-fill with ``on_tile_error=`` (e.g.
+    :func:`~tilearray.soft_fail_exhausted_tiles`) or ``soft_fail=True``. Soft
+    decisions are bound at plan time into each delayed tile load.
     """
 
     target_crs = _coerce_crs(crs)
@@ -610,6 +685,12 @@ def create_array(
         raise ValueError(
             "Provided service_type does not match the ServiceConfig service_type"
         )
+
+    tile_error_handler = _resolve_on_tile_error(
+        on_tile_error,
+        soft_fail=soft_fail,
+        soft_fail_max_fraction=soft_fail_max_fraction,
+    )
 
     options = dict(service_options)
     fetch_policy = _resolve_fetch_policy(service_config, options)
@@ -644,6 +725,7 @@ def create_array(
     )
 
     effective_format = request.effective_format(service)
+    # Probe ignores soft-fail: shape discovery must stay hard.
     n_bands = _probe_tile_band_count(
         tile_requests[0],
         cache_path,
@@ -667,6 +749,9 @@ def create_array(
                 dtype_np,
                 fetch_policy,
                 progress,
+                tile_error_handler,
+                soft_fill_value,
+                n_bands,
             )
             block_shape = (height, width, n_bands) if n_bands > 1 else (height, width)
             row_blocks.append(
@@ -683,6 +768,14 @@ def create_array(
     attrs = request.array_attrs(service, tile_options, effective_format)
     attrs[_FETCH_POLICY_ATTR] = _fetch_policy_summary(fetch_policy)
     attrs[_RECOMMENDED_NUM_WORKERS_ATTR] = compute_thread_pool_size(fetch_policy)
+    attrs[_TILE_ERRORS_ATTR] = _tile_errors_attr_summary(
+        handler=tile_error_handler,
+        soft_fill_value=soft_fill_value,
+        soft_fail_max_fraction=soft_fail_max_fraction
+        if soft_fail or tile_error_handler is not None
+        else None,
+        progress=None,
+    )
 
     normalized_bbox = request.bbox
     target_crs = request.target_crs
@@ -707,10 +800,19 @@ def create_array(
         num_workers = compute_thread_pool_size(
             fetch_policy, override=compute_num_workers
         )
-        return data_array.compute(
+        computed = data_array.compute(
             scheduler="threads",
             num_workers=num_workers,
         )
+        computed.attrs[_TILE_ERRORS_ATTR] = _tile_errors_attr_summary(
+            handler=tile_error_handler,
+            soft_fill_value=soft_fill_value,
+            soft_fail_max_fraction=soft_fail_max_fraction
+            if soft_fail or tile_error_handler is not None
+            else None,
+            progress=progress,
+        )
+        return computed
     return data_array
 
 
@@ -864,6 +966,75 @@ def _resize_tile_array(
     return resized
 
 
+def _soft_fill_array(
+    request: TileRequest,
+    dtype: np.dtype[Any],
+    soft_fill_value: float,
+    n_bands: int,
+) -> NDArrayFloat:
+    height = request.height or 1
+    width = request.width or 1
+    shape: tuple[int, ...]
+    if n_bands > 1:
+        shape = (height, width, n_bands)
+    else:
+        shape = (height, width)
+    return cast(NDArrayFloat, np.full(shape, soft_fill_value, dtype=dtype))
+
+
+def _tile_error_context(
+    request: TileRequest,
+    *,
+    response: TileResponse | None,
+    exc: BaseException | None,
+    progress: FetchProgress,
+    fetch_policy: FetchPolicy | None,
+) -> TileErrorContext:
+    policy_retries = fetch_policy.retries if fetch_policy is not None else 0
+    return TileErrorContext(
+        request=request,
+        response=response,
+        exc=exc,
+        progress=progress,
+        attempt_policy_retries=policy_retries,
+        soft_failed_so_far=progress.soft_failed_count(),
+        total_tiles=progress.total,
+    )
+
+
+def _apply_tile_error_action(
+    action: TileErrorAction,
+    *,
+    request: TileRequest,
+    message: str,
+    progress: FetchProgress | None,
+    dtype: np.dtype[Any],
+    soft_fill_value: float,
+    n_bands: int,
+    exc: BaseException | None = None,
+) -> NDArrayFloat:
+    if action is TileErrorAction.SOFT_FAIL:
+        if progress is not None:
+            progress.record_soft_fail(request)
+        return _soft_fill_array(request, dtype, soft_fill_value, n_bands)
+    if action is TileErrorAction.ABORT_MOSAIC:
+        if progress is not None:
+            progress.abort(message)
+        if exc is not None:
+            raise exc
+        raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
+    if action is TileErrorAction.RERAISE:
+        # Fetch failures keep today's abort; decode/library errors re-raise as-is.
+        if exc is not None:
+            raise exc
+        if progress is not None:
+            progress.abort(message)
+        raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
+    # Exhaustiveness guard for newly added TileErrorAction variants.
+    _exhaustive: TileErrorAction = action
+    raise AssertionError(f"Unhandled TileErrorAction: {_exhaustive!r}")
+
+
 def _load_tile_array(
     request: TileRequest,
     cache_dir: Path | None,
@@ -871,6 +1042,9 @@ def _load_tile_array(
     dtype: np.dtype[Any],
     fetch_policy: FetchPolicy | None = None,
     progress: FetchProgress | None = None,
+    on_tile_error: TileErrorHandler | None = None,
+    soft_fill_value: float = float("nan"),
+    n_bands: int = 1,
 ) -> NDArrayFloat:
     if progress is not None:
         progress.check_not_aborted()
@@ -879,20 +1053,62 @@ def _load_tile_array(
         progress.tick(request, response)
     if not response.success:
         message = response.error_message or f"HTTP {response.status_code}"
-        if progress is not None:
-            progress.abort(message)
-        raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
+        if on_tile_error is None or progress is None:
+            if progress is not None:
+                progress.abort(message)
+            raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
+        action = on_tile_error(
+            _tile_error_context(
+                request,
+                response=response,
+                exc=None,
+                progress=progress,
+                fetch_policy=fetch_policy,
+            )
+        )
+        return _apply_tile_error_action(
+            action,
+            request=request,
+            message=message,
+            progress=progress,
+            dtype=dtype,
+            soft_fill_value=soft_fill_value,
+            n_bands=n_bands,
+        )
 
-    array = decoder(response, request)
-    if array.ndim not in (2, 3):
-        raise ValueError("tile_decoder must return a 2D or 3D (y, x[, band]) array")
+    try:
+        array = decoder(response, request)
+        if array.ndim not in (2, 3):
+            raise ValueError("tile_decoder must return a 2D or 3D (y, x[, band]) array")
 
-    target_height = request.height or array.shape[0]
-    target_width = request.width or array.shape[1]
+        target_height = request.height or array.shape[0]
+        target_width = request.width or array.shape[1]
 
-    array = _resize_tile_array(array, target_height, target_width)
-
-    return np.asarray(array, dtype=dtype)
+        array = _resize_tile_array(array, target_height, target_width)
+        return np.asarray(array, dtype=dtype)
+    except Exception as exc:
+        if on_tile_error is None or progress is None:
+            raise
+        message = f"{type(exc).__name__}: {exc}"
+        action = on_tile_error(
+            _tile_error_context(
+                request,
+                response=response,
+                exc=exc,
+                progress=progress,
+                fetch_policy=fetch_policy,
+            )
+        )
+        return _apply_tile_error_action(
+            action,
+            request=request,
+            message=message,
+            progress=progress,
+            dtype=dtype,
+            soft_fill_value=soft_fill_value,
+            n_bands=n_bands,
+            exc=exc,
+        )
 
 
 def _fetch_with_cache(
