@@ -44,7 +44,7 @@ Fetching uses **synchronous HTTP** (`httpx.Client`) with a concurrency gate:
 - Fixed ceiling + optional rate limit when adaptive mode is off (OSM preset).
 - **AIMD** when enabled: ramp under `max_concurrent`, back off on pressure (403/408/429/5xx and known OGC transient responses).
 - Optional **circuit breaker** (EA DSP preset): a burst of pressure freezes concurrency at the floor for a cooldown.
-- Retries with `Retry-After` support; hard failure raises `NetworkError` (no silent NaN holes).
+- Retries with `Retry-After` support; hard failure raises `NetworkError` by default (no silent NaN holes). Opt-in `on_tile_error` / `soft_fail=True` can soft-fill exhausted tile-local failures after retries without aborting siblings.
 
 AIMD only helps if Dask can schedule enough tile loads — use `compute_with_policy` for multi-tile mosaics.
 

@@ -502,6 +502,8 @@ class FetchProgress:
     call_max_concurrent: int | None = None
     done: int = field(default=0, init=False)
     errors: list[str] = field(default_factory=list, init=False)
+    soft_failed: int = field(default=0, init=False)
+    soft_failed_urls: list[str] = field(default_factory=list, init=False)
     _aborted: bool = field(default=False, init=False)
     _abort_reason: str | None = field(default=None, init=False)
     _call_semaphore: threading.Semaphore | None = field(
@@ -549,6 +551,17 @@ class FetchProgress:
 
         if self._call_semaphore is not None:
             self._call_semaphore.release()
+
+    def record_soft_fail(self, request: TileRequest) -> None:
+        """Count a visible soft-fill (does not abort siblings)."""
+
+        with self._lock:
+            self.soft_failed += 1
+            self.soft_failed_urls.append(request.url)
+
+    def soft_failed_count(self) -> int:
+        with self._lock:
+            return self.soft_failed
 
     def tick(self, request: TileRequest, response: TileResponse) -> None:
         with self._lock:

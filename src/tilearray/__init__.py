@@ -30,6 +30,12 @@ from .service import (
 from .service.wcs import WCSParser, WCSService
 from .service.wms import WMSService
 from .service.wmts import WMTSParser, WMTSService
+from .tile_errors import (
+    TileErrorAction,
+    TileErrorContext,
+    TileErrorHandler,
+    soft_fail_exhausted_tiles,
+)
 from .types import (
     CRS,
     BBoxTuple,
@@ -58,6 +64,10 @@ __all__ = [
     "NetworkError",
     "ParseError",
     "ConfigurationError",
+    "TileErrorAction",
+    "TileErrorContext",
+    "TileErrorHandler",
+    "soft_fail_exhausted_tiles",
     "BaseService",
     "TileGeometry",
     "detect_service_type",

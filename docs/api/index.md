@@ -70,7 +70,23 @@ Presets: `WCSConfig.for_ea_dsp`, `XYZConfig.for_openstreetmap`. Custom hosts: ea
    ConfigurationError
 ```
 
-{py:exc}`NetworkError` means a tile failed after retries — mosaics do not leave silent NaN holes.
+{py:exc}`NetworkError` means a tile failed after retries — mosaics do not leave silent NaN holes **by default**.
+
+## Tile errors (opt-in soft-fail)
+
+```{eval-rst}
+.. currentmodule:: tilearray
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   TileErrorAction
+   TileErrorContext
+   soft_fail_exhausted_tiles
+```
+
+Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilearray.create_array` / {py:func}`~tilearray.load_array`. The library preset {py:func}`~tilearray.soft_fail_exhausted_tiles` soft-fills exhausted tile-local fetch failures (404 / 5xx / transport) as NaN (or ``soft_fill_value``) blocks, keeps retries, hard-fails auth / exhausted 429 / decode errors, and aborts when soft-failed fraction exceeds ``soft_fail_max_fraction``. Default remains hard-fail + sibling abort.
 
 ## Fetch
 
