@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import math
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import Any, Callable, cast
@@ -10,9 +10,12 @@ from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from ..tiles import snap_bbox_outward
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .requests import compose_tile_request as _compose_tile_request
 from .requests import merge_str_mappings
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "TileGeometry",
@@ -96,37 +99,52 @@ class BaseService(ABC):
             if res_x <= 0 or res_y <= 0:
                 raise ValueError("resolution values must be positive")
 
-            tile_width_units = width * res_x
-            tile_height_units = height * res_y
-            epsilon = min(res_x, res_y) / 10.0
+            origin = _coerce_grid_origin(options.get("origin"))
+            snapped = snap_bbox_outward(bbox, (res_x, res_y), origin)
+            if (
+                snapped.min_x != bbox.min_x
+                or snapped.min_y != bbox.min_y
+                or snapped.max_x != bbox.max_x
+                or snapped.max_y != bbox.max_y
+            ):
+                logger.debug(
+                    "Snapped resolution plan bbox outward by "
+                    "min_x=%s min_y=%s max_x=%s max_y=%s",
+                    snapped.min_x - bbox.min_x,
+                    snapped.min_y - bbox.min_y,
+                    snapped.max_x - bbox.max_x,
+                    snapped.max_y - bbox.max_y,
+                )
 
-            current_min_y = float(bbox.min_y)
-            while current_min_y < bbox.max_y - epsilon:
-                current_max_y = min(bbox.max_y, current_min_y + tile_height_units)
-                span_y = current_max_y - current_min_y
-                pixel_height = max(1, int(math.ceil(span_y / res_y)))
+            # Index-walk on the snapped pixel grid so every request spans at
+            # least one native pixel (no epsilon drop / sub-pixel leftover).
+            n_px = max(1, int(round((snapped.max_x - snapped.min_x) / res_x)))
+            n_py = max(1, int(round((snapped.max_y - snapped.min_y) / res_y)))
 
-                current_min_x = float(bbox.min_x)
-                while current_min_x < bbox.max_x - epsilon:
-                    current_max_x = min(bbox.max_x, current_min_x + tile_width_units)
-                    span_x = current_max_x - current_min_x
-                    pixel_width = max(1, int(math.ceil(span_x / res_x)))
-
+            y0 = 0
+            while y0 < n_py:
+                tile_h = min(height, n_py - y0)
+                min_y = snapped.min_y + y0 * res_y
+                max_y = snapped.min_y + (y0 + tile_h) * res_y
+                x0 = 0
+                while x0 < n_px:
+                    tile_w = min(width, n_px - x0)
+                    min_x = snapped.min_x + x0 * res_x
+                    max_x = snapped.min_x + (x0 + tile_w) * res_x
                     yield TileGeometry(
                         bbox=BoundingBox(
-                            min_x=current_min_x,
-                            min_y=current_min_y,
-                            max_x=current_max_x,
-                            max_y=current_max_y,
+                            min_x=min_x,
+                            min_y=min_y,
+                            max_x=max_x,
+                            max_y=max_y,
                             crs=bbox.crs,
                         ),
-                        width=pixel_width,
-                        height=pixel_height,
+                        width=tile_w,
+                        height=tile_h,
                         crs=bbox.crs,
                     )
-
-                    current_min_x = current_max_x
-                current_min_y = current_max_y
+                    x0 += tile_w
+                y0 += tile_h
             return
 
         grid_shape_option = options.get("grid_shape")
@@ -210,6 +228,18 @@ class BaseService(ABC):
         **options: object,
     ) -> TileRequest:
         """Build the HTTP request description for a tile."""
+
+
+def _coerce_grid_origin(value: object) -> tuple[float, float]:
+    """Return a ``(x, y)`` grid origin, defaulting to ``(0.0, 0.0)``."""
+
+    if value is None:
+        return (0.0, 0.0)
+    if isinstance(value, tuple) and len(value) == 2:
+        origin_x = value[0]
+        origin_y = value[1]
+        return (float(origin_x), float(origin_y))
+    raise ValueError("origin must be a tuple of two numbers")
 
 
 # ----------------------------------------------------------------------

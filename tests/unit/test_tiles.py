@@ -12,7 +12,7 @@ import pytest
 import respx
 
 from tilearray.fetch import FetchPolicy, TileFetcher
-from tilearray.tiles import create_tile_grid, fetch_tile, save_tile
+from tilearray.tiles import create_tile_grid, fetch_tile, save_tile, snap_bbox_outward
 from tilearray.types import CRS, BoundingBox, Format, TileRequest, TileResponse
 
 pytestmark = pytest.mark.unit
@@ -29,6 +29,47 @@ def _bbox(min_x: float, min_y: float, max_x: float, max_y: float) -> BoundingBox
     return BoundingBox(
         min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, crs=CRS.EPSG_4326
     )
+
+
+def test_snap_bbox_outward_expands_fractional_edges() -> None:
+    bbox = _bbox(0.1, 0.1, 1024.1, 512.25)
+    snapped = snap_bbox_outward(bbox, resolution=(1.0, 1.0), origin=(0.0, 0.0))
+
+    assert snapped.min_x == 0.0
+    assert snapped.min_y == 0.0
+    assert snapped.max_x == 1025.0
+    assert snapped.max_y == 513.0
+
+
+def test_snap_bbox_outward_leaves_aligned_bbox_unchanged() -> None:
+    bbox = _bbox(0, 0, 1024, 1024)
+    snapped = snap_bbox_outward(bbox, resolution=(1.0, 1.0), origin=(0.0, 0.0))
+
+    assert snapped.min_x == bbox.min_x
+    assert snapped.min_y == bbox.min_y
+    assert snapped.max_x == bbox.max_x
+    assert snapped.max_y == bbox.max_y
+
+
+def test_snap_bbox_outward_rejects_non_positive_resolution() -> None:
+    bbox = _bbox(0, 0, 10, 10)
+    with pytest.raises(ValueError, match="resolution"):
+        snap_bbox_outward(bbox, resolution=(0.0, 1.0), origin=(0.0, 0.0))
+
+
+def test_snap_bbox_outward_matches_create_tile_grid_pixel_union() -> None:
+    bbox = _bbox(12.2, 8.7, 88.1, 92.4)
+    origin = (0.0, 0.0)
+    resolution = (1.0, 1.0)
+    snapped = snap_bbox_outward(bbox, resolution=resolution, origin=origin)
+    grid = create_tile_grid(
+        bbox, tile_size=(1, 1), origin=origin, resolution=resolution
+    )
+
+    assert grid[0, 0, 0] == snapped.min_x
+    assert grid[0, 0, 1] == snapped.min_y
+    assert grid[-1, -1, 2] == snapped.max_x
+    assert grid[-1, -1, 3] == snapped.max_y
 
 
 def test_create_tile_grid_aligned_bbox() -> None:
