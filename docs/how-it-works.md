@@ -57,7 +57,7 @@ AIMD only helps if Dask can schedule enough tile loads — use `compute_with_pol
 :width: 700px
 ```
 
-Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into `float32` arrays. JPEG/PNG keep bands `(y, x, band)` when present; GeoTIFF elevation uses the first band.
+Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into `float32` arrays. JPEG/PNG keep bands `(y, x, band)` when present; GeoTIFF elevation uses the first band (pixels via `tifffile`, no GDAL/`zarr` pin cage).
 
 ---
 

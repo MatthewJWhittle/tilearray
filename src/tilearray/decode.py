@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-import tempfile
 import warnings
 from collections.abc import Callable
 from email import policy
@@ -13,8 +12,7 @@ from io import BytesIO
 from typing import Literal, cast
 
 import numpy as np
-from geotiff import GeoTiff  # type: ignore[import-untyped]
-from geotiff.geotiff import TiffFile  # type: ignore[import-untyped]
+import tifffile
 from numpy.typing import NDArray
 
 from .types import Format, TileRequest, TileResponse
@@ -188,29 +186,35 @@ def decode_tile_bytes(
 
 
 def read_geotiff_bytes(raw_bytes: bytes) -> NDArrayFloat:
-    """Read a GeoTIFF payload from bytes."""
+    """Read a GeoTIFF payload from bytes via ``tifffile`` (no GDAL/zarr)."""
 
-    with tempfile.NamedTemporaryFile(suffix=".tif") as tmp:
-        tmp.write(raw_bytes)
-        tmp.flush()
-        try:
-            return _read_geotiff_file(tmp.name)
-        except Exception:  # pragma: no cover - fallback path
-            tif = GeoTiff(tmp.name, as_crs=None)
-            return cast(NDArrayFloat, np.asarray(tif.read(), dtype=np.float32))
+    return _read_geotiff_source(BytesIO(raw_bytes))
 
 
 def _read_geotiff_file(path: str) -> NDArrayFloat:
+    """Read a GeoTIFF from a filesystem path."""
+
+    return _read_geotiff_source(path)
+
+
+def _read_geotiff_source(source: str | BytesIO) -> NDArrayFloat:
+    """
+    Decode TIFF/GeoTIFF pixels with ``tifffile``.
+
+    Applies GDAL_NODATA when present and maps non-finite / extreme sentinel
+    values to NaN so elevation mosaics stay numerically honest.
+    """
+
     tifffile_logger = logging.getLogger("tifffile")
     previous_level = tifffile_logger.level
     tifffile_logger.setLevel(logging.ERROR)
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
-            with TiffFile(path) as tif_file:
+            with tifffile.TiffFile(source) as tif_file:
                 data = np.asarray(tif_file.asarray(), dtype=np.float64)
-                page = tif_file.pages[0]
-                nodata_tag = page.tags.get("GDAL_NODATA")
+                page = tif_file.pages.first
+                nodata_tag = page.tags.get("GDAL_NODATA") if page is not None else None
                 if nodata_tag is not None:
                     try:
                         nodata = float(nodata_tag.value)

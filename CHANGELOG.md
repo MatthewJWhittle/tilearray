@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- WCS GeoTIFF decode now uses ``tifffile`` directly (bytes or path); dropped the ``geotiff`` → ``zarr<2.13`` / ``numcodecs<0.16`` pin cage so clean-env installs no longer need that dependency gymnastics. XYZ-without-GDAL posture unchanged (no hard rasterio/GDAL runtime dep) (#53)
+
 ### Added
 
 - Opt-in plan-time tile error policy for mosaics (`on_tile_error=` / `soft_fail=True`) with library preset `soft_fail_exhausted_tiles`: after retries, soft-fill tile-local exhausted failures (404 / 5xx / transport) as NaN blocks without aborting siblings; auth (401), exhausted 429, decode errors, and soft-fail fraction above `soft_fail_max_fraction` still hard-abort. Default remains hard-fail + `FetchProgress.abort` (#65)
