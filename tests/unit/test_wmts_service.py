@@ -5,8 +5,10 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 
+import httpx
 import numpy as np
 import pytest
+import respx
 import xarray as xr
 from PIL import Image
 from pytest import MonkeyPatch
@@ -184,6 +186,43 @@ def test_wmts_service_build_rest_tile_request_includes_headers() -> None:
         "User-Agent": "tilearray-test/1.0",
         "X-Peer-Test": "enabled",
     }
+
+
+@respx.mock
+def test_wmts_get_capabilities_sends_config_headers_and_params() -> None:
+    """Private-server auth on config must reach WMTS GetCapabilities (#57)."""
+
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["headers"] = dict(request.headers)
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, text=WMTS_CAPABILITIES_XML)
+
+    respx.get(WMTS_URL).mock(side_effect=handler)
+
+    service = WMTSService(
+        WMTS_URL,
+        layer="example_layer",
+        tile_matrix_set="EPSG4326",
+        tile_matrix=12,
+        headers={
+            "User-Agent": "tilearray-wmts-caps/1.0",
+            "X-API-Key": "private-key",
+        },
+        params={"token": "query-token"},
+    )
+    caps = service.get_capabilities()
+
+    assert "example_layer" in caps.layers
+    headers = captured["headers"]
+    assert isinstance(headers, dict)
+    assert headers.get("user-agent") == "tilearray-wmts-caps/1.0"
+    assert headers.get("x-api-key") == "private-key"
+    params = captured["params"]
+    assert isinstance(params, dict)
+    assert params.get("request") == "GetCapabilities"
+    assert params.get("token") == "query-token"
 
 
 def test_wmts_service_plan_tiles_for_bbox() -> None:

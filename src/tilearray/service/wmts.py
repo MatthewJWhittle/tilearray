@@ -10,11 +10,17 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
 
-import requests
+import httpx
 
 from ..errors import NetworkError, ParseError, ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
+from .http import (
+    compose_http_headers,
+    compose_http_params,
+    http_get,
+    resolve_timeout,
+)
 from .xyz import _tile_bounds, _tile_range_for_bbox
 
 logger = logging.getLogger(__name__)
@@ -194,7 +200,7 @@ class WMTSService(BaseService):
         crs: CRS | None = CRS.EPSG_4326,
         url_template: str | None = None,
         version: str = "1.0.0",
-        session: requests.Session | None = None,
+        client: httpx.Client | None = None,
         **config: Any,
     ) -> None:
         super().__init__(
@@ -221,7 +227,7 @@ class WMTSService(BaseService):
         )
         self.native_crs = self._coerce_crs(crs or config.get("crs") or CRS.EPSG_4326)
         self.url_template = url_template or config.get("url_template")
-        self.session = session or requests.Session()
+        self._client = client
         self.parser = WMTSParser()
         self._capabilities: WMTSCapabilities | None = None
 
@@ -237,17 +243,22 @@ class WMTSService(BaseService):
 
     def get_capabilities(self, **params: Any) -> WMTSCapabilities:
         try:
-            response = self.session.get(
+            response = http_get(
                 self.base_url,
-                params={
-                    "service": "WMTS",
-                    "version": self.version,
-                    "request": "GetCapabilities",
-                    **params,
-                },
+                params=compose_http_params(
+                    {
+                        "service": "WMTS",
+                        "version": self.version,
+                        "request": "GetCapabilities",
+                    },
+                    self.config,
+                    params or None,
+                ),
+                headers=compose_http_headers(self.config),
+                timeout=resolve_timeout(self.config),
+                client=self._client,
             )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+        except httpx.HTTPError as exc:
             raise NetworkError(
                 f"WMTS GetCapabilities failed for {self.base_url}: {exc}",
                 cause=exc,

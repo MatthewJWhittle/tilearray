@@ -35,7 +35,7 @@ Make the installed library boringly reliable on the documented paths: fix object
 - One canonical compute habit and a fresh stranger first-look pass
 - Honest “WMTS supported via `WMTSConfig`, guide TBD” so the four-protocol claim is not oversold
 - Large-AOI politeness evidence / nightly soak under presets
-- Start HTTP consolidation (capabilities → httpx or one UA/timeout policy)
+- Start HTTP consolidation (capabilities → httpx or one UA/timeout policy) — caps/DescribeCoverage on httpx with shared UA/timeout + config credential parity (#57)
 
 **Exit criteria for tagging 0.2.0**
 
