@@ -8,6 +8,10 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..error_messages import (
+    coverage_build_service_config_message,
+    coverage_build_service_network_message,
+)
 from ..errors import (
     ConfigurationError,
     NetworkError,
@@ -244,17 +248,23 @@ class WCSConfig(ServiceConfig):
             service.describe_coverage(self.coverage_id)
         except NetworkError as exc:
             raise NetworkError(
-                f"Failed to validate coverage '{self.coverage_id}' against {self.base_url}",  # noqa: G004
+                coverage_build_service_network_message(
+                    self.coverage_id, self.base_url, exc
+                ),
                 cause=exc,
             ) from exc
         except httpx.HTTPError as exc:
             raise NetworkError(
-                f"Failed to validate coverage '{self.coverage_id}' against {self.base_url}",  # noqa: G004
+                coverage_build_service_network_message(
+                    self.coverage_id, self.base_url, exc
+                ),
                 cause=exc,
             ) from exc
         except TileArrayError as exc:
             raise ConfigurationError(
-                f"Coverage '{self.coverage_id}' is not available from {self.base_url}",  # noqa: G004
+                coverage_build_service_config_message(
+                    self.coverage_id, self.base_url, exc
+                ),
                 cause=exc,
             ) from exc
 

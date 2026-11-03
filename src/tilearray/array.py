@@ -37,6 +37,7 @@ from .decode import (
 from .decode import (
     decoder_for_format as _decoder_for_format,
 )
+from .error_messages import missing_decoder_message, tile_fetch_failure_message
 from .errors import ConfigurationError, NetworkError, ValidationError
 from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .progress import resolve_on_progress
@@ -307,9 +308,7 @@ def _resolve_decoder(
         if decoder is not None:
             return decoder
 
-    raise ConfigurationError(
-        f"No tile decoder available for format {fmt!r}; please provide tile_decoder."
-    )
+    raise ConfigurationError(missing_decoder_message(fmt))
 
 
 def _delayed_call(func: Callable[..., Any], *args: Any) -> Delayed:
@@ -1167,14 +1166,14 @@ def _apply_tile_error_action(
             progress.abort(message)
         if exc is not None:
             raise exc
-        raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
+        raise NetworkError(tile_fetch_failure_message(request.url, message))
     if action is TileErrorAction.RERAISE:
         # Fetch failures keep today's abort; decode/library errors re-raise as-is.
         if exc is not None:
             raise exc
         if progress is not None:
             progress.abort(message)
-        raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
+        raise NetworkError(tile_fetch_failure_message(request.url, message))
     # Exhaustiveness guard for newly added TileErrorAction variants.
     _exhaustive: TileErrorAction = action
     raise AssertionError(f"Unhandled TileErrorAction: {_exhaustive!r}")
@@ -1201,7 +1200,14 @@ def _load_tile_array(
         if on_tile_error is None or progress is None:
             if progress is not None:
                 progress.abort(message)
-            raise NetworkError(f"Tile fetch failed for {request.url}: {message}")
+            raise NetworkError(
+                tile_fetch_failure_message(
+                    request.url,
+                    message,
+                    content_type=response.content_type or None,
+                    body=response.data or None,
+                )
+            )
         action = on_tile_error(
             _tile_error_context(
                 request,
