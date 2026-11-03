@@ -119,6 +119,7 @@ Use with [docs/design-principles.md](docs/design-principles.md). Reject or redes
 - [ ] **Service politeness** — host ceiling preserved; call-local limits don’t redefine the shared gate; presets compose.
 - [ ] **Access vs processing** — change stays inside fetch/assemble boundaries (or is clearly out of scope).
 - [ ] **Surface area** — new public symbol justified; `__all__` + autosummary updated; no dual habit for an existing job.
+- [ ] **Freeze awareness** — if the change expands `__all__`, flips a default, or aims at 1.0, update [docs/api-freeze-checklist.md](docs/api-freeze-checklist.md) in the same theme.
 
 Awkward patterns are **mistakes to fix**, not intentional design, unless evidence shows otherwise.
 

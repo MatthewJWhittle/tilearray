@@ -7,6 +7,7 @@ Read these before changing code or docs:
 3. **[guidelines.md](guidelines.md)** — engineering standards, tests, API design checklist.
 4. **[docs/roadmap.md](docs/roadmap.md)** — coverage, direction, non-goals; do not invent scope.
 5. **[CONTRIBUTING.md](CONTRIBUTING.md)** — setup and PR habits.
+6. **[docs/api-freeze-checklist.md](docs/api-freeze-checklist.md)** — public vs provisional surface; use before 1.0 / freeze cuts (do not invent graduation).
 
 ## Before you edit
 
