@@ -5,7 +5,7 @@ Load a small slippy-map window, compute it, and plot the mosaic.
 Uses `XYZConfig.from_url(OSM_TILE_TEMPLATE, …, **osm_fetch_defaults())` (identifiable User-Agent, max 2 in-flight, ~2 req/s). Include **© OpenStreetMap contributors** when displaying the imagery.
 
 ```{note}
-OSM raster tiles are often **palette PNGs**, so the mosaic may be single-band (grayscale) today. For a full-colour RGB XYZ example see {doc}`gibs-bluemarble`.
+OSM raster tiles are often **palette PNGs**, so the mosaic may be single-band index values unless you pass `expand_palette=True`. For a full-colour RGB XYZ example see {doc}`gibs-bluemarble`.
 ```
 
 ## Code

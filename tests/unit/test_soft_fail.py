@@ -226,6 +226,7 @@ def test_mosaic_soft_fail_every_tenth_completes(
         chunk_size=(4, 4),
         grid_shape=(rows, cols),
         output_format=Format.GEOTIFF,
+        band_policy="first_band",
         compute=True,
         tile_decoder=_decoder,
         on_progress=on_progress,
@@ -268,6 +269,7 @@ def test_mosaic_soft_fail_attrs_refresh_via_compute_with_policy(
         chunk_size=(4, 4),
         grid_shape=(rows, cols),
         output_format=Format.GEOTIFF,
+        band_policy="first_band",
         compute=False,
         tile_decoder=_decoder,
         soft_fail=True,
@@ -315,6 +317,7 @@ def test_mosaic_without_soft_fail_aborts(
             chunk_size=(4, 4),
             grid_shape=(rows, cols),
             output_format=Format.GEOTIFF,
+            band_policy="first_band",
             compute=True,
             tile_decoder=_decoder,
             max_concurrent_requests=4,
@@ -470,6 +473,7 @@ def test_soft_fail_threshold_aborts_mosaic(
             chunk_size=(2, 2),
             grid_shape=(rows, cols),
             output_format=Format.GEOTIFF,
+            band_policy="first_band",
             compute=True,
             tile_decoder=_decoder,
             soft_fail=True,
@@ -556,7 +560,7 @@ def test_probe_ignores_soft_fail_handler(
     )
     monkeypatch.setattr(
         "tilearray.array.default_band_count_for_format",
-        lambda fmt: None,
+        lambda fmt, band_policy=None: None,
     )
 
     def fail_fetch(request: TileRequest, **kwargs: Any) -> TileResponse:
@@ -581,6 +585,7 @@ def test_probe_ignores_soft_fail_handler(
             chunk_size=(4, 4),
             grid_shape=(rows, cols),
             output_format=Format.GEOTIFF,
+            band_policy="first_band",
             compute=False,
             tile_decoder=_decoder,
             soft_fail=True,
@@ -673,6 +678,7 @@ def test_on_tile_error_and_soft_fail_mutually_exclusive(
             chunk_size=(2, 2),
             grid_shape=(1, 1),
             output_format=Format.GEOTIFF,
+            band_policy="first_band",
             tile_decoder=_decoder,
             soft_fail=True,
             on_tile_error=soft_fail_exhausted_tiles,

@@ -28,10 +28,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .decode import (
     DEFAULT_BAND_POLICIES,
+    BandPolicy,
+    GeoTransform,
+    NDArrayAny,
     NDArrayFloat,
     TileDecoder,
     band_count_from_array,
+    build_format_decoder,
     default_band_count_for_format,
+    geotiff_bytes_from_response,
+    pixel_offsets_for_placement,
+    place_array_on_canvas,
+    read_geotiff_georef,
     sniff_effective_content_type,
 )
 from .decode import (
@@ -297,16 +305,43 @@ class ArrayRequest(BaseModel):
 
 
 def _resolve_decoder(
-    request: ArrayRequest, service: BaseService, explicit: TileDecoder | None
+    request: ArrayRequest,
+    service: BaseService,
+    explicit: TileDecoder | None,
+    *,
+    band_policy: BandPolicy | None = None,
+    expand_palette: bool = False,
 ) -> TileDecoder:
     if explicit is not None:
         return explicit
 
     fmt = request.effective_format(service)
     if fmt is not None:
+        default_policy = DEFAULT_BAND_POLICIES.get(fmt, "preserve")
+        effective_policy = band_policy or default_policy
+        # Rebuild when the caller opts into a non-default band/palette policy;
+        # otherwise prefer the process registry (tests and custom installs).
+        needs_custom = expand_palette or (
+            band_policy is not None and band_policy != default_policy
+        )
+        if needs_custom:
+            built = build_format_decoder(
+                fmt,
+                band_policy=effective_policy,
+                expand_palette=expand_palette,
+            )
+            if built is not None:
+                return built
         decoder = _decoder_for_format(fmt)
         if decoder is not None:
             return decoder
+        built = build_format_decoder(
+            fmt,
+            band_policy=effective_policy,
+            expand_palette=expand_palette,
+        )
+        if built is not None:
+            return built
 
     raise ConfigurationError(missing_decoder_message(fmt))
 
@@ -698,6 +733,8 @@ def create_array(
     compute: bool = False,
     compute_num_workers: int | None = None,
     dtype: str | np.dtype[Any] = np.dtype("float32"),
+    band_policy: BandPolicy | None = None,
+    expand_palette: bool = False,
     tile_decoder: TileDecoder | None = None,
     on_progress: ProgressCallback | None = None,
     show_progress: bool | None = None,
@@ -728,6 +765,13 @@ def create_array(
     retries). Opt in to visible soft-fill with ``on_tile_error=`` (e.g.
     :func:`~tilearray.soft_fail_exhausted_tiles`) or ``soft_fail=True``. Soft
     decisions are bound at plan time into each delayed tile load.
+
+    Raster fidelity: ``band_policy`` defaults to ``preserve`` (keep all bands;
+    pass ``\"first_band\"`` to reduce explicitly). Palette PNGs stay as index
+    arrays unless ``expand_palette=True``. GeoTIFF decode promotes to float32
+    so nodata can be NaN; imagery decode keeps native dtype until the
+    ``dtype=`` cast. Clipped WCS GeoTIFF responses are placed by their tags
+    onto the requested grid and padded with NaN — never stretched.
     """
 
     target_crs = _coerce_crs(crs)
@@ -771,7 +815,17 @@ def create_array(
     )
 
     service = request.build_service(service_type)
-    decoder = _resolve_decoder(request, service, tile_decoder)
+    effective_format = request.effective_format(service)
+    resolved_band_policy: BandPolicy | None = band_policy
+    if resolved_band_policy is None and effective_format is not None:
+        resolved_band_policy = DEFAULT_BAND_POLICIES.get(effective_format)
+    decoder = _resolve_decoder(
+        request,
+        service,
+        tile_decoder,
+        band_policy=resolved_band_policy,
+        expand_palette=expand_palette,
+    )
 
     tile_requests, tile_options = request.plan_tile_requests(service)
 
@@ -792,7 +846,6 @@ def create_array(
         call_max_concurrent=fetch_policy.call_max_concurrent,
     )
 
-    effective_format = request.effective_format(service)
     # Probe ignores soft-fail: shape discovery must stay hard.
     n_bands = _probe_tile_band_count(
         tile_requests[0],
@@ -801,6 +854,7 @@ def create_array(
         dtype_np,
         fetch_policy,
         effective_format,
+        band_policy=resolved_band_policy,
     )
 
     blocks: list[list[DaskArray]] = []
@@ -856,6 +910,8 @@ def create_array(
             height=height,
             width=width,
             output_format=effective_format,
+            band_policy=resolved_band_policy,
+            expand_palette=expand_palette,
         )
     )
     # Pixel centers from mosaic Affine; row 0 = north (_organize_tiles sorts by -max_y).
@@ -947,6 +1003,8 @@ def _geospatial_attrs(
     height: int,
     width: int,
     output_format: Format | None,
+    band_policy: BandPolicy | None = None,
+    expand_palette: bool = False,
 ) -> dict[str, Any]:
     """
     Analysis-ready CRS / transform / nodata / band-policy attrs for handoff.
@@ -960,13 +1018,18 @@ def _geospatial_attrs(
         "transform_source": "mosaic_bbox",
     }
     if output_format is not None:
-        band_policy = DEFAULT_BAND_POLICIES.get(output_format)
-        if band_policy is not None:
-            attrs["band_policy"] = band_policy
+        policy = band_policy or DEFAULT_BAND_POLICIES.get(output_format)
+        if policy is not None:
+            attrs["band_policy"] = policy
+        if output_format in {Format.PNG, Format.JPEG}:
+            attrs["palette_mode"] = "rgb" if expand_palette else "indices"
         if output_format == Format.GEOTIFF:
             # Decode maps GDAL_NODATA / sentinels → NaN in pixels (#53/#77).
             attrs["nodata"] = float("nan")
             attrs["_FillValue"] = float("nan")
+            attrs["dtype_policy"] = "float32_nodata_nan"
+        elif output_format in {Format.PNG, Format.JPEG}:
+            attrs["dtype_policy"] = "native_then_array_dtype"
     return attrs
 
 
@@ -1038,10 +1101,12 @@ def _probe_tile_band_count(
     dtype: np.dtype[Any],
     fetch_policy: FetchPolicy | None,
     effective_format: Format | None,
+    *,
+    band_policy: BandPolicy | None = None,
 ) -> int:
     """Determine band count before building the Dask graph."""
 
-    fixed = default_band_count_for_format(effective_format)
+    fixed = default_band_count_for_format(effective_format, band_policy=band_policy)
     if fixed is not None:
         return fixed
 
@@ -1056,14 +1121,16 @@ def _probe_tile_band_count(
 
 
 def _resize_tile_array(
-    array: NDArrayFloat, target_height: int, target_width: int
-) -> NDArrayFloat:
+    array: NDArrayAny, target_height: int, target_width: int
+) -> NDArrayAny:
+    """Downsample an oversize tile to the request shape (never upsample/stretch)."""
+
     if array.ndim == 3:
         resized_bands = [
             _resize_tile_array(array[..., band], target_height, target_width)
             for band in range(array.shape[2])
         ]
-        return cast(NDArrayFloat, np.stack(resized_bands, axis=-1))
+        return cast(NDArrayAny, np.stack(resized_bands, axis=-1))
 
     actual_height, actual_width = array.shape
 
@@ -1075,14 +1142,19 @@ def _resize_tile_array(
 
     if actual_height < target_height or actual_width < target_width:
         raise ValidationError(
-            f"Decoded tile has shape {(actual_height, actual_width)}, expected at least {(target_height, target_width)}"
+            f"Decoded tile has shape {(actual_height, actual_width)}, "
+            f"expected at least {(target_height, target_width)}. "
+            "Clipped GeoTIFF responses need ModelPixelScale/ModelTiepoint "
+            "tags so pixels can be placed without stretching."
         )
 
+    # Downsample in float space so nanmean accepts integer source tiles.
+    float_array = np.asarray(array, dtype=np.float64)
     if actual_height % target_height == 0 and actual_width % target_width == 0:
         factor_y = actual_height // target_height
         factor_x = actual_width // target_width
-        reshaped = array.reshape(target_height, factor_y, target_width, factor_x)
-        return cast(NDArrayFloat, np.nanmean(reshaped, axis=(1, 3)))
+        reshaped = float_array.reshape(target_height, factor_y, target_width, factor_x)
+        return cast(NDArrayAny, np.nanmean(reshaped, axis=(1, 3)))
 
     y_edges = np.linspace(0, actual_height, target_height + 1, dtype=int)
     x_edges = np.linspace(0, actual_width, target_width + 1, dtype=int)
@@ -1091,14 +1163,117 @@ def _resize_tile_array(
     x_edges[0] = 0
     x_edges[-1] = actual_width
 
-    resized = np.empty((target_height, target_width), dtype=array.dtype)
+    resized = np.empty((target_height, target_width), dtype=np.float64)
     for row in range(target_height):
         y_start, y_end = y_edges[row], y_edges[row + 1]
         for col in range(target_width):
             x_start, x_end = x_edges[col], x_edges[col + 1]
-            block = array[y_start:y_end, x_start:x_end]
+            block = float_array[y_start:y_end, x_start:x_end]
             resized[row, col] = np.nanmean(block) if block.size else np.nan
-    return resized
+    return cast(NDArrayAny, resized)
+
+
+def _epsg_code_from_crs(crs: CRS | None) -> int | None:
+    if crs is None:
+        return None
+    value = crs.value if hasattr(crs, "value") else str(crs)
+    text = str(value).upper()
+    if text.startswith("EPSG:"):
+        try:
+            return int(text.split(":", 1)[1])
+        except ValueError:
+            return None
+    return None
+
+
+def _place_clipped_geotiff_tile(
+    array: NDArrayAny,
+    request: TileRequest,
+    response: TileResponse,
+    *,
+    fill_value: float = float("nan"),
+) -> NDArrayAny:
+    """
+    Place a smaller-than-requested GeoTIFF onto the request canvas using tags.
+
+    Pads uncovered cells with ``fill_value`` (coverage nodata, not soft-fail).
+    """
+
+    target_height = request.height
+    target_width = request.width
+    if (
+        request.bbox is None
+        or target_height is None
+        or target_width is None
+        or target_height < 1
+        or target_width < 1
+    ):
+        raise ValidationError(
+            "Clipped coverage placement requires tile bbox, width, and height"
+        )
+
+    tiff_bytes = geotiff_bytes_from_response(response)
+    if tiff_bytes[:2] not in (b"II", b"MM"):
+        raise ValidationError(
+            f"Decoded tile has shape {array.shape[:2]}, expected "
+            f"{(target_height, target_width)}, and the response is not a GeoTIFF "
+            "with georeferencing tags for exact placement."
+        )
+    georef = read_geotiff_georef(tiff_bytes)
+    if georef is None:
+        raise ValidationError(
+            f"Decoded tile has shape {array.shape[:2]}, expected "
+            f"{(target_height, target_width)}, but the GeoTIFF lacks usable "
+            "ModelPixelScale/ModelTiepoint georeferencing. "
+            "Refusing to stretch or guess pixel placement."
+        )
+
+    request_epsg = _epsg_code_from_crs(request.crs or request.bbox.crs)
+    if (
+        georef.epsg is not None
+        and request_epsg is not None
+        and georef.epsg != request_epsg
+    ):
+        raise ValidationError(
+            f"Clipped coverage CRS EPSG:{georef.epsg} does not match the "
+            f"requested tile EPSG:{request_epsg}; refusing to reproject."
+        )
+
+    request_transform = GeoTransform(
+        *_mosaic_affine_transform(request.bbox, target_height, target_width)
+    )
+    row_offset, col_offset = pixel_offsets_for_placement(
+        request_transform=request_transform,
+        response_transform=georef.transform,
+    )
+    return place_array_on_canvas(
+        array,
+        target_height=target_height,
+        target_width=target_width,
+        row_offset=row_offset,
+        col_offset=col_offset,
+        fill_value=fill_value,
+    )
+
+
+def _fit_tile_to_request(
+    array: NDArrayAny,
+    request: TileRequest,
+    response: TileResponse,
+) -> NDArrayAny:
+    """Match decoded pixels to the requested tile shape without silent stretch."""
+
+    target_height = request.height or array.shape[0]
+    target_width = request.width or array.shape[1]
+    actual_height, actual_width = array.shape[0], array.shape[1]
+
+    if actual_height == target_height and actual_width == target_width:
+        return array
+
+    if actual_height < target_height or actual_width < target_width:
+        return _place_clipped_geotiff_tile(array, request, response)
+
+    return _resize_tile_array(array, target_height, target_width)
 
 
 def _soft_fill_array(
@@ -1225,10 +1400,7 @@ def _load_tile_array(
                 "tile_decoder must return a 2D or 3D (y, x[, band]) array"
             )
 
-        target_height = request.height or array.shape[0]
-        target_width = request.width or array.shape[1]
-
-        array = _resize_tile_array(array, target_height, target_width)
+        array = _fit_tile_to_request(array, request, response)
         return np.asarray(array, dtype=dtype)
     except Exception as exc:
         if on_tile_error is None or progress is None:
