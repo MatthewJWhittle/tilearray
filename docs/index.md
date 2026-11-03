@@ -12,9 +12,15 @@ The API may change.
 
 1. {doc}`install` — install the package
 2. {doc}`quickstart` — copy-paste recipes against public hosts
+<<<<<<< HEAD
 3. {doc}`inspect-endpoint` — unknown WMS/WMTS/WCS URL → valid config
 4. {doc}`how-it-works` — what happens for a large AOI (plan, fetch, lazy mosaic)
 5. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar, WMTS)
+=======
+3. {doc}`how-it-works` — what happens for a large AOI (plan, fetch, lazy mosaic)
+4. {doc}`multi-aoi-ml-patches` — many sample bboxes / ML chips (loop, not megamosaic)
+5. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar)
+>>>>>>> 57a9202 (Document multi-AOI / ML sample loops under shared host politeness)
 6. {doc}`example-sources` — public endpoints and presets
 7. {doc}`troubleshooting` — when fetches fail or shapes look wrong
 8. {doc}`api/index` — public API reference
@@ -32,6 +38,7 @@ install
 quickstart
 inspect-endpoint
 how-it-works
+multi-aoi-ml-patches
 guides/index
 example-sources
 troubleshooting
@@ -39,6 +46,7 @@ api/index
 design-principles
 roadmap
 ```
+
 
 ```{toctree}
 :caption: Contributing

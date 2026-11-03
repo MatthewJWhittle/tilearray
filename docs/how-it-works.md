@@ -186,7 +186,7 @@ With a DataArray you can:
 
 - **Plot** a computed window or a reduction (`da.plot()` / `da.isel(band=0).plot()`)
 - **Analyse** with xarray/Dask (stats, terrain, resample)
-- **Feed ML** — sample chips or materialise tensors from the same chunked array
+- **Feed ML** — sample chips from one mosaic, or many noncontiguous sites via a per-bbox loop ({doc}`multi-aoi-ml-patches`); do not union distant boxes into one megagrid
 - **Handoff to rioxarray** (optional install) using mosaic attrs — no silent CRS rewrite:
 
 ```python
