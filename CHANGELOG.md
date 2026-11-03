@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Document private/keyed hosts via existing config `params=` / `headers=` (query keys, legacy username/password query params, Bearer/Basic headers); OS Maps XYZ recipe uses env-backed `params` instead of `?key=` in the URL template; soft-fail still hard-aborts 401 (related #58). Caps credential parity for WCS/WMTS is under Changed (#57)
 
+### Fixed
+
+- Soft-fail observability: `compute_with_policy` refreshes `attrs["tilearray_tile_errors"]` (`soft_failed`, `aborted`, `examples`) from `FetchProgress` after lazy `create_array` — same counters as the eager `compute=True` path (#73)
+
 ### Changed
 
 - WCS GeoTIFF decode now uses ``tifffile`` directly (bytes or path); dropped the ``geotiff`` → ``zarr<2.13`` / ``numcodecs<0.16`` pin cage so clean-env installs no longer need that dependency gymnastics. XYZ-without-GDAL posture unchanged (no hard rasterio/GDAL runtime dep) (#53)

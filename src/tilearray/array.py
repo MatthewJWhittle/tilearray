@@ -67,6 +67,9 @@ else:  # pragma: no cover - typing aid
 _FETCH_POLICY_ATTR = "tilearray_fetch_policy"
 _RECOMMENDED_NUM_WORKERS_ATTR = "tilearray_recommended_num_workers"
 _TILE_ERRORS_ATTR = "tilearray_tile_errors"
+# Internal handle so compute_with_policy can refresh tile_errors after lazy compute.
+# Not part of the public attrs contract; stripped from eager/computed results.
+_PROGRESS_REF_ATTR = "_tilearray_fetch_progress"
 
 
 class ArrayRequest(BaseModel):
@@ -485,6 +488,10 @@ def compute_with_policy(
     :class:`~tilearray.fetch.FetchPolicy` defaults. ``max_concurrent`` only adjusts
     Dask worker sizing here — the HTTP fetch gate was fixed at :func:`create_array`
     time from the host/preset ceiling.
+
+    After compute, refreshes ``attrs["tilearray_tile_errors"]`` from the mosaic's
+    :class:`~tilearray.fetch.FetchProgress` when present (same counters as the
+    ``create_array(..., compute=True)`` path).
     """
 
     policy = _resolve_fetch_policy_for_compute(
@@ -504,7 +511,25 @@ def compute_with_policy(
     merged = dict(compute_kwargs)
     merged["scheduler"] = "threads"
     merged["num_workers"] = workers
-    return obj.compute(**merged)
+
+    # Capture before compute: result attrs are a copy; progress is shared in the graph.
+    progress = _progress_from_attrs(obj)
+    result = obj.compute(**merged)
+
+    if progress is not None:
+        # Preferred lazy path: refresh soft-fail / tile-error observability (#73).
+        for target in (result, obj):
+            target_attrs = _attrs_from_compute_target(target)
+            if target_attrs is None:
+                continue
+            if _TILE_ERRORS_ATTR in target_attrs:
+                _refresh_tile_errors_attr_from_progress(target_attrs, progress)
+            # Drop the internal handle from computed results; keep on lazy source
+            # only when the result is a distinct object (re-inspect after compute).
+            if target is result:
+                target_attrs.pop(_PROGRESS_REF_ATTR, None)
+
+    return result
 
 
 def _resolve_fetch_policy(
@@ -628,6 +653,36 @@ def _tile_errors_attr_summary(
         summary["aborted"] = progress.is_aborted()
         summary["examples"] = list(progress.errors[:5])
     return summary
+
+
+def _progress_from_attrs(obj: Any) -> FetchProgress | None:
+    attrs = _attrs_from_compute_target(obj)
+    if attrs is None:
+        return None
+    progress = attrs.get(_PROGRESS_REF_ATTR)
+    if isinstance(progress, FetchProgress):
+        return progress
+    return None
+
+
+def _refresh_tile_errors_attr_from_progress(
+    attrs: dict[str, Any],
+    progress: FetchProgress,
+) -> None:
+    """Update public ``tilearray_tile_errors`` counters from a live FetchProgress."""
+
+    existing = attrs.get(_TILE_ERRORS_ATTR)
+    if not isinstance(existing, dict):
+        return
+    attrs[_TILE_ERRORS_ATTR] = {
+        "policy": existing.get("policy"),
+        "soft_fill_value": existing.get("soft_fill_value"),
+        "soft_fail_max_fraction": existing.get("soft_fail_max_fraction"),
+        "armed": existing.get("armed", False),
+        "soft_failed": progress.soft_failed_count(),
+        "aborted": progress.is_aborted(),
+        "examples": list(progress.errors[:5]),
+    }
 
 
 def create_array(
@@ -777,6 +832,8 @@ def create_array(
         else None,
         progress=None,
     )
+    # Shared with delayed tile loads; compute_with_policy refreshes counters from it.
+    attrs[_PROGRESS_REF_ATTR] = progress
 
     normalized_bbox = request.bbox
     height = int(data.shape[0])
@@ -821,6 +878,7 @@ def create_array(
             else None,
             progress=progress,
         )
+        computed.attrs.pop(_PROGRESS_REF_ATTR, None)
         return computed
     return data_array
 
