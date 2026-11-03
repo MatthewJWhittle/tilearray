@@ -24,6 +24,21 @@ make docs-artifacts
 
 That rebuilds How it works diagrams (offline) and live usage-guide mosaics (network, polite presets). Commit updated assets when they change.
 
+## Politeness soak / large-AOI evidence
+
+PR CI stays offline (`not slow and not net`). Live preset soaks are opt-in:
+
+```bash
+# Nightly-scale multi-tile soak (EA + OSM ceilings + fail-loud contract)
+uv run pytest -m soak --timeout=300 --cov-fail-under=0
+
+# Maintainer large-AOI soak (hundreds–thousands of tiles; feeds 0.3 evidence)
+uv run python scripts/soak_large_aoi_presets.py --host both --profile medium
+uv run python scripts/soak_large_aoi_presets.py --host ea --profile large
+```
+
+Design notes live in {doc}`how-it-works` (Politeness evidence). Do not wire large profiles into always-on PR jobs.
+
 ## First open release checklist (`0.1.0`)
 
 Do **not** push the release tag until the items below that need human secrets/clicks are done.

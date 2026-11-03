@@ -132,6 +132,7 @@ markers = [
     "integration: marks tests as integration tests",
     "slow: marks tests as slow (>1s)",
     "net: marks tests requiring network",
+    "soak: multi-tile politeness soak / bench (also mark net/slow; PR-deselected)",
     "property: marks tests as property-based tests",
 ]
 filterwarnings = [

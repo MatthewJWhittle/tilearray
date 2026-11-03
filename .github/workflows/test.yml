@@ -41,6 +41,10 @@ jobs:
           echo "Live endpoint tests must not be selected on PRs"
           exit 1
         fi
+        if echo "$out" | grep -q 'test_preset_soak'; then
+          echo "Preset soak tests must not be selected on PRs"
+          exit 1
+        fi
         echo "OK: net/slow tests are deselected on PRs"
 
     - name: Run tests

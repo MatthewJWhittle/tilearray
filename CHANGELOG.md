@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Analysis-ready mosaic attrs for xarray/rioxarray handoff: Affine `transform` + `transform_source="mosaic_bbox"`, `band_policy`, and elevation GeoTIFF `nodata`/`_FillValue` (NaN after decode). Documented north-up + optional rioxarray recipe; mosaic CRS remains the request `crs=` (never silently replaced by per-tile GeoTIFF tags) (#54)
+- Large-AOI politeness evidence scaffold (#56): `@pytest.mark.soak` multi-tile cold mosaics under EA DSP + OSM preset ceilings (nightly via `@net`/`@slow`, deselected on PRs); offline fail-loud abort under concurrent pressure; maintainer script `scripts/soak_large_aoi_presets.py` for county-/valley-scale soaks; how-it-works / troubleshooting / building-docs note on nightly vs maintainer split
 - Opt-in plan-time tile error policy for mosaics (`on_tile_error=` / `soft_fail=True`) with library preset `soft_fail_exhausted_tiles`: after retries, soft-fill tile-local exhausted failures (404 / 5xx / transport) as NaN blocks without aborting siblings; auth (401), exhausted 429, decode errors, and soft-fail fraction above `soft_fail_max_fraction` still hard-abort. Default remains hard-fail + `FetchProgress.abort` (#65)
 
 ### Changed
