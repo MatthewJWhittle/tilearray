@@ -61,13 +61,10 @@ def _coerce_crs_enum(value: str | None) -> CRS | None:
         return None
     normalized = normalize_crs_reference(value)
     try:
-        return CRS(normalized)
-    except ValueError:
-        try:
-            return CRS.from_epsg(normalized)
-        except ValueError:
-            logger.debug("Skipping unsupported CRS reference '%s'", value)
-            return None
+        return CRS.parse(normalized)
+    except ValidationError:
+        logger.debug("Skipping unsupported CRS reference '%s'", value)
+        return None
 
 
 class WCSParser:
@@ -228,11 +225,9 @@ class WCSParser:
         crs_list: list[CRS] = []
         for crs_elem in root.findall(".//wcs:SupportedCRS", self.namespaces):
             if crs_elem.text:
-                text = crs_elem.text.strip()
-                try:
-                    crs_list.append(CRS(text))
-                except ValueError:
-                    logger.debug("Skipping unsupported CRS '%s'", text)
+                coerced = _coerce_crs_enum(crs_elem.text.strip())
+                if coerced is not None and coerced not in crs_list:
+                    crs_list.append(coerced)
         for crs_elem in root.findall(".//crs:crsSupported", self.namespaces):
             if crs_elem.text:
                 coerced = _coerce_crs_enum(crs_elem.text.strip())
@@ -265,11 +260,9 @@ class WCSParser:
         crs_list: list[CRS] = []
         for crs_elem in coverage_elem.findall(".//wcs:SupportedCRS", self.namespaces):
             if crs_elem.text:
-                text = crs_elem.text.strip()
-                try:
-                    crs_list.append(CRS(text))
-                except ValueError:
-                    logger.debug("Skipping unsupported CRS '%s'", text)
+                coerced = _coerce_crs_enum(crs_elem.text.strip())
+                if coerced is not None and coerced not in crs_list:
+                    crs_list.append(coerced)
         return crs_list
 
     def _parse_coverage_formats(self, coverage_elem: ET.Element) -> list[Format]:
@@ -688,17 +681,7 @@ class WCSService(BaseService):
         raise ValidationError(f"Invalid WCS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:
-        if isinstance(crs, CRS):
-            return crs
-        if isinstance(crs, str):
-            return (
-                CRS.from_epsg(crs)
-                if crs.upper().startswith("EPSG:")
-                else CRS.from_integer(int(crs))
-            )
-        if isinstance(crs, int):
-            return CRS.from_integer(crs)
-        raise ValidationError(f"Invalid CRS value: {crs!r}")
+        return CRS.parse(crs)
 
     def _resolve_subset(
         self,
@@ -724,11 +707,7 @@ class WCSService(BaseService):
         return subset_crs, subset_bbox, self._format_subset(subset_bbox, axis_labels)
 
     def _default_subset_axes(self, crs: CRS) -> tuple[str, str]:
-        if crs == CRS.EPSG_27700:
-            return ("E", "N")
-        if crs == CRS.EPSG_3857:
-            return ("x", "y")
-        return ("Long", "Lat")
+        return CRS.parse(crs).default_subset_axes()
 
     def _format_subset(
         self, bbox: BoundingBox, axis_labels: tuple[str, str]

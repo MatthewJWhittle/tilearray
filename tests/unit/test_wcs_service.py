@@ -516,8 +516,24 @@ def test_wcs_service_coerce_helpers_validate_inputs() -> None:
     with pytest.raises(ValidationError, match="Unsupported WCS format"):
         service._coerce_format("image/unknown")
 
-    with pytest.raises(ValidationError, match="Invalid CRS value"):
+    assert service._coerce_crs("EPSG:25833") == "EPSG:25833"
+    assert service._coerce_crs(32632) == "EPSG:32632"
+
+    with pytest.raises(ValidationError, match="Did you mean 'EPSG:28992'"):
+        service._coerce_crs("EPGS:28992")
+
+    with pytest.raises(ValidationError, match="Invalid CRS"):
         service._coerce_crs(object())
+
+
+def test_wcs_default_subset_axes_respect_angular_vs_linear() -> None:
+    service = WCSService("http://example.com/wcs", coverage_id="coverage-1")
+
+    assert service._default_subset_axes(CRS.EPSG_4326) == ("Long", "Lat")
+    assert service._default_subset_axes(CRS.EPSG_27700) == ("E", "N")
+    assert service._default_subset_axes(CRS.EPSG_3857) == ("x", "y")
+    assert service._default_subset_axes(CRS.parse("EPSG:25833")) == ("E", "N")
+    assert service._default_subset_axes(CRS.parse("EPSG:32632")) == ("E", "N")
 
 
 def test_service_config_builds_xyz_service() -> None:

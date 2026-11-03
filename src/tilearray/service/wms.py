@@ -14,14 +14,13 @@ def format_wms_bbox(bbox: BoundingBox, crs: CRS, version: str) -> str:
     """
     Format a bounding box for WMS GetMap.
 
-    WMS 1.3.0 follows CRS axis order (latitude-first for EPSG:4326).
-    Earlier versions always use minx,miny,maxx,maxy.
+    WMS 1.3.0 follows CRS axis order (north/south axis first for geographic
+    CRS such as EPSG:4326). Earlier versions always use minx,miny,maxx,maxy.
     """
 
-    if version.startswith("1.3"):
-        if crs in {CRS.EPSG_4326}:
-            return f"{bbox.min_y},{bbox.min_x},{bbox.max_y},{bbox.max_x}"
-        return f"{bbox.min_x},{bbox.min_y},{bbox.max_x},{bbox.max_y}"
+    target = CRS.parse(crs)
+    if version.startswith("1.3") and target.north_axis_first:
+        return f"{bbox.min_y},{bbox.min_x},{bbox.max_y},{bbox.max_x}"
 
     return f"{bbox.min_x},{bbox.min_y},{bbox.max_x},{bbox.max_y}"
 
@@ -116,14 +115,4 @@ class WMSService(BaseService):
         raise ValidationError(f"Invalid WMS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:
-        if isinstance(crs, CRS):
-            return crs
-        if isinstance(crs, str):
-            return (
-                CRS.from_epsg(crs)
-                if crs.upper().startswith("EPSG:")
-                else CRS.from_integer(int(crs))
-            )
-        if isinstance(crs, int):
-            return CRS.from_integer(crs)
-        raise ValidationError(f"Invalid CRS value: {crs!r}")
+        return CRS.parse(crs)

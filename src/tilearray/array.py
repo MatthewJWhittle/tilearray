@@ -907,16 +907,7 @@ def load_array(*args: Any, compute: bool = True, **kwargs: Any) -> xr.DataArray:
 
 
 def _coerce_crs(crs: CRS | str | int) -> CRS:
-    if isinstance(crs, CRS):
-        return crs
-    if isinstance(crs, str):
-        crs_upper = crs.upper()
-        return (
-            CRS.from_epsg(crs_upper)
-            if crs_upper.startswith("EPSG:")
-            else CRS.from_integer(int(crs))
-        )
-    return CRS.from_integer(crs)
+    return CRS.parse(crs)
 
 
 def _mosaic_affine_transform(

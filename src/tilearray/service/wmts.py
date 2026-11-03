@@ -104,10 +104,15 @@ class WMTSParser:
         supported_crs = CRS.EPSG_3857
         if crs_text:
             normalized = crs_text.strip()
-            if normalized.upper().endswith("4326") or "CRS:84" in normalized.upper():
-                supported_crs = CRS.EPSG_4326
-            elif "3857" in normalized:
-                supported_crs = CRS.EPSG_3857
+            try:
+                # Representation only — non-Mercator matrix maths is #93.
+                supported_crs = CRS.parse(normalized)
+            except ValidationError:
+                upper = normalized.upper()
+                if upper.endswith("4326") or "CRS:84" in upper:
+                    supported_crs = CRS.EPSG_4326
+                elif "3857" in upper:
+                    supported_crs = CRS.EPSG_3857
 
         tms = WMTSTileMatrixSet(identifier=identifier, supported_crs=supported_crs)
         for matrix_elem in element.findall("wmts:TileMatrix", self.namespaces):
@@ -539,17 +544,7 @@ class WMTSService(BaseService):
         raise ValidationError(f"Invalid WMTS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:
-        if isinstance(crs, CRS):
-            return crs
-        if isinstance(crs, str):
-            return (
-                CRS.from_epsg(crs)
-                if crs.upper().startswith("EPSG:")
-                else CRS.from_integer(int(crs))
-            )
-        if isinstance(crs, int):
-            return CRS.from_integer(crs)
-        raise ValidationError(f"Invalid CRS value: {crs!r}")
+        return CRS.parse(crs)
 
 
 def _require_index(value: int | None, override: int | None) -> int:

@@ -42,7 +42,7 @@ Keep these concepts separate in types, docs, and tests:
 
 ### Current alpha behaviour (honest contract)
 
-Today `create_array(..., crs=)` is a **single** CRS argument used both to interpret the bbox and to label the mosaic (`attrs["crs"]`). Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS — but the three-role vocabulary above is the **target** design. Do not treat separate `bbox_crs` / output CRS as already shipped.
+Today `create_array(..., crs=)` is a **single** CRS argument used both to interpret the bbox and to label the mosaic (`attrs["crs"]`). That argument accepts any pyproj-valid CRS (presets or EPSG strings such as `EPSG:25833`), not a fixed four-value enum. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS — but the three-role vocabulary above is the **target** design. Do not treat separate `bbox_crs` / output CRS as already shipped.
 
 Prefer a clean documented contract over preserving an ambiguous `crs` forever; any migration will be explicit during alpha.
 
