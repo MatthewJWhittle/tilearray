@@ -78,6 +78,10 @@ print(img.shape, da.attrs["service_type"])
 
 No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. See {doc}`example-sources` for layer quirks.
 
+## Private or keyed hosts
+
+Same habit: config → `create_array` → `compute_with_policy`. Pass static credentials on the config with `params=` (query API keys, legacy username/password query params) or `headers=` (Bearer, API-key headers, Basic). Prefer env-backed `params=` over secrets in XYZ URL templates. Details and the WCS/WMTS capabilities caveat: {doc}`troubleshooting`. Keyed OS Maps XYZ: {doc}`example-sources`.
+
 ## Large mosaics — `compute_with_policy`
 
 For multi-tile lazy mosaics, `compute_with_policy` reads fetch policy from `da.attrs` automatically:

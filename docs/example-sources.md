@@ -40,8 +40,24 @@ Public endpoints and thin fetch presets for testing host quirks — **not** a pr
 
 ## OS Maps API ZXY (needs key)
 
-- Template: `https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=…`
-- Useful for real HTTP 429 throttle behaviour. Attribution required. Do not commit keys.
+- Template (no secret in the URL): `https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png`
+- Pass the key via config `params` from the environment — prefer this over `?key=…` in the template:
+
+```python
+import os
+from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray.types import CRS
+
+config = XYZConfig.from_url(
+    "https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png",
+    zoom=10,
+    params={"key": os.environ["OS_MAPS_API_KEY"]},
+)
+da = create_array(config, bbox=(-0.1, 51.4, 0.0, 51.5), crs=CRS.EPSG_4326)
+arr = compute_with_policy(da)
+```
+
+- Useful for real HTTP 429 throttle behaviour. Attribution required. Do not commit keys. Same `params=` / `headers=` pattern covers other keyed or private tile hosts — see {doc}`troubleshooting`.
 
 ## Other XYZ (restricted)
 
