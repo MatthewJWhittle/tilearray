@@ -10,6 +10,12 @@ from typing import Any
 
 import httpx
 
+from ..error_messages import (
+    describe_coverage_parse_message,
+    format_http_failure,
+    looks_like_html,
+    unsupported_format_message,
+)
 from ..errors import NetworkError, ParseError, ValidationError
 from ..types import (
     CRS,
@@ -122,6 +128,12 @@ class WCSParser:
             raise ParseError(f"Invalid XML content: {exc}", cause=exc) from exc
 
     def parse_describe_coverage(self, xml_content: str) -> CoverageDescription:
+        if looks_like_html(xml_content):
+            raise ParseError(
+                "DescribeCoverage response looks like HTML (login/portal page), "
+                "not WCS XML. Check base_url and credentials via params=/headers=; "
+                "this is unlikely a coverage_id typo."
+            )
         try:
             root = ET.fromstring(xml_content)
 
@@ -131,13 +143,20 @@ class WCSParser:
             ):
                 coverage_elem = root
             if coverage_elem is None:
-                raise ParseError("No coverage description found in XML")
+                raise ParseError(
+                    "No coverage description found in XML "
+                    "(empty response or OGC ExceptionReport). "
+                    "Hint: call get_capabilities() and check CoverageId values."
+                )
 
             identifier = self._get_text(coverage_elem, ".//gml:identifier")
             if not identifier:
                 identifier = self._get_text(coverage_elem, ".//wcs:CoverageId")
             if not identifier:
-                raise ParseError("Coverage identifier not found")
+                raise ParseError(
+                    "Coverage identifier not found in DescribeCoverage XML. "
+                    "Hint: call get_capabilities() and check CoverageId values."
+                )
 
             title = self._get_text(coverage_elem, ".//gml:name")
             abstract = self._get_text(coverage_elem, ".//gml:description")
@@ -405,13 +424,13 @@ class WCSService(BaseService):
         self.version = version
         self.coverage_id = coverage_id or config.get("layer_id")
         self.parser = WCSParser(self.base_url)
+        self._coverage_metadata: dict[str, CoverageDescription] = {}
         self.output_format = self._coerce_format(
             output_format or config.get("format") or Format.GEOTIFF
         )
         self.subsetting_crs = self._coerce_crs(
             crs or config.get("crs") or CRS.EPSG_4326
         )
-        self._coverage_metadata: dict[str, CoverageDescription] = {}
 
     @classmethod
     def from_url(cls, url: str, **config: Any) -> WCSService:
@@ -472,7 +491,12 @@ class WCSService(BaseService):
             )
         except httpx.HTTPError as exc:
             raise NetworkError(
-                f"WCS GetCapabilities failed for {self.base_url}: {exc}",
+                format_http_failure(
+                    exc,
+                    request_name="GetCapabilities",
+                    url=self.base_url,
+                    protocol="WCS",
+                ),
                 cause=exc,
             ) from exc
         return self.parser.parse_get_capabilities(response.text)
@@ -493,10 +517,28 @@ class WCSService(BaseService):
             )
         except httpx.HTTPError as exc:
             raise NetworkError(
-                f"WCS DescribeCoverage failed for {coverage!r} at {self.base_url}: {exc}",
+                format_http_failure(
+                    exc,
+                    request_name="DescribeCoverage",
+                    url=self.base_url,
+                    protocol="WCS",
+                    coverage_id=coverage,
+                ),
                 cause=exc,
             ) from exc
-        description = self.parser.parse_describe_coverage(response.text)
+        try:
+            description = self.parser.parse_describe_coverage(response.text)
+        except ParseError as exc:
+            raise ParseError(
+                describe_coverage_parse_message(
+                    coverage,
+                    self.base_url,
+                    response.text,
+                    content_type=response.headers.get("content-type"),
+                    parse_error=exc,
+                ),
+                cause=exc.cause or exc,
+            ) from exc
         self.set_coverage_metadata(description)
         return description
 
@@ -634,7 +676,15 @@ class WCSService(BaseService):
             try:
                 return Format(fmt)
             except ValueError as exc:
-                raise ValidationError(f"Unsupported WCS format: {fmt}") from exc
+                meta = self.coverage_metadata()
+                raise ValidationError(
+                    unsupported_format_message(
+                        "WCS",
+                        fmt,
+                        server_formats=None if meta is None else meta.supported_formats,
+                        native_format=None if meta is None else meta.native_format,
+                    )
+                ) from exc
         raise ValidationError(f"Invalid WCS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:

@@ -19,6 +19,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from .error_messages import looks_like_html, redact_url
 from .errors import NetworkError, ValidationError
 from .pressure import (
     DEFAULT_PRESSURE_CLASSIFIER,
@@ -605,13 +606,19 @@ def _response_from_httpx(response: httpx.Response, request_url: str) -> TileResp
             success=True,
         )
 
-    error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+    content_type = response.headers.get("content-type", "")
+    body_snip = response.text[:200]
+    error_msg = f"HTTP {response.status_code}: {body_snip}"
+    if looks_like_html(response.text, content_type=content_type):
+        error_msg = (
+            f"HTTP {response.status_code} (HTML body, not tile bytes): {body_snip}"
+        )
     return TileResponse(
         data=b"",
-        content_type=response.headers.get("content-type", ""),
+        content_type=content_type,
         status_code=response.status_code,
         headers=dict(response.headers),
-        url=str(response.url),
+        url=redact_url(str(response.url)),
         success=False,
         error_message=error_msg,
     )

@@ -12,6 +12,7 @@ from urllib.parse import quote
 
 import httpx
 
+from ..error_messages import format_http_failure, unsupported_format_message
 from ..errors import NetworkError, ParseError, ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
@@ -260,7 +261,13 @@ class WMTSService(BaseService):
             )
         except httpx.HTTPError as exc:
             raise NetworkError(
-                f"WMTS GetCapabilities failed for {self.base_url}: {exc}",
+                format_http_failure(
+                    exc,
+                    request_name="GetCapabilities",
+                    url=self.base_url,
+                    protocol="WMTS",
+                    layer=self.layer,
+                ),
                 cause=exc,
             ) from exc
         self._capabilities = self.parser.parse_get_capabilities(response.text)
@@ -528,7 +535,7 @@ class WMTSService(BaseService):
             try:
                 return Format(fmt)
             except ValueError as exc:
-                raise ValidationError(f"Unsupported WMTS format: {fmt}") from exc
+                raise ValidationError(unsupported_format_message("WMTS", fmt)) from exc
         raise ValidationError(f"Invalid WMTS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:

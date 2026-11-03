@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..error_messages import unsupported_format_message
 from ..errors import ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
@@ -111,7 +112,7 @@ class WMSService(BaseService):
             try:
                 return Format(fmt)
             except ValueError as exc:
-                raise ValidationError(f"Unsupported WMS format: {fmt}") from exc
+                raise ValidationError(unsupported_format_message("WMS", fmt)) from exc
         raise ValidationError(f"Invalid WMS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:

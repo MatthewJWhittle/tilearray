@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from ..error_messages import undetectable_service_type_message
 from ..errors import ConfigurationError, ValidationError
 from ..tiles import snap_bbox_outward
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
@@ -294,7 +295,7 @@ def detect_service_type(
     if fallback is not None:
         return fallback
 
-    raise ConfigurationError(f"Unable to detect service type from URL: {url}")
+    raise ConfigurationError(undetectable_service_type_message(url))
 
 
 def get_service(
