@@ -124,9 +124,9 @@ Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xa
 | Path | What happens |
 |------|----------------|
 | `create_array(...)` (default) | **Lazy** Dask graph — coords/attrs ready; pixels not all in RAM. |
-| `create_array(..., compute=True)` / `load_array(...)` | Build then compute immediately. |
+| {py:func}`tilearray.compute_with_policy` | **Preferred** compute path: thread workers aligned to the fetch ceiling. |
+| `load_array(...)` | Eager sugar for `create_array(..., compute=True)` — builds then computes immediately (same fetch-aligned workers). Prefer lazy + `compute_with_policy` on primary paths. |
 | `da.compute()` | Works, but default Dask worker count can under-use a high fetch ceiling. |
-| {py:func}`tilearray.compute_with_policy` | Preferred for multi-tile mosaics: thread workers aligned to the fetch ceiling. |
 | `cache_dir=...` | Optional on-disk tile cache; warm hits skip the network. |
 
 Memory tracks **what you compute** (full mosaic, a reduction, a window) — not automatically the whole AOI. Scale with bbox, chunks, and fetch policy.

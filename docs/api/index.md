@@ -17,7 +17,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
    array.compute_thread_pool_size
 ```
 
-`create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_with_policy` over plain `.compute()` on multi-tile mosaics so Dask workers match the fetch ceiling. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
+`create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_with_policy` over plain `.compute()` so Dask workers match the fetch ceiling. {py:func}`~tilearray.load_array` is eager sugar (`create_array(..., compute=True)` by default) — useful for tiny windows, not a second primary habit. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
 
 `**service_options` on `create_array` / `load_array` is one bag with three key families (**fetch** politeness, **planner** geometry, **identity** / protocol). Concurrency names each have one job (`max_concurrent_requests` host ceiling vs `FetchPolicy.max_concurrent` shared gate vs `call_max_concurrent` per-call vs `compute_with_policy(..., max_concurrent=)` Dask workers). Name map: {doc}`../how-it-works`.
 

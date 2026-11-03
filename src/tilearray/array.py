@@ -884,7 +884,12 @@ def create_array(
 
 
 def load_array(*args: Any, compute: bool = True, **kwargs: Any) -> xr.DataArray:
-    """Convenience wrapper around :func:`create_array`."""
+    """Eager sugar for :func:`create_array`.
+
+    Defaults to ``compute=True`` so a small window materialises immediately with
+    fetch-aligned Dask workers. For multi-tile mosaics prefer lazy
+    ``create_array`` (default ``compute=False``) plus :func:`compute_with_policy`.
+    """
 
     return create_array(*args, compute=compute, **kwargs)
 

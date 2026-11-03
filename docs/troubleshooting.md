@@ -39,7 +39,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 |---------|--------------|------------|
 | Empty / invalid coverage | CoverageId ≠ URL path slug | Use the GetCapabilities id (e.g. `UUID__Lidar_Composite_Elevation_DTM_1m`), or `WCSConfig.for_ea_dsp` with the id from {doc}`example-sources` |
 | Many 403s / hard fail mid-mosaic | Burst above the EA ceiling | Keep AIMD ceiling at **10** (the EA preset). Do not raise `max_concurrent_requests` for county-scale cold mosaics |
-| Slow multi-tile mosaic | Dask workers << fetch ceiling | Use `compute_with_policy` (or `create_array(..., compute=True)`) |
+| Slow multi-tile mosaic | Dask workers << fetch ceiling | Use `compute_with_policy` |
 
 ## OpenStreetMap XYZ
 

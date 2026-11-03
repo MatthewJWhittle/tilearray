@@ -82,13 +82,13 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
         config,
         OSM_LONDON_BBOX,
         CRS.EPSG_4326,
-        compute=True,
     )
+    arr = compute_with_policy(da)
     elapsed = time.perf_counter() - start
 
     # OSM raster tiles are often palette PNGs → single-band after decode today.
     fig, ax = plt.subplots(figsize=(5.5, 5.5))
-    da.plot.imshow(ax=ax, cmap="gray", add_colorbar=False)
+    arr.plot.imshow(ax=ax, cmap="gray", add_colorbar=False)
     ax.set_title("OpenStreetMap XYZ — central London")
     ax.set_xlabel("longitude")
     ax.set_ylabel("latitude")
@@ -112,16 +112,16 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
         "bbox": list(OSM_LONDON_BBOX),
         "crs": "EPSG:4326",
         "zoom": OSM_ZOOM,
-        "shape": list(da.shape),
-        "dims": list(da.dims),
+        "shape": list(arr.shape),
+        "dims": list(arr.dims),
         "elapsed_s": round(elapsed, 3),
-        "mean": float(np.nanmean(da.values)),
+        "mean": float(np.nanmean(arr.values)),
         "figure": png.name,
         "attribution": "© OpenStreetMap contributors",
         "note": "OSM PNGs are often palette mode; decoded mosaic is single-band today",
     }
     _write_json(out_dir / "osm-london.json", stats)
-    print(f"  wrote {png.name} shape={da.shape} in {elapsed:.1f}s")
+    print(f"  wrote {png.name} shape={arr.shape} in {elapsed:.1f}s")
     return stats
 
 
@@ -139,24 +139,25 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
         },
     )
     start = time.perf_counter()
-    da = create_array(config, GIBS_BBOX, CRS.EPSG_4326, compute=True)
+    da = create_array(config, GIBS_BBOX, CRS.EPSG_4326)
+    arr = compute_with_policy(da)
     elapsed = time.perf_counter() - start
 
     fig, ax = plt.subplots(figsize=(6.0, 5.0))
-    if da.ndim == 3 and "band" in da.dims and da.sizes["band"] >= 3:
-        rgb = np.clip(np.asarray(da.values[..., :3]) / 255.0, 0, 1)
+    if arr.ndim == 3 and "band" in arr.dims and arr.sizes["band"] >= 3:
+        rgb = np.clip(np.asarray(arr.values[..., :3]) / 255.0, 0, 1)
         ax.imshow(
             rgb,
             extent=[
-                float(da.x.min()),
-                float(da.x.max()),
-                float(da.y.min()),
-                float(da.y.max()),
+                float(arr.x.min()),
+                float(arr.x.max()),
+                float(arr.y.min()),
+                float(arr.y.max()),
             ],
             origin="upper",
         )
     else:
-        da.plot.imshow(ax=ax, add_colorbar=False)
+        arr.plot.imshow(ax=ax, add_colorbar=False)
     ax.set_title("NASA GIBS Blue Marble — mid-Atlantic glance")
     ax.set_xlabel("longitude")
     ax.set_ylabel("latitude")
@@ -180,15 +181,15 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
         "bbox": list(GIBS_BBOX),
         "crs": "EPSG:4326",
         "zoom": GIBS_ZOOM,
-        "shape": list(da.shape),
-        "dims": list(da.dims),
+        "shape": list(arr.shape),
+        "dims": list(arr.dims),
         "elapsed_s": round(elapsed, 3),
-        "mean": float(np.nanmean(da.values)),
+        "mean": float(np.nanmean(arr.values)),
         "figure": png.name,
         "template_note": "GIBS path is {z}/{y}/{x} (row before col)",
     }
     _write_json(out_dir / "gibs-bluemarble.json", stats)
-    print(f"  wrote {png.name} shape={da.shape} in {elapsed:.1f}s")
+    print(f"  wrote {png.name} shape={arr.shape} in {elapsed:.1f}s")
     return stats
 
 
