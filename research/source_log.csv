@@ -1,0 +1,66 @@
+source_id,type,title_or_label,url,accessed_utc,content_date,verification_method,verification_status,relevance,used_in,notes
+P01,primary_problem,Getting spatially referenced tiles from WMTS,https://gis.stackexchange.com/questions/323374/getting-spatially-referenced-tiles-from-wmts,2026-11-03,2019-05-20,WebFetch,verified,high,evidence_matrix;segments;opportunity,Job A origin-story match
+P02,primary_problem,Download custom extent from WMTS,https://gis.stackexchange.com/questions/282675/download-custom-extent-from-wmts,2026-11-03,2018-05-12,WebFetch,verified,high,evidence_matrix;opportunity,10k patches automation
+P03,primary_problem,OWSLib WCS 2.0.1 GetCoverage,https://gis.stackexchange.com/questions/483928/how-to-create-wcs-2-0-1-getcoverage-request-using-owslib,2026-11-03,2024-07-18,WebFetch,verified,medium,evidence_matrix,Timeout/docs; httpx bypass
+P04,primary_problem,OWSLib WCS GetCoverage identifier,https://gis.stackexchange.com/questions/377275/owslib-python-wcs-getcoverage-does-not-work,2026-11-03,2020-10-22,WebFetch,verified,low-medium,evidence_matrix,API footgun
+P05,primary_problem,Unknown layer WMS OWSLib typo,https://gis.stackexchange.com/questions/486554/unknown-layer-exception-when-downloading-wms-chip-with-owslib,2026-11-03,2024-10-07,WebFetch,verified,low,evidence_matrix,Counterexample (typo)
+P06,primary_problem,OWSLib issue 703 WCS xarray,https://github.com/geopython/OWSLib/issues/703,2026-11-03,2020-08-28,GitHub REST API,verified,high,evidence_matrix;opportunity;segments,Tile+rasterio.merge workaround
+P07,primary_problem,OWSLib issue 853 SoilGrids,https://github.com/geopython/OWSLib/issues/853,2026-11-03,2022-12-13,GitHub REST API,verified,medium,evidence_matrix,subsettingCrs / server memory
+P08,primary_problem,r/QGIS downloading tiles,https://www.reddit.com/r/QGIS/comments/1jd8k3e,2026-11-03,2025-03-17,WebSearch snippet; curl JSON 403,partial,medium,evidence_matrix,Re-fetch before public citation
+P09,primary_problem,r/gis ArcGIS cache to GeoTIFF,https://www.reddit.com/r/gis/comments/1n6t59h/export_arcgis_mapserver_cached_tiles_to_a_single/,2026-11-03,2025-09-02,WebSearch snippet; curl JSON 403,partial,high,evidence_matrix;competitors,Names tms2geotiff/leafmap
+P10,primary_problem,r/gis WMS 0-255 compression,https://www.reddit.com/r/gis/comments/12sbsky/the_wms_0255_compression_problem_ideas_on_how_to/,2026-11-03,2023-04-19,WebSearch snippet; curl JSON 403,partial,high,evidence_matrix;opportunity,Semantic counterexample
+P11,primary_problem,r/gis WMS vs WCS vs WMTS,https://www.reddit.com/r/gis/comments/1ha7hzh/wms_vs_wcs_vs_wmts_data/,2026-11-03,2024-12-09,WebSearch snippet,partial,low,evidence_matrix,Educational
+P12,primary_problem,r/gis WMS to TMS proxy,https://www.reddit.com/r/gis/comments/k9p2lk/python_function_to_translate_wms_to_tms_and_back/,2026-11-03,2020-12-09,WebSearch snippet,partial,low,evidence_matrix,Wrong JTBD
+P13,primary_problem,WMS tiles R Shiny offline,https://gis.stackexchange.com/questions/479485/download-wms-tiles-in-r-shiny-for-offline-use,2026-11-03,2024-04-03,WebFetch,verified,low,evidence_matrix,R interop only
+P14,primary_problem,r/gis pip install gdal,https://www.reddit.com/r/gis/comments/1hojo4t/whats_the_point_of_pip_install_gdal_eli5/,2026-11-03,2024-12-29,WebSearch snippet,partial,low,evidence_matrix;opportunity,Weak GDAL-free signal
+P15,primary_problem,r/gis OSGeo4W PyCharm,https://www.reddit.com/r/gis/comments/1hpjarx/installed_gdal_via_osgeo4w_how_do_i_get_it_to/,2026-11-03,2024-12-30,WebSearch snippet,partial,low,evidence_matrix,Env wiring
+P16,primary_problem,r/gis Docker GDAL,https://www.reddit.com/r/gis/comments/1mjh9uq/docker_gdal_setup/,2026-11-03,2025-08-06,WebSearch snippet,partial,low,evidence_matrix,OSGeo images exist
+G01,standard,OSM Tile Usage Policy,https://operations.osmfoundation.org/policies/tiles/,2026-11-03,current,WebFetch,verified,high,opportunity;validation_plan,No bulk scrape; constrains demos
+G02,standard,GDAL Python bindings install,https://gdal.org/en/latest/api/python/python_bindings.html,2026-11-03,current,WebFetch,verified,medium,opportunity,Upstream admits install complexity
+G03,standard,WMS/WMTS vs WCS semantics,https://www.ogc.org/standards/ (plus Digital Earth Africa / NRCan summaries),2026-11-03,current,WebFetch/WebSearch,verified,high,opportunity_summary;opportunity,Rendered vs numerical
+D01,community_guidelines,Pangeo Discourse guidelines,https://discourse.pangeo.io/guidelines,2026-11-03,current,WebFetch,verified,medium,validation_plan,Soft technical Q preferred
+D02,community_guidelines,r/gis rules update 2019,https://www.reddit.com/r/gis/comments/de7y9w/sub_rules_update/,2026-11-03,2019-10-06,WebSearch/fetch partial,partial,medium,validation_plan,about/rules page blocked
+D03,community_guidelines,r/Python community updates,https://www.reddit.com/r/Python/comments/1ak0ysc/rpython_community_updates/,2026-11-03,2024,WebSearch,partial,medium,validation_plan,No cold alpha showcase
+D04,community_guidelines,GIS SE on-topic,https://gis.stackexchange.com/help/on-topic,2026-11-03,current,WebFetch,verified,medium,validation_plan,Concrete Q not vendor support
+D05,community_guidelines,OWSLib CONTRIBUTING,https://github.com/geopython/OWSLib/blob/master/CONTRIBUTING.md,2026-11-03,current,WebFetch raw,verified,medium,validation_plan,No marketing issues
+N07,discovery,SoilGrids OWSLib units,https://gis.stackexchange.com/questions/373455/i-cant-get-soilgrid-image-with-python-owslib,2026-11-03,2020-09-07,WebFetch,verified,medium,evidence_matrix,Educational counterexample
+N08,discovery,SoilGrids WCS from Python docs,https://docs.isric.org/globaldata/soilgrids/WCS_from_Python.html,2026-11-03,2025-12-04,WebFetch,verified,high,evidence_matrix;opportunity,Happy OWSLib path
+N09,discovery,OWSLib issue 1010 identifier,https://github.com/geopython/OWSLib/issues/1010,2026-11-03,2025-08-22,WebSearch+API corroboration,verified,medium,evidence_matrix,Footgun persists 2025
+N10,discovery,gdal-dev parallel WMTS,https://lists.osgeo.org/pipermail/gdal-dev/2024-May/059044.html,2026-11-03,2024-05-29,WebFetch,verified,high,evidence_matrix;competitors,GDAL capable counterexample
+N11,discovery,wmts-downloader script,https://github.com/GastonZalba/wmts-downloader,2026-11-03,readme,WebFetch,verified,medium,evidence_matrix;competitors,Homegrown tool
+N12,discovery,wms-scraper,https://github.com/GeoHistoricalData/wms-scraper,2026-11-03,readme,WebFetch,verified,medium,competitors,GDAL CLI mosaic
+N13,discovery,QGIS Basemap Tile Downloader,https://github.com/cvonk/qgis-basemap-tile-downloader,2026-11-03,plugin_1.13.0,WebFetch,verified,high,competitors;segments,Four-protocol desktop peer
+N14,discovery,RSGISLib WMTS tools,https://rsgislib.org/rsgislib_tools_wmts_tools.html,2026-11-03,docs,WebFetch,verified,medium,competitors,GDAL-backed RS stack
+N15,discovery,rasterama PyPI,https://pypi.org/project/rasterama/,2026-11-03,0.1.2,WebFetch,verified,medium,competitors,XYZ→GeoTIFF no GUI
+N16,discovery,leafmap map_tiles_to_geotiff,https://leafmap.org/notebooks/74_map_tiles_to_geotiff/,2026-11-03,current,WebFetch,verified,high,competitors;segments,CV/ML file path
+N17,discovery,contextily local files,https://contextily.readthedocs.io/en/stable/working_with_local_files.html,2026-11-03,current,WebFetch,verified,high,competitors,bounds2raster
+N18,discovery,PyGeoOGC docs,https://docs.hyriver.io/readme/pygeoogc.html,2026-11-03,0.19.5,WebFetch+PyPI JSON,verified,high,competitors,WMS AOI peer
+N19,discovery,Pangeo WMTS cookbook proposal,https://discourse.pangeo.io/t/proposed-cookbook-web-map-tile-services-wmts/3505,2026-11-03,2023-06-09,WebFetch,verified,medium,validation_plan;segments,Viz framing
+N20,discovery,Pangeo climate viz modernization,https://discourse.pangeo.io/t/advice-on-modernizing-a-climate-visualization-web-application-for-the-pangeo-software-stack/4789,2026-11-03,~2024,WebFetch,verified,high,opportunity;segments,COG/Zarr preference
+N21,discovery,Pangeo raster format advice,https://discourse.pangeo.io/t/whats-the-best-file-format-to-chose-for-raster-imagery-and-masks-products/4555,2026-11-03,undated,WebFetch,verified,medium,opportunity,STAC+COG
+N22,discovery,NASA GIBS Python usage,https://nasa-gibs.github.io/gibs-api-docs/python-usage/,2026-11-03,current,WebFetch,verified,high,competitors,Official recipes
+N23,discovery,PyGMT WMS/WMTS,https://forum.generic-mapping-tools.org/t/using-wms-or-wmts-source-with-pygmt/4786,2026-11-03,forum,WebFetch,verified,medium,evidence_matrix,Happy GDAL
+N24,discovery,PAVICS WCS example,https://pavics-sdi.readthedocs.io/en/latest/notebooks/WCS_example.html,2026-11-03,docs,WebFetch,verified,medium,evidence_matrix,OWSLib happy path
+N25,discovery,MAAP EDAV WCS tutorial,https://docs.maap-project.org/en/latest/technical_tutorials/access/edav_wcs_data.html,2026-11-03,2023-04-03,WebFetch,verified,medium,evidence_matrix,OWSLib→rioxarray
+N26,discovery,tilearray GitHub/PyPI presence,https://github.com/MatthewJWhittle/tilearray,2026-11-03,2026-11-01_pypi,GitHub API,verified,high,opportunity;executive_summary,0 stars/forks; no level 3/4
+C01,competitor,OWSLib,https://github.com/geopython/OWSLib,2026-11-03,0.36.0,WebFetch+PyPI,verified,high,competitor_matrix,Protocol client
+C02,competitor,PyGeoOGC,https://github.com/hyriver/pygeoogc,2026-11-03,0.19.5,WebFetch+PyPI,verified,high,competitor_matrix,WMS peer
+C03,competitor,GeoDataCatalog,https://github.com/geodatacatalog/geodatacatalog,2026-11-03,2026-09-30,GitHub API,verified,high,competitor_matrix,Closest multi-protocol→xarray peer
+C04,competitor,GDAL WMTS driver,https://gdal.org/en/stable/drivers/raster/wmts.html,2026-11-03,current,WebFetch,verified,high,competitor_matrix,Incumbent Job A
+C05,competitor,GDAL WMS driver,https://gdal.org/en/stable/drivers/raster/wms.html,2026-11-03,current,WebFetch,verified,high,competitor_matrix,Incumbent Job C
+C06,competitor,contextily,https://github.com/geopandas/contextily,2026-11-03,1.7.1,WebFetch+PyPI,verified,high,competitor_matrix,XYZ basemap
+C07,competitor,tms2geotiff,https://github.com/gumblex/tms2geotiff,2026-11-03,ongoing,WebFetch,verified,high,competitor_matrix,XYZ→GeoTIFF
+C08,competitor,leafmap,https://github.com/opengeos/leafmap,2026-11-03,0.64.0,WebFetch+PyPI,verified,high,competitor_matrix,Notebook + geotiff
+C09,competitor,QGIS Basemap Tile Downloader,https://plugins.qgis.org/plugins/basemap_tile_downloader/,2026-11-03,1.13.0,WebFetch,verified,high,competitor_matrix,Desktop four-protocol
+C10,competitor,rioxarray,https://github.com/corteva/rioxarray,2026-11-03,0.24.0,WebFetch+PyPI,verified,high,competitor_matrix,Array I/O not OGC client; note: matrix may say vylor fork path—canonical corteva
+C11,competitor,xarray-spatial,https://github.com/xarray-contrib/xarray-spatial,2026-11-03,0.10.20,WebFetch+PyPI,verified,low,competitor_matrix,Analysis not fetch
+C12,competitor,terrio,https://github.com/opengeos/terrio,2026-11-03,0.6.1,WebFetch+PyPI,verified,low,competitor_matrix,GDAL-free I/O not OGC
+C13,competitor,GRASS r.in.wms,https://grass.osgeo.org/grass-stable/manuals/r.in.wms.html,2026-11-03,current,WebFetch,verified,medium,competitor_matrix,GRASS-centric
+C14,competitor,mercantile,https://github.com/mapbox/mercantile,2026-11-03,1.2.1,WebFetch,verified,low,competitor_matrix,Tile math only
+C15,competitor,TiTiler,https://github.com/developmentseed/titiler,2026-11-03,0.25.0,WebFetch,verified,low,competitor_matrix,Opposite direction (serve)
+C16,competitor,NASA GIBS Python examples,https://nasa-gibs.github.io/gibs-api-docs/python-usage/,2026-11-03,current,WebFetch,verified,medium,competitor_matrix,Recipes not library
+DOC_HOME,product_docs,tilearray docs home,https://matthewjwhittle.github.io/tilearray/,2026-11-03,current,WebFetch,verified,high,all,Fair comparison baseline
+DOC_HOW,product_docs,tilearray how it works,https://matthewjwhittle.github.io/tilearray/how-it-works.html,2026-11-03,current,WebFetch,verified,high,opportunity;executive_summary,Lazy Dask mosaic + politeness
+README,product_docs,tilearray README main,https://github.com/MatthewJWhittle/tilearray/blob/main/README.md,2026-11-03,main@69ca5d9,local_checkout,verified,high,all,Alpha; WCS/WMS/WMTS/XYZ
+INTERNAL_PRIMARY,internal_working,Primary source verification notes,/cursor/stores/bc-01a19102-6c87-71a9-a8e6-f17ef3d71f0d/internal/primary-source-verification.md,2026-11-03,2026-11-03,agent_working_notes,working,n/a,methodology,Not a user-facing deliverable
+INTERNAL_DISC,internal_working,Discovery sources notes,/cursor/stores/bc-01a19102-6c87-71a9-a8e6-f17ef3d71f0d/internal/user-research/discovery-sources.md,2026-11-03,2026-11-03,agent_working_notes,working,n/a,methodology,Not a user-facing deliverable
