@@ -19,6 +19,8 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 
 `create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_with_policy` over plain `.compute()` on multi-tile mosaics so Dask workers match the fetch ceiling. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
 
+`**service_options` on `create_array` / `load_array` is one bag with three key families (**fetch** politeness, **planner** geometry, **identity** / protocol). Concurrency names each have one job (`max_concurrent_requests` host ceiling vs `FetchPolicy.max_concurrent` shared gate vs `call_max_concurrent` per-call vs `compute_with_policy(..., max_concurrent=)` Dask workers). Name map: {doc}`../how-it-works`.
+
 ## Configs
 
 ```{eval-rst}
@@ -103,6 +105,8 @@ Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilear
 ```
 
 `FetchPolicy` controls concurrency, retries, timeouts, rate limits, and optional AIMD / circuit-breaker behaviour. Service configs expose the same knobs and build a policy via `.fetch_policy()`. Advanced callers may also import it as `tilearray.fetch.FetchPolicy`.
+
+`FetchPolicy.max_concurrent` is the **shared process-gate** ceiling. Per-call politeness is `call_max_concurrent` (or a lower `max_concurrent_requests` override on `create_array`). `compute_with_policy(..., max_concurrent=)` sizes Dask workers only — see {doc}`../how-it-works`.
 
 ## Registry
 

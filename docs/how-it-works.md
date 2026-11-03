@@ -50,6 +50,33 @@ WCS/WMTS **GetCapabilities** / **DescribeCoverage** (and direct `WCSService.get_
 
 AIMD only helps if Dask can schedule enough tile loads — use `compute_with_policy` for multi-tile mosaics.
 
+### `**service_options` key families
+
+`create_array(..., **service_options)` is one bag today. Keys fall into three families — know which family you are editing:
+
+| Family | Keys (illustrative) | What consumes them |
+|--------|---------------------|--------------------|
+| **Fetch** | `max_concurrent_requests`, `max_connections`, `fetch_retries`, `fetch_timeout`, `rate_limit_per_second`, `rate_limiter`, AIMD / circuit-breaker fields (`adaptive_concurrency`, `initial_concurrent_requests`, …) | Popped into `FetchPolicy` before planning |
+| **Planner** | `resolution`, `origin` | Snap / grid planning (`ArrayRequest`); leftovers join tile options |
+| **Identity / protocol** | `headers`, `params`, coverage / layer / style / TMS / zoom… | Leftover options → service / `TileRequest` |
+
+Soft-fail knobs (`on_tile_error`, `soft_fail`, `soft_fill_value`, `soft_fail_max_fraction`) are **named** parameters on `create_array` / `load_array`, not bag keys — same progressive-disclosure pattern as `on_progress` and `cache_dir`.
+
+API surface: {doc}`api/index`. When a knob misbehaves: {doc}`troubleshooting`.
+
+### `max_concurrent*` — one job per name
+
+Same-ish names, different jobs. **Host ceiling ≠ call politeness ≠ Dask threads.**
+
+| Name | Where | Job |
+|------|-------|-----|
+| `max_concurrent_requests` | `*Config` field **and** `create_array` override via `**service_options` | Config / preset **host ceiling** input. On a preset config, a **lower** override is call-local only; a **raise** lifts the shared ceiling ([#67](https://github.com/MatthewJWhittle/tilearray/pull/67)). |
+| `FetchPolicy.max_concurrent` | Policy / attrs `tilearray_fetch_policy` | **Shared process-gate** (part of the fetcher `cache_key`). |
+| `call_max_concurrent` | `FetchPolicy` + `FetchProgress` | **Per-call / per-session** in-flight cap; **not** in `cache_key`. |
+| `compute_with_policy(..., max_concurrent=)` | Compute helper | **Dask worker sizing only** (merges into attrs policy for `num_workers`). The HTTP gate was fixed at `create_array`. |
+
+Do **not** treat `FetchPolicy(max_concurrent=1)` as the polite-call recipe — that shrinks the shared gate for sibling sessions. Prefer a lower `max_concurrent_requests=` override on `create_array` (or `call_max_concurrent` on the session) so the host ceiling stays intact.
+
 ### Politeness evidence (nightly vs maintainer)
 
 Multi-tile cold mosaics under the EA + OSM presets are **evidence**, not folklore:

@@ -14,6 +14,16 @@ result = compute_with_policy(da)          # or compute_with_policy(da.mean())
 
 `create_array` stores fetch policy on `da.attrs`; `compute_with_policy` reads it automatically. You do not need to pass `max_concurrent` by hand.
 
+## Concurrency names and `**service_options`
+
+| Symptom | Likely mix-up | What to do |
+|---------|---------------|------------|
+| One polite call serialises sibling mosaics | Shared gate shrunk (`FetchPolicy.max_concurrent=1` / raised-then-shared override) | Lower `max_concurrent_requests=` on `create_array` (call-local) or set `call_max_concurrent`; keep the preset host ceiling |
+| `compute_with_policy(..., max_concurrent=N)` changed HTTP in-flight | That kwarg sizes **Dask workers only** | Set fetch politeness at `create_array` / config; see the name map in {doc}`how-it-works` |
+| Headers / `resolution` / AIMD knobs “ignored” or applied oddly | Same `**service_options` bag feeds **fetch**, **planner**, and **identity** families | Match the key to its family in {doc}`how-it-works` (fetch keys are popped into `FetchPolicy` first) |
+
+Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `**service_options` key.
+
 ## CRS / attrs / rioxarray handoff
 
 | Symptom | Likely cause | What to do |
