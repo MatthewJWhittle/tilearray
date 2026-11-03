@@ -103,6 +103,27 @@ Do **not** treat `FetchPolicy(max_concurrent=1)` as the polite-call recipe — t
 
 Stay at or below preset ceilings on multi-tile cold mosaics. Soft-fill is plan-time opt-in; the default remains hard `NetworkError` + sibling abort after retries. Maintainer soak commands live in {doc}`building-docs`.
 
+### Laptop → larger machine (don’t stampede)
+
+The fetch gate (fixed semaphore or AIMD) is **process-local**. Threads in one Python process share it; separate OS processes and Dask distributed workers do **not**. Scaling “the wrong way” multiplies in-flight HTTP by worker count even when each worker looks polite.
+
+| Scale shape | What the gate does | Recipe |
+|-------------|--------------------|--------|
+| **One process, Dask threads** | Shared ceiling holds for sibling mosaics | Prefer {py:func}`~tilearray.compute_with_policy` (always uses `scheduler="threads"`). Keep preset host ceilings; lower per-call with `max_concurrent_requests=` / `call_max_concurrent`. |
+| **Several mosaics, same process** | Aggregate in-flight ≤ host ceiling | Same configs / presets; do not shrink `FetchPolicy.max_concurrent` for one polite call. |
+| **Multi-process or distributed workers** | Each process has its own gate — **no global ceiling** | Do **not** advertise a cluster-wide host limit. Either stay on threads, or set each worker’s ceiling to about `floor(preset_ceiling / N_workers)` and treat that as a conservative recipe, not a library guarantee. |
+
+**Don’ts**
+
+- Do not use `da.compute(scheduler="processes")` or a Dask distributed cluster expecting the AIMD / semaphore gate to protect the host — those workers do not share one gate.
+- Do not raise `max_concurrent_requests` past the preset to “use the bigger machine”; more CPU does not raise the provider’s ceiling.
+- Do not launch N independent Python jobs against the same host each at the full preset ceiling.
+- Do not expect tilearray to coordinate politeness across machines — there is no second client or distributed fetch coordinator.
+
+`Retry-After`, AIMD pressure backoff, circuit breakers, and hard-fail / soft-fail abort still apply **inside** each process. Concurrent mosaics in one process share that behaviour; across processes you only get N independent copies.
+
+Same public API on a larger box: `create_array` → `compute_with_policy`. Bigger machines help when the bottleneck is CPU/RAM for decode and assemble under an honest host ceiling — not by multiplying HTTP storms.
+
 ---
 
 ## 3 · Decode

@@ -168,7 +168,7 @@ Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilear
 
 `FetchPolicy` controls concurrency, retries, timeouts, rate limits, and optional AIMD / circuit-breaker behaviour. Service configs expose the same knobs and build a policy via `.fetch_policy()`. Advanced callers may also import it as `tilearray.fetch.FetchPolicy`.
 
-`FetchPolicy.max_concurrent` is the **shared process-gate** ceiling. Per-call politeness is `call_max_concurrent` (or a lower `max_concurrent_requests` override on `create_array`). `compute_with_policy(..., max_concurrent=)` sizes Dask workers only — see {doc}`../how-it-works`.
+`FetchPolicy.max_concurrent` is the **shared process-local gate** ceiling (threads in one process share it; separate OS processes / distributed workers do not). Per-call politeness is `call_max_concurrent` (or a lower `max_concurrent_requests` override on `create_array`). `compute_with_policy(..., max_concurrent=)` sizes Dask **thread** workers only and always uses `scheduler="threads"` — see {doc}`../how-it-works` (including don’t-stampede notes).
 
 ## Registry
 
