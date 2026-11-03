@@ -1,10 +1,28 @@
-"""Fetch-policy presets for common public tile endpoints."""
+"""Fetch-policy presets for common public tile endpoints.
+
+Host folklore (politeness ceilings, User-Agent, AIMD) lives here — not on
+``WCSConfig`` / ``XYZConfig``. Compose with protocol constructors::
+
+    WCSConfig.from_url(url, coverage_id, **ea_dsp_fetch_defaults())
+    XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from ._version import __version__
+
+__all__ = [
+    "OSM_TILE_TEMPLATE",
+    "EA_LIDAR_WCS_URL",
+    "EA_LIDAR_COVERAGE_ID",
+    "EA_LIDAR_BENCH_BBOX",
+    "DEFAULT_CONTACT_URL",
+    "tilearray_user_agent",
+    "osm_fetch_defaults",
+    "ea_dsp_fetch_defaults",
+]
 
 OSM_TILE_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 

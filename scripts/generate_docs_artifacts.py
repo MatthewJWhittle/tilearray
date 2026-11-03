@@ -40,6 +40,9 @@ from tilearray.fetch_presets import (  # noqa: E402
     EA_LIDAR_BENCH_BBOX,
     EA_LIDAR_COVERAGE_ID,
     EA_LIDAR_WCS_URL,
+    OSM_TILE_TEMPLATE,
+    ea_dsp_fetch_defaults,
+    osm_fetch_defaults,
 )
 from tilearray.service import WCSConfig  # noqa: E402
 from tilearray.types import CRS, Format  # noqa: E402
@@ -72,10 +75,12 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def generate_osm(out_dir: Path) -> dict[str, Any]:
     print("OSM XYZ: fetching central London (polite preset)...")
-    config = XYZConfig.for_openstreetmap(
+    config = XYZConfig.from_url(
+        OSM_TILE_TEMPLATE,
         zoom=OSM_ZOOM,
         output_format=Format.PNG,
         chunk_size=(256, 256),
+        **osm_fetch_defaults(),
     )
     start = time.perf_counter()
     da = create_array(
@@ -195,13 +200,14 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
 
 def generate_ea(out_dir: Path) -> dict[str, Any]:
     print("EA Lidar WCS: fetching small OSGB elevation window...")
-    config = WCSConfig.for_ea_dsp(
+    config = WCSConfig.from_url(
         EA_LIDAR_WCS_URL,
         coverage_id=EA_LIDAR_COVERAGE_ID,
         crs=CRS.EPSG_27700,
         output_format=Format.GEOTIFF,
         chunk_size=EA_CHUNK,
         resolution=EA_RESOLUTION,
+        **ea_dsp_fetch_defaults(),
     )
     start = time.perf_counter()
     da = create_array(config, EA_GUIDE_BBOX, CRS.EPSG_27700)

@@ -16,7 +16,7 @@ da = create_array(config, bbox, crs)   # lazy Dask-backed DataArray by default
 result = compute_with_policy(da)       # fetch + assemble when you need values
 ```
 
-WCS, WMS, WMTS, and XYZ share one request-and-decode path. Host **presets** (`XYZConfig.for_openstreetmap`, `WCSConfig.for_ea_dsp`) set polite defaults for known public endpoints.
+WCS, WMS, WMTS, and XYZ share one request-and-decode path. Host **presets** in `tilearray.fetch_presets` (`osm_fetch_defaults`, `ea_dsp_fetch_defaults`) set polite defaults for known public endpoints — compose with `XYZConfig.from_url` / `WCSConfig.from_url`.
 
 ---
 

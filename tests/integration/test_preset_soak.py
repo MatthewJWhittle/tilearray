@@ -27,6 +27,9 @@ from tilearray.fetch import TileFetcher
 from tilearray.fetch_presets import (
     EA_LIDAR_COVERAGE_ID,
     EA_LIDAR_WCS_URL,
+    OSM_TILE_TEMPLATE,
+    ea_dsp_fetch_defaults,
+    osm_fetch_defaults,
 )
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig, XYZConfig
@@ -81,16 +84,17 @@ def _assert_cold_cache(cache_dir: Path) -> None:
 def test_ea_dsp_multi_tile_cold_mosaic_under_preset_ceiling(
     tmp_cache_dir: Path,
 ) -> None:
-    """EA Lidar multi-tile cold mosaic completes under for_ea_dsp ceiling (10)."""
+    """EA Lidar multi-tile cold mosaic completes under ea_dsp preset ceiling (10)."""
     _assert_cold_cache(tmp_cache_dir)
 
-    config = WCSConfig.for_ea_dsp(
+    config = WCSConfig.from_url(
         EA_LIDAR_WCS_URL,
         coverage_id=EA_LIDAR_COVERAGE_ID,
         crs=CRS.EPSG_27700,
         output_format=Format.GEOTIFF,
         chunk_size=_EA_CHUNK,
         resolution=_EA_RESOLUTION,
+        **ea_dsp_fetch_defaults(),
     )
     assert config.max_concurrent_requests == _EA_CEILING
 
@@ -118,13 +122,15 @@ def test_ea_dsp_multi_tile_cold_mosaic_under_preset_ceiling(
 def test_osm_multi_tile_cold_mosaic_under_preset_ceiling(
     tmp_cache_dir: Path,
 ) -> None:
-    """OSM XYZ multi-tile cold mosaic completes under for_openstreetmap caps."""
+    """OSM XYZ multi-tile cold mosaic completes under osm_fetch_defaults caps."""
     _assert_cold_cache(tmp_cache_dir)
 
-    config = XYZConfig.for_openstreetmap(
+    config = XYZConfig.from_url(
+        OSM_TILE_TEMPLATE,
         zoom=_OSM_ZOOM,
         output_format=Format.PNG,
         chunk_size=(256, 256),
+        **osm_fetch_defaults(),
     )
     assert config.max_concurrent_requests == _OSM_CEILING
     assert config.rate_limit_per_second == 2.0

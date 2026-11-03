@@ -34,9 +34,10 @@ Prefer **`compute_with_policy`** over plain `.compute()` so Dask workers match t
 
 ```python
 from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
 from tilearray.types import CRS
 
-config = XYZConfig.for_openstreetmap(zoom=16)
+config = XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 da = create_array(
     config,
     bbox=(-0.005, 51.495, 0.005, 51.505),  # small window near central London
@@ -53,16 +54,18 @@ Include © OpenStreetMap contributors when displaying map imagery.
 
 ```python
 from tilearray import WCSConfig, compute_with_policy, create_array
+from tilearray.fetch_presets import ea_dsp_fetch_defaults
 from tilearray.types import CRS, Format
 
-config = WCSConfig.for_ea_dsp(
+config = WCSConfig.from_url(
     "https://environment.data.gov.uk/spatialdata/"
     "lidar-composite-digital-terrain-model-dtm-1m/wcs",
-    coverage_id="13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
+    "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
     crs=CRS.EPSG_27700,
     output_format=Format.GEOTIFF,
     chunk_size=(800, 800),
     grid_shape=(1, 1),
+    **ea_dsp_fetch_defaults(),
 )
 bbox = (431900.0, 382700.0, 432700.0, 383500.0)  # British National Grid
 da = create_array(config, bbox, CRS.EPSG_27700)
@@ -70,7 +73,7 @@ elevation = compute_with_policy(da)
 print(elevation.shape, float(elevation.mean()))
 ```
 
-The EA Lidar preset caps sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS is supported via `WMTSConfig`; a host guide is still TBD.
+EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS is supported via `WMTSConfig`; a host guide is still TBD.
 
 ## Development
 

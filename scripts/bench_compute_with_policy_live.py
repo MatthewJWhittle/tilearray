@@ -28,6 +28,7 @@ from tilearray import compute_with_policy, create_array  # noqa: E402
 from tilearray.fetch_presets import (  # noqa: E402
     EA_LIDAR_COVERAGE_ID,
     EA_LIDAR_WCS_URL,
+    ea_dsp_fetch_defaults,
 )
 from tilearray.service import WCSConfig  # noqa: E402
 from tilearray.types import CRS, Format  # noqa: E402
@@ -40,13 +41,14 @@ EA_MAX_CONCURRENT = 32
 
 
 def _build_config() -> WCSConfig:
-    return WCSConfig.for_ea_dsp(
+    return WCSConfig.from_url(
         EA_LIDAR_WCS_URL,
         coverage_id=EA_LIDAR_COVERAGE_ID,
         crs=CRS.EPSG_27700,
         output_format=Format.GEOTIFF,
         chunk_size=CHUNK_SIZE,
         resolution=RESOLUTION,
+        **ea_dsp_fetch_defaults(),
     )
 
 

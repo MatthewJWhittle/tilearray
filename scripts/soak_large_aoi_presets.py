@@ -34,6 +34,9 @@ from tilearray import compute_with_policy, create_array  # noqa: E402
 from tilearray.fetch_presets import (  # noqa: E402
     EA_LIDAR_COVERAGE_ID,
     EA_LIDAR_WCS_URL,
+    OSM_TILE_TEMPLATE,
+    ea_dsp_fetch_defaults,
+    osm_fetch_defaults,
 )
 from tilearray.service import WCSConfig, XYZConfig  # noqa: E402
 from tilearray.types import CRS, Format  # noqa: E402
@@ -77,13 +80,14 @@ def _reset_cache(cache_dir: Path | None) -> None:
 
 def _soak_ea(profile: str, cache_dir: Path | None) -> None:
     bbox, chunk = _EA_PROFILES[profile]
-    config = WCSConfig.for_ea_dsp(
+    config = WCSConfig.from_url(
         EA_LIDAR_WCS_URL,
         coverage_id=EA_LIDAR_COVERAGE_ID,
         crs=CRS.EPSG_27700,
         output_format=Format.GEOTIFF,
         chunk_size=chunk,
         resolution=(1.0, 1.0),
+        **ea_dsp_fetch_defaults(),
     )
     print(
         f"\n[ea/{profile}] ceiling={config.max_concurrent_requests} "
@@ -105,10 +109,12 @@ def _soak_ea(profile: str, cache_dir: Path | None) -> None:
 
 def _soak_osm(profile: str, cache_dir: Path | None) -> None:
     bbox, zoom = _OSM_PROFILES[profile]
-    config = XYZConfig.for_openstreetmap(
+    config = XYZConfig.from_url(
+        OSM_TILE_TEMPLATE,
         zoom=zoom,
         output_format=Format.PNG,
         chunk_size=(256, 256),
+        **osm_fetch_defaults(),
     )
     print(
         f"\n[osm/{profile}] ceiling={config.max_concurrent_requests} "

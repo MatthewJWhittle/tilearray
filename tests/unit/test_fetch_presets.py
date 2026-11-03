@@ -1,4 +1,4 @@
-"""Tests for fetch-policy presets and bench helpers."""
+"""Tests for fetch-policy presets and compose-with-from_url helpers."""
 
 from __future__ import annotations
 
@@ -42,8 +42,13 @@ def test_ea_dsp_fetch_defaults_use_aimd() -> None:
     assert defaults["fetch_timeout"] == 60.0
 
 
-def test_xyz_config_for_openstreetmap_applies_preset() -> None:
-    config = XYZConfig.for_openstreetmap(zoom=16, output_format=Format.PNG)
+def test_xyz_config_compose_osm_preset() -> None:
+    config = XYZConfig.from_url(
+        OSM_TILE_TEMPLATE,
+        zoom=16,
+        output_format=Format.PNG,
+        **osm_fetch_defaults(),
+    )
     assert config.base_url == OSM_TILE_TEMPLATE
     assert config.max_concurrent_requests == 2
     assert config.adaptive_concurrency is False
@@ -55,10 +60,11 @@ def test_xyz_config_for_openstreetmap_applies_preset() -> None:
     assert policy.rate_limit_per_second == 2.0
 
 
-def test_wcs_config_for_ea_dsp_applies_preset() -> None:
-    config = WCSConfig.for_ea_dsp(
+def test_wcs_config_compose_ea_dsp_preset() -> None:
+    config = WCSConfig.from_url(
         "https://environment.data.gov.uk/example/wcs",
         coverage_id="test-coverage",
+        **ea_dsp_fetch_defaults(),
     )
     assert config.max_concurrent_requests == 10
     assert config.initial_concurrent_requests == 8
@@ -81,5 +87,9 @@ def test_wcs_config_for_ea_dsp_applies_preset() -> None:
 
 def test_custom_osm_user_agent() -> None:
     agent = tilearray_user_agent(contact_url="https://example.com/contact")
-    config = XYZConfig.for_openstreetmap(zoom=10, user_agent=agent)
+    config = XYZConfig.from_url(
+        OSM_TILE_TEMPLATE,
+        zoom=10,
+        **osm_fetch_defaults(user_agent=agent),
+    )
     assert config.headers["User-Agent"] == agent
