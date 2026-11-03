@@ -1,0 +1,15 @@
+{
+  "provenance": {
+    "source_url": "https://gis.stackexchange.com/questions/282675/download-custom-extent-from-wmts",
+    "source_date": "2018-05-12",
+    "notes": "Tiny noncontiguous offline AOIs. Not a bulk scrape of any public WMTS."
+  },
+  "crs": "EPSG:4326",
+  "chunk_size": [16, 16],
+  "bboxes": [
+    {"id": "a", "bbox": [0.0, 0.0, 0.02, 0.02]},
+    {"id": "b", "bbox": [0.05, 0.05, 0.07, 0.07]},
+    {"id": "c", "bbox": [0.01, 0.01, 0.03, 0.03]}
+  ],
+  "overlap_note": "bbox c overlaps source tiles that a may also touch depending on planning; cache reuse is asserted via shared TileFetcher cache_dir hits."
+}

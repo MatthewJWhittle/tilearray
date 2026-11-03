@@ -1,0 +1,54 @@
+{
+  "grayscale": {
+    "shape": [
+      8,
+      8
+    ],
+    "dtype": "uint8",
+    "mean": 31.5
+  },
+  "rgb": {
+    "shape": [
+      8,
+      8,
+      3
+    ],
+    "bands": [
+      10,
+      20,
+      30
+    ]
+  },
+  "rgba": {
+    "shape": [
+      8,
+      8,
+      4
+    ],
+    "alpha0_at": [
+      0,
+      0
+    ]
+  },
+  "palette": {
+    "mode": "P",
+    "unique_indices": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "multiband_nodata": {
+    "shape": [
+      3,
+      8,
+      8
+    ],
+    "nan_at": [
+      0,
+      0,
+      0
+    ]
+  }
+}

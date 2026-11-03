@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Community-derived acceptance suite (#97): offline fixtures + baseline classifications for nine real WMTS/WCS/WMS user scenarios (S1–S9) under `tests/acceptance/`, with independent WMTS golden maths and owning-issue cross-links. No public “Problems from the field” docs page until claims are verified end-to-end.
+
 ## [0.2.0] - 2026-11-03
 
 Trustworthy-core release: clean-env GeoTIFF install, analysis-ready mosaic attrs, one preferred compute habit, typed public errors, default tile progress, and actionable stage-gate DX — without holding the cut for multi-AOI orchestration or later uniqueness work.

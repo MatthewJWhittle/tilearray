@@ -1,0 +1,29 @@
+{
+  "provenance": {
+    "source_url": "https://gis.stackexchange.com/questions/482781/handle-or-disable-wcs-geoserver-trimmed-down-coverage-response-when-asking-dat",
+    "source_date": "2024-06-01",
+    "notes": "Synthetic clipped GeoTIFF stands in for GeoServer trim-at-edge behaviour. Requested grid 64x64; server returns 48x48 offset by 8 px with 4 bands."
+  },
+  "requested": {
+    "width": 64,
+    "height": 64,
+    "bbox": [0.0, 0.0, 64.0, 64.0],
+    "crs": "EPSG:27700",
+    "band_count": 4
+  },
+  "server_response": {
+    "width": 48,
+    "height": 48,
+    "offset_x": 8,
+    "offset_y": 8,
+    "dtype": "float32",
+    "fill_value": 12.5
+  },
+  "required_behaviour": {
+    "output_shape": [64, 64],
+    "band_count": 4,
+    "outside_nodata": true,
+    "no_stretch": true,
+    "invalid_transform_must_fail": true
+  }
+}

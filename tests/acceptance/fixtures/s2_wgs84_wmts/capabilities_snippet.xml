@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic WGS84 WMTS matrix inspired by GIS-SE 323374. Offline only. -->
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0"
+              xmlns:ows="http://www.opengis.net/ows/1.1">
+  <Contents>
+    <Layer>
+      <ows:Identifier>v0Lw1953KMdH</ows:Identifier>
+      <ResourceURL format="image/png" resourceType="tile"
+                   template="https://example.invalid/wmts/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png"/>
+      <TileMatrixSetLink>
+        <TileMatrixSet>WGS84</TileMatrixSet>
+      </TileMatrixSetLink>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>WGS84</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::4326</ows:SupportedCRS>
+      <TileMatrix>
+        <ows:Identifier>16</ows:Identifier>
+        <ScaleDenominator>4265.459167669</ScaleDenominator>
+        <TopLeftCorner>90.0 -180.0</TopLeftCorner>
+        <TileWidth>256</TileWidth>
+        <TileHeight>256</TileHeight>
+        <MatrixWidth>131072</MatrixWidth>
+        <MatrixHeight>65536</MatrixHeight>
+      </TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>

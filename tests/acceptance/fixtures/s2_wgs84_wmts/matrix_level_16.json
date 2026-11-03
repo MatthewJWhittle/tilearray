@@ -1,0 +1,28 @@
+{
+  "provenance": {
+    "source_url": "https://gis.stackexchange.com/questions/323374/getting-spatially-referenced-tiles-from-wmts",
+    "source_date": "2019-05-20",
+    "notes": "Row/col/matrix identifiers from the question. ScaleDenominator is a synthetic GlobalCRS84-style value chosen for offline determinism (the post illustrated a nearby zoom example, not exact level-16 numbers). TopLeftCorner caps order 90/-180 is lat/lon; golden maths interprets lon/lat NW origin."
+  },
+  "crs": "EPSG:4326",
+  "crs_kind": "geographic",
+  "tile_matrix_set": "WGS84",
+  "tile_matrix": "16",
+  "tile_row": 20480,
+  "tile_col": 32001,
+  "scale_denominator": 4265.459167669,
+  "top_left_corner_caps_order": [90.0, -180.0],
+  "top_left_x_lon": -180.0,
+  "top_left_y_lat": 90.0,
+  "tile_width": 256,
+  "tile_height": 256,
+  "matrix_width": 131072,
+  "matrix_height": 65536,
+  "meters_per_degree": 111319.49079327358,
+  "expected_bounds": {
+    "min_x": -92.10662841859865,
+    "min_y": 33.74725341837189,
+    "max_x": -92.10388183656741,
+    "max_y": 33.75000000040312
+  }
+}

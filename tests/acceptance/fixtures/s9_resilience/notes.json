@@ -1,0 +1,11 @@
+{
+  "provenance": {
+    "notes": "Behaviours exercised via programmable fake HTTP in test_s9_resilience.py. No third-party host required."
+  },
+  "behaviours": [
+    "429 + Retry-After retry",
+    "hard-fail default on tile HTTP failure",
+    "opt-in soft_fail partial fill",
+    "corrupt body decode failure"
+  ]
+}

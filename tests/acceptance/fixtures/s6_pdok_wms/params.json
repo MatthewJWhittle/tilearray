@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "source_url": "https://gis.stackexchange.com/questions/486554/unknown-layer-exception-when-downloading-wms-chip-with-owslib",
+    "source_date": "2024-10-07",
+    "notes": "Layer name and CRS typo from the post. No live PDOK calls in default CI."
+  },
+  "invalid_crs": "EPGS:28992",
+  "corrected_crs": "EPSG:28992",
+  "layer": "Actueel_ortho25_jpeg",
+  "output_format": "image/jpeg",
+  "width": 256,
+  "height": 256,
+  "sample_bbox_epsg28992": [100000.0, 400000.0, 100256.0, 400256.0]
+}

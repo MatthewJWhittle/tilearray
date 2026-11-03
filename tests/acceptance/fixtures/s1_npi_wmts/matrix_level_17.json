@@ -1,0 +1,28 @@
+{
+  "provenance": {
+    "source_url": "https://gis.stackexchange.com/questions/484520/getting-tile-bounds-for-epsg25833-wmts-tile-using-python",
+    "source_date": "2024-08-03",
+    "notes": "Matrix numbers copied from the accepted answer's TileMatrix excerpt. Approximate user polygon is recorded for context only — golden bounds come from maths, not that polygon."
+  },
+  "crs": "EPSG:25833",
+  "crs_kind": "projected",
+  "tile_matrix_set": "default028mm",
+  "tile_matrix": "17",
+  "tile_row": 31066,
+  "tile_col": 133128,
+  "scale_denominator": 590.588978796931,
+  "top_left_x": -5120900.0,
+  "top_left_y": 9998100.0,
+  "tile_width": 256,
+  "tile_height": 256,
+  "matrix_width": 141182,
+  "matrix_height": 41237,
+  "approximate_user_bbox": [514863.0, 8682927.0, 514905.0, 8682970.0],
+  "expected_bounds": {
+    "min_x": 514863.2715258347,
+    "min_y": 8682927.702988904,
+    "max_x": 514905.6049438348,
+    "max_y": 8682970.036406904
+  },
+  "expected_edge_length": 42.33341800016401
+}

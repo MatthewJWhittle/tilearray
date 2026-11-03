@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "source_url": "https://gis.stackexchange.com/questions/483928/how-to-create-wcs-2-0-1-getcoverage-request-using-owslib",
+    "source_date": "2024-07-18",
+    "notes": "Sanitised local fake GeoServer parameters. example.com / placeholder hosts from the post must not be used as live endpoints."
+  },
+  "version": "2.0.1",
+  "crs": "EPSG:32632",
+  "output_format": "image/tiff",
+  "coverage_id": "local:demo_coverage",
+  "width": 32,
+  "height": 32,
+  "subset_bbox_epsg32632": [500000.0, 5400000.0, 500032.0, 5400032.0]
+}

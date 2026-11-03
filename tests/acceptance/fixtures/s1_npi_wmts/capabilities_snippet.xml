@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Sanitised TileMatrix excerpt for NPI Svalbard WMTS EPSG:25833 (GIS-SE 484520).
+     Not a full GetCapabilities document; offline acceptance only. -->
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0"
+              xmlns:ows="http://www.opengis.net/ows/1.1">
+  <Contents>
+    <Layer>
+      <ows:Identifier>Basisdata_NP_Ortofoto_Svalbard_WMTS_25833</ows:Identifier>
+      <ResourceURL format="image/png" resourceType="tile"
+                   template="https://example.invalid/wmts/tile/1.0.0/Basisdata_NP_Ortofoto_Svalbard_WMTS_25833/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}"/>
+      <TileMatrixSetLink>
+        <TileMatrixSet>default028mm</TileMatrixSet>
+      </TileMatrixSetLink>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>default028mm</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::25833</ows:SupportedCRS>
+      <TileMatrix>
+        <ows:Identifier>17</ows:Identifier>
+        <ScaleDenominator>590.588978796931</ScaleDenominator>
+        <TopLeftCorner>-5120900.0 9998100.0</TopLeftCorner>
+        <TileWidth>256</TileWidth>
+        <TileHeight>256</TileHeight>
+        <MatrixWidth>141182</MatrixWidth>
+        <MatrixHeight>41237</MatrixHeight>
+      </TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>
