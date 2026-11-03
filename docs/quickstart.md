@@ -79,6 +79,10 @@ print(img.shape, da.attrs["service_type"])
 
 No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. See {doc}`example-sources` for layer quirks.
 
+## WMTS
+
+WMTS is supported via {py:class}`tilearray.WMTSConfig` (REST or KVP GetTile, same `create_array` → `compute_with_policy` path as WCS/WMS/XYZ). A copy-paste host guide is still TBD — track [issue #60](https://github.com/MatthewJWhittle/tilearray/issues/60). Until then, configure with `WMTSConfig.from_url(...)` and follow the XYZ/WMS recipes above for compute habit and politeness.
+
 ## Private or keyed hosts
 
 Same habit: config → `create_array` → `compute_with_policy`. Pass static credentials on the config with `params=` (query API keys, legacy username/password query params) or `headers=` (Bearer, API-key headers, Basic). Prefer env-backed `params=` over secrets in XYZ URL templates. Details and the WCS/WMTS capabilities caveat: {doc}`troubleshooting`. Keyed OS Maps XYZ: {doc}`example-sources`.

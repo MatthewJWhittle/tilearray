@@ -324,7 +324,7 @@ def stage_lazy_compute_cache() -> None:
         (
             3.5,
             "B · Compute",
-            "compute_with_policy(da)\nor compute=True\nthread workers ↔\nfetch ceiling",
+            "compute_with_policy(da)\nthread workers ↔\nfetch ceiling",
             ACCENT,
         ),
         (
@@ -343,9 +343,9 @@ def stage_lazy_compute_cache() -> None:
     _box(ax, 0.3, 0.35, 9.35, 1.4, fc="#ffffff")
     ax.text(0.55, 1.4, "API map", fontsize=9, color=INK, fontweight="bold")
     lines = [
-        "load_array(...) ≈ create_array(..., compute=True)",
-        "da.compute() works but may under-use a high AIMD ceiling (CPU-bound worker default)",
-        "Prefer compute_with_policy for multi-tile mosaics so Dask threads match FetchPolicy.max_concurrent",
+        "Preferred: create_array(...) → compute_with_policy(da)",
+        "load_array(...) is eager sugar for create_array(..., compute=True)",
+        "Plain da.compute() may under-use a high AIMD ceiling (CPU-bound worker default)",
     ]
     for i, line in enumerate(lines):
         ax.text(0.55, 1.05 - i * 0.3, f"•  {line}", fontsize=8, color=MUTED, va="center")

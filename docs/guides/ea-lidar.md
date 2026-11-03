@@ -7,8 +7,7 @@ Uses `WCSConfig.for_ea_dsp` (AIMD under a hard ceiling, pressure circuit breaker
 ## Code
 
 ```python
-from tilearray import compute_with_policy, create_array
-from tilearray.service import WCSConfig
+from tilearray import WCSConfig, compute_with_policy, create_array
 from tilearray.types import CRS, Format
 
 wcs_url = (

@@ -70,7 +70,7 @@ elevation = compute_with_policy(da)
 print(elevation.shape, float(elevation.mean()))
 ```
 
-The EA Lidar preset caps sustained concurrency at **10** (AIMD ceiling). More hosts, WMS/WMTS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/).
+The EA Lidar preset caps sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS is supported via `WMTSConfig`; a host guide is still TBD.
 
 ## Development
 

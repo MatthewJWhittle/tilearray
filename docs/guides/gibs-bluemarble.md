@@ -5,7 +5,7 @@ Load a small mid-Atlantic window from NASA GIBS as JPEG RGB tiles. Uses `XYZConf
 ## Code
 
 ```python
-from tilearray import XYZConfig, create_array
+from tilearray import XYZConfig, compute_with_policy, create_array
 from tilearray.types import CRS, Format
 
 template = (
@@ -27,8 +27,9 @@ config = XYZConfig.from_url(
 )
 
 bbox = (-40.0, 20.0, -10.0, 45.0)
-da = create_array(config, bbox, CRS.EPSG_4326, compute=True)
-print(da.shape, da.dims)  # expect (y, x, band) for RGB JPEG
+da = create_array(config, bbox, CRS.EPSG_4326)
+arr = compute_with_policy(da)
+print(arr.shape, arr.dims)  # expect (y, x, band) for RGB JPEG
 ```
 
 ## Result

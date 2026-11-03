@@ -11,7 +11,7 @@ OSM raster tiles are often **palette PNGs**, so the mosaic may be single-band (g
 ## Code
 
 ```python
-from tilearray import XYZConfig, create_array
+from tilearray import XYZConfig, compute_with_policy, create_array
 from tilearray.types import CRS, Format
 
 config = XYZConfig.for_openstreetmap(
@@ -21,8 +21,9 @@ config = XYZConfig.for_openstreetmap(
 )
 
 bbox = (-0.005, 51.495, 0.005, 51.505)  # ~central London
-da = create_array(config, bbox, CRS.EPSG_4326, compute=True)
-print(da.shape, da.dims, da.attrs["service_type"])
+da = create_array(config, bbox, CRS.EPSG_4326)
+arr = compute_with_policy(da)
+print(arr.shape, arr.dims, da.attrs["service_type"])
 ```
 
 ## Result

@@ -22,4 +22,4 @@ cd tilearray
 uv sync --dev
 ```
 
-Then jump to {doc}`quickstart` or {doc}`how-it-works`.
+Next: {doc}`quickstart` (install → mosaic on a documented public host) or {doc}`how-it-works`.
