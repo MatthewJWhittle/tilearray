@@ -84,4 +84,4 @@ Config `params=` / `headers=` also reach WCS/WMTS **GetCapabilities** / **Descri
 
 ## Custom endpoints
 
-Use `WCSConfig.from_url` / `WMSConfig.from_url` / `WMTSConfig.from_url` / `XYZConfig.from_url` and tune `FetchPolicy` / config knobs (`max_concurrent_requests`, `rate_limit_per_second`, AIMD fields). Pass credentials via `params=` / `headers=` (see above). Presets exist only for known host quirks (EA DSP WCS, OSMF XYZ) — they are not a catalogue of every public layer.
+Use `WCSConfig.from_url` / `WMSConfig.from_url` / `WMTSConfig.from_url` / `XYZConfig.from_url` and tune {py:class}`~tilearray.FetchPolicy` / config knobs (`max_concurrent_requests`, `rate_limit_per_second`, AIMD fields). Pass credentials via `params=` / `headers=` (see above). Presets exist only for known host quirks (EA DSP WCS, OSMF XYZ) — they are not a catalogue of every public layer.

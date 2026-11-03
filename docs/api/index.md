@@ -99,12 +99,12 @@ Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilear
    :toctree: generated
    :nosignatures:
 
-   fetch.FetchPolicy
+   FetchPolicy
 ```
 
-`FetchPolicy` controls concurrency, retries, timeouts, rate limits, and optional AIMD / circuit-breaker behaviour. Service configs expose the same knobs and build a policy via `.fetch_policy()`.
+`FetchPolicy` controls concurrency, retries, timeouts, rate limits, and optional AIMD / circuit-breaker behaviour. Service configs expose the same knobs and build a policy via `.fetch_policy()`. Advanced callers may also import it as `tilearray.fetch.FetchPolicy`.
 
-## Registry / services
+## Registry
 
 ```{eval-rst}
 .. currentmodule:: tilearray
@@ -116,10 +116,6 @@ Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilear
    get_service
    register_service
    detect_service_type
-   WCSService
-   WMSService
-   WMTSService
-   XYZService
 ```
 
-Lower-level clients and parsers also live under `tilearray.service`. Arrays from `create_array` are north-up (row 0 = north). Mosaic attrs include `crs`, Affine `transform` (`transform_source="mosaic_bbox"`), `band_policy`, and elevation `nodata`/`_FillValue` when the format is GeoTIFF — see {doc}`../how-it-works` for the rioxarray handoff.
+Concrete service clients and parsers (`WCSService`, `WMSService`, `WMTSService`, `XYZService`, `BaseService`, `WCSParser`, `WMTSParser`) are **not** part of the advertised public surface — import them from `tilearray.service` / `tilearray.service.wcs` (etc.) only if you need low-level access. Prefer configs + `create_array`. Arrays from `create_array` are north-up (row 0 = north). Mosaic attrs include `crs`, Affine `transform` (`transform_source="mosaic_bbox"`), `band_policy`, and elevation `nodata`/`_FillValue` when the format is GeoTIFF — see {doc}`../how-it-works` for the rioxarray handoff.
