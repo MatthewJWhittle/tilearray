@@ -75,7 +75,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 
 ## WMS (EA Vegetation Object Model)
 
-- Layer names are year-suffixed (`Vegetation_Object_Model_2022`, …). Confirm the year in GetCapabilities before hard-coding.
+- Layer names are year-suffixed (`Vegetation_Object_Model_2022`, …). Confirm the year with {py:func}`~tilearray.inspect_endpoint` (or GetCapabilities) before hard-coding.
 - Transparent PNG GetMap responses decode to **RGBA (4 bands)**.
 
 ## Failures are loud (by default)
@@ -95,8 +95,9 @@ These fail **before** a useful mosaic exists. Exception text names what was wron
 | `Unsupported WCS/WMS/WMTS format` ({py:exc}`~tilearray.ValidationError`) | Typo or non-enum MIME | Use `Format.GEOTIFF` / `Format.PNG` / `Format.JPEG` (or their MIME strings); when DescribeCoverage already ran, the message also lists server formats |
 | `Failed to validate coverage` + `ConnectError` / Name or service not known | Bad host / DNS / VPN | Fix `base_url` spelling — **not** `coverage_id` |
 | `…` + HTTP 401/403 or HTML / login portal body | Auth or portal URL, not WCS XML | Pass credentials via config `params=` / `headers=` (see private hosts below); do **not** soft-fail 401 |
-| `Coverage '…' is not available` / no coverage description | Wrong or misspelled CoverageId | Call `service.get_capabilities()` and use a listed CoverageId; for EA DSP, id looks like `UUID__…` and ≠ the URL path slug |
-| `Unable to detect service type` | Ambiguous URL | Pass a typed `WCSConfig` / `WMSConfig` / `WMTSConfig` / `XYZConfig`, or include `{z}/{x}/{y}` for XYZ |
+| `Coverage '…' is not available` / no coverage description | Wrong or misspelled CoverageId | Use {py:func}`~tilearray.inspect_endpoint` (or `service.get_capabilities()`) and pick a listed CoverageId; for EA DSP, id looks like `UUID__…` and ≠ the URL path slug |
+| `Unknown coverage` / `Unknown layer` from `build_config` | Identifier not in GetCapabilities | Print the inspection summary and pass an exact listed id — no fuzzy rename |
+| `Unable to detect service type` | Ambiguous URL | Pass `service_type=` to `inspect_endpoint`, or a typed config / `{z}/{x}/{y}` for XYZ |
 | Tile `NetworkError` after plan succeeded | Host reject / politeness / transient | Keep preset ceilings; prefer `compute_with_policy`; HTML tile bodies usually mean auth/portal URL |
 
 ## Disk cache
@@ -119,4 +120,4 @@ Config `params=` / `headers=` also reach WCS/WMTS **GetCapabilities** / **Descri
 
 ## Custom endpoints
 
-Use `WCSConfig.from_url` / `WMSConfig.from_url` / `WMTSConfig.from_url` / `XYZConfig.from_url` and tune {py:class}`~tilearray.FetchPolicy` / config knobs (`max_concurrent_requests`, `rate_limit_per_second`, AIMD fields). Pass credentials via `params=` / `headers=` (see above). Presets exist only for known host quirks (EA DSP WCS, OSMF XYZ) — they are not a catalogue of every public layer.
+Start from {doc}`inspect-endpoint` when you do not know layer / CoverageId / tile matrix values yet. Then use `WCSConfig.from_url` / `WMSConfig.from_url` / `WMTSConfig.from_url` / `XYZConfig.from_url` (or `inspection.build_config(...)`) and tune {py:class}`~tilearray.FetchPolicy` / config knobs (`max_concurrent_requests`, `rate_limit_per_second`, AIMD fields). Pass credentials via `params=` / `headers=` (see above). Presets exist only for known host quirks (EA DSP WCS, OSMF XYZ) — they are not a catalogue of every public layer.

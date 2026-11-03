@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0"
+                  xmlns:ows="http://www.opengis.net/ows/1.1"
+                  version="2.0.1">
+    <ows:ServiceIdentification>
+        <ows:Title>Example WCS</ows:Title>
+        <ows:Abstract>Fixture for endpoint inspection</ows:Abstract>
+    </ows:ServiceIdentification>
+    <wcs:Contents>
+        <wcs:CoverageSummary>
+            <ows:Title>Elevation DTM</ows:Title>
+            <wcs:CoverageId>demo__Elevation_DTM</wcs:CoverageId>
+        </wcs:CoverageSummary>
+        <wcs:CoverageSummary>
+            <ows:Title>Hillshade</ows:Title>
+            <wcs:CoverageId>demo__Hillshade</wcs:CoverageId>
+        </wcs:CoverageSummary>
+    </wcs:Contents>
+    <wcs:SupportedFormat>image/tiff</wcs:SupportedFormat>
+    <wcs:SupportedCRS>EPSG:27700</wcs:SupportedCRS>
+</wcs:Capabilities>

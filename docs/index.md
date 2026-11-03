@@ -12,11 +12,12 @@ The API may change.
 
 1. {doc}`install` — install the package
 2. {doc}`quickstart` — copy-paste recipes against public hosts
-3. {doc}`how-it-works` — what happens for a large AOI (plan, fetch, lazy mosaic)
-4. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar, WMTS)
-5. {doc}`example-sources` — public endpoints and presets
-6. {doc}`troubleshooting` — when fetches fail or shapes look wrong
-7. {doc}`api/index` — public API reference
+3. {doc}`inspect-endpoint` — unknown WMS/WMTS/WCS URL → valid config
+4. {doc}`how-it-works` — what happens for a large AOI (plan, fetch, lazy mosaic)
+5. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar, WMTS)
+6. {doc}`example-sources` — public endpoints and presets
+7. {doc}`troubleshooting` — when fetches fail or shapes look wrong
+8. {doc}`api/index` — public API reference
 
 ## Also useful
 
@@ -29,6 +30,7 @@ The API may change.
 
 install
 quickstart
+inspect-endpoint
 how-it-works
 guides/index
 example-sources

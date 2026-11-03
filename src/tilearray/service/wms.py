@@ -2,12 +2,141 @@
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..error_messages import unsupported_format_message
-from ..errors import ValidationError
+from ..errors import ParseError, ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
+
+
+@dataclass
+class WMSLayerInfo:
+    """Layer metadata extracted from WMS GetCapabilities."""
+
+    name: str
+    title: str | None = None
+    crs: list[str] = field(default_factory=list)
+    styles: list[str] = field(default_factory=list)
+
+
+@dataclass
+class WMSCapabilities:
+    """Parsed WMS GetCapabilities payload (inspection-oriented)."""
+
+    version: str = "1.3.0"
+    title: str | None = None
+    layers: list[WMSLayerInfo] = field(default_factory=list)
+    formats: list[str] = field(default_factory=list)
+
+
+class WMSParser:
+    """Parser for WMS GetCapabilities XML (layers, CRS, GetMap formats)."""
+
+    def __init__(self) -> None:
+        self.namespaces = {
+            "wms": "http://www.opengis.net/wms",
+            "ows": "http://www.opengis.net/ows/1.1",
+            "xlink": "http://www.w3.org/1999/xlink",
+        }
+
+    def parse_get_capabilities(self, xml_content: str) -> WMSCapabilities:
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError as exc:
+            raise ParseError(f"Invalid XML content: {exc}", cause=exc) from exc
+
+        version = root.get("version") or "1.3.0"
+        title = self._first_text(
+            root,
+            (
+                "./wms:Service/wms:Title",
+                "./Service/Title",
+                ".//{http://www.opengis.net/wms}Service/{http://www.opengis.net/wms}Title",
+            ),
+        )
+        formats = self._parse_getmap_formats(root)
+        layers = self._parse_layers(root)
+        return WMSCapabilities(
+            version=version, title=title, layers=layers, formats=formats
+        )
+
+    def _parse_getmap_formats(self, root: ET.Element) -> list[str]:
+        formats: list[str] = []
+        for xpath in (
+            ".//wms:Capability/wms:Request/wms:GetMap/wms:Format",
+            ".//Capability/Request/GetMap/Format",
+        ):
+            for elem in root.findall(xpath, self.namespaces):
+                if elem.text and elem.text.strip() and elem.text.strip() not in formats:
+                    formats.append(elem.text.strip())
+        if formats:
+            return formats
+        # Namespace-agnostic fallback: Format siblings under a GetMap parent.
+        for elem in root.iter():
+            if elem.tag.rsplit("}", 1)[-1] != "GetMap":
+                continue
+            for child in elem:
+                if child.tag.rsplit("}", 1)[-1] != "Format":
+                    continue
+                if (
+                    child.text
+                    and child.text.strip()
+                    and child.text.strip() not in formats
+                ):
+                    formats.append(child.text.strip())
+        return formats
+
+    def _parse_layers(self, root: ET.Element) -> list[WMSLayerInfo]:
+        layers: list[WMSLayerInfo] = []
+        seen: set[str] = set()
+        layer_elems = root.findall(".//wms:Layer", self.namespaces) or root.findall(
+            ".//Layer"
+        )
+        for layer_elem in layer_elems:
+            name = self._child_text(layer_elem, ("Name", "wms:Name"))
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            title = self._child_text(layer_elem, ("Title", "wms:Title"))
+            crs_values = self._layer_crs(layer_elem)
+            styles = [
+                style_name
+                for style_elem in list(layer_elem)
+                if style_elem.tag.rsplit("}", 1)[-1] == "Style"
+                for style_name in [self._child_text(style_elem, ("Name", "wms:Name"))]
+                if style_name
+            ]
+            layers.append(
+                WMSLayerInfo(name=name, title=title, crs=crs_values, styles=styles)
+            )
+        return layers
+
+    def _layer_crs(self, layer_elem: ET.Element) -> list[str]:
+        values: list[str] = []
+        for child in layer_elem:
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag in {"CRS", "SRS"} and child.text and child.text.strip():
+                text = child.text.strip()
+                if text not in values:
+                    values.append(text)
+        return values
+
+    def _child_text(self, element: ET.Element, names: tuple[str, ...]) -> str | None:
+        wanted = {name.rsplit(":", 1)[-1] for name in names}
+        for child in element:
+            if child.tag.rsplit("}", 1)[-1] in wanted and child.text:
+                return child.text.strip()
+        return None
+
+    def _first_text(self, root: ET.Element, xpaths: tuple[str, ...]) -> str | None:
+        for xpath in xpaths:
+            elem = root.find(xpath, self.namespaces)
+            if elem is not None and elem.text and elem.text.strip():
+                return elem.text.strip()
+        return None
 
 
 def format_wms_bbox(bbox: BoundingBox, crs: CRS, version: str) -> str:

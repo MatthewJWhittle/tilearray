@@ -244,11 +244,17 @@ class WCSParser:
             if not identifier:
                 identifier = self._get_text(coverage_elem, ".//wcs:CoverageId")
             if identifier:
+                title = self._get_text(coverage_elem, ".//wcs:Title")
+                if not title:
+                    title = self._get_text(coverage_elem, ".//ows:Title")
+                abstract = self._get_text(coverage_elem, ".//wcs:Abstract")
+                if not abstract:
+                    abstract = self._get_text(coverage_elem, ".//ows:Abstract")
                 coverages.append(
                     CoverageDescription(
                         identifier=identifier,
-                        title=self._get_text(coverage_elem, ".//wcs:Title"),
-                        abstract=self._get_text(coverage_elem, ".//wcs:Abstract"),
+                        title=title,
+                        abstract=abstract,
                         keywords=self._get_keywords(coverage_elem),
                         native_crs=None,
                         native_format=None,
