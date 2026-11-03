@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Maintainer stage-gate notebook (`notebooks/stage_gate_0_2.ipynb`) + run notes in `notebooks/README.md`: local editable install → live OSM / EA DSP mosaics → politeness knobs, soft-fail attrs, and a human checklist before the 0.2.0 cut
 - Document private/keyed hosts via existing config `params=` / `headers=` (query keys, legacy username/password query params, Bearer/Basic headers); OS Maps XYZ recipe uses env-backed `params` instead of `?key=` in the URL template; soft-fail still hard-aborts 401 (related #58). Caps credential parity for WCS/WMTS is under Changed (#57)
+- Default tile progress + quiet opt-out documented in how-it-works, troubleshooting (“looks hung”), and API index (#86)
 
 ### Fixed
 
@@ -29,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Default tqdm-style tile progress for multi-tile mosaics via existing `on_progress` / `FetchProgress` (scripts + notebooks). Quiet opt-out: `show_progress=False`, `TILEARRAY_PROGRESS=0`, or non-TTY/non-Jupyter display. Custom `on_progress=` still replaces the default bar. Runtime dependency: `tqdm`. No second compute API (#86)
 - Analysis-ready mosaic attrs for xarray/rioxarray handoff: Affine `transform` + `transform_source="mosaic_bbox"`, `band_policy`, and elevation GeoTIFF `nodata`/`_FillValue` (NaN after decode). Documented north-up + optional rioxarray recipe; mosaic CRS remains the request `crs=` (never silently replaced by per-tile GeoTIFF tags) (#54)
 - Large-AOI politeness evidence scaffold (#56): `@pytest.mark.soak` multi-tile cold mosaics under EA DSP + OSM preset ceilings (nightly via `@net`/`@slow`, deselected on PRs); offline fail-loud abort under concurrent pressure; maintainer script `scripts/soak_large_aoi_presets.py` for county-/valley-scale soaks; how-it-works / troubleshooting / building-docs note on nightly vs maintainer split
 - Opt-in plan-time tile error policy for mosaics (`on_tile_error=` / `soft_fail=True`) with library preset `soft_fail_exhausted_tiles`: after retries, soft-fill tile-local exhausted failures (404 / 5xx / transport) as NaN blocks without aborting siblings; auth (401), exhausted 429, decode errors, and soft-fail fraction above `soft_fail_max_fraction` still hard-abort. Default remains hard-fail + `FetchProgress.abort` (#65)

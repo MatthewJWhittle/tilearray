@@ -14,6 +14,19 @@ result = compute_with_policy(da)          # or compute_with_policy(da.mean())
 
 `create_array` stores fetch policy on `da.attrs`; `compute_with_policy` reads it automatically. You do not need to pass `max_concurrent` by hand.
 
+## Large mosaic looks hung / want quiet CI
+
+Multi-tile computes show a **tile progress bar by default** (tqdm-style via `on_progress`). If a large job still looks idle, confirm you are on `compute_with_policy` (or `compute=True`) so the graph is actually running.
+
+| Goal | What to do |
+|------|------------|
+| Quiet CI / scripts | `create_array(..., show_progress=False)` or set env `TILEARRAY_PROGRESS=0` |
+| Non-TTY / redirected stderr | Auto progress stays off unless you force `show_progress=True` or `TILEARRAY_PROGRESS=1` |
+| Custom UI | Pass your own `on_progress(done, total, request, response)=` (replaces the default bar) |
+| Force a bar | `show_progress=True` (even single-tile or non-TTY) |
+
+Host ceiling / concurrency semantics are unchanged — progress only observes tile completions.
+
 ## Concurrency names and `**service_options`
 
 | Symptom | Likely mix-up | What to do |

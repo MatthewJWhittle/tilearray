@@ -129,6 +129,8 @@ Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xa
 | `da.compute()` | Works, but default Dask worker count can under-use a high fetch ceiling. |
 | `cache_dir=...` | Optional on-disk tile cache; warm hits skip the network. |
 
+**Tile progress:** multi-tile mosaics show a tqdm-style bar by default while tiles complete (same `on_progress` / `FetchProgress` path in scripts and notebooks). Quiet for CI / redirected scripts with `show_progress=False` or `TILEARRAY_PROGRESS=0`. Pass your own `on_progress=` to replace the default bar. Single-tile plans stay quiet unless you force progress.
+
 Memory tracks **what you compute** (full mosaic, a reduction, a window) — not automatically the whole AOI. Scale with bbox, chunks, and fetch policy.
 
 ---

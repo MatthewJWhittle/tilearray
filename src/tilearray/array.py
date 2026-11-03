@@ -39,6 +39,7 @@ from .decode import (
 )
 from .errors import ConfigurationError, NetworkError, ValidationError
 from .fetch import FetchPolicy, FetchProgress, ProgressCallback
+from .progress import resolve_on_progress
 from .service import get_service
 from .service.base import BaseService
 from .service.config import ServiceConfig as ServiceConfigModel
@@ -700,6 +701,7 @@ def create_array(
     dtype: str | np.dtype[Any] = np.dtype("float32"),
     tile_decoder: TileDecoder | None = None,
     on_progress: ProgressCallback | None = None,
+    show_progress: bool | None = None,
     on_tile_error: TileErrorHandler | None = None,
     soft_fail: bool = False,
     soft_fill_value: float = float("nan"),
@@ -716,6 +718,12 @@ def create_array(
     For lazy arrays (``compute=False``), prefer :func:`compute_with_policy` over
     plain ``.compute()`` so Dask worker count matches the fetch ceiling. Fetch
     policy metadata is stored on ``DataArray.attrs`` for that path.
+
+    Multi-tile mosaics show a tqdm-style tile progress bar by default during
+    compute (via ``on_progress`` / :class:`~tilearray.fetch.FetchProgress`).
+    Pass ``show_progress=False``, set ``TILEARRAY_PROGRESS=0``, or use a
+    non-TTY / non-Jupyter display for quiet CI and scripts. A custom
+    ``on_progress=`` replaces the default bar.
 
     Tile failures stay loud by default (``NetworkError`` + sibling abort after
     retries). Opt in to visible soft-fill with ``on_tile_error=`` (e.g.
@@ -774,9 +782,14 @@ def create_array(
     cache_path = request.cache_path
     chunk_height, chunk_width = request.chunk_size
     dtype_np = np.dtype(dtype)
+    progress_callback = resolve_on_progress(
+        on_progress,
+        total_tiles=len(tile_requests),
+        show_progress=show_progress,
+    )
     progress = FetchProgress(
         total=len(tile_requests),
-        on_progress=on_progress,
+        on_progress=progress_callback,
         call_max_concurrent=fetch_policy.call_max_concurrent,
     )
 
