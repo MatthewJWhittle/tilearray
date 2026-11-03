@@ -120,4 +120,4 @@ Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilear
    XYZService
 ```
 
-Lower-level clients and parsers also live under `tilearray.service`. Arrays from `create_array` are north-up (row 0 = north).
+Lower-level clients and parsers also live under `tilearray.service`. Arrays from `create_array` are north-up (row 0 = north). Mosaic attrs include `crs`, Affine `transform` (`transform_source="mosaic_bbox"`), `band_policy`, and elevation `nodata`/`_FillValue` when the format is GeoTIFF — see {doc}`../how-it-works` for the rioxarray handoff.

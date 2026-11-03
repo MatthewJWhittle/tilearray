@@ -27,6 +27,7 @@ from dask.delayed import Delayed, delayed
 from pydantic import BaseModel, ConfigDict, Field
 
 from .decode import (
+    DEFAULT_BAND_POLICIES,
     NDArrayFloat,
     TileDecoder,
     band_count_from_array,
@@ -778,10 +779,18 @@ def create_array(
     )
 
     normalized_bbox = request.bbox
-    target_crs = request.target_crs
-    # Row 0 comes from the northernmost tiles (_organize_tiles sorts by -max_y).
-    y_coords = np.linspace(normalized_bbox.max_y, normalized_bbox.min_y, data.shape[0])
-    x_coords = np.linspace(normalized_bbox.min_x, normalized_bbox.max_x, data.shape[1])
+    height = int(data.shape[0])
+    width = int(data.shape[1])
+    attrs.update(
+        _geospatial_attrs(
+            bbox=normalized_bbox,
+            height=height,
+            width=width,
+            output_format=effective_format,
+        )
+    )
+    # Pixel centers from mosaic Affine; row 0 = north (_organize_tiles sorts by -max_y).
+    y_coords, x_coords = _pixel_center_coords(normalized_bbox, height, width)
 
     coords: dict[str, Any] = {"y": y_coords, "x": x_coords}
     dims: tuple[str, ...] = ("y", "x")
@@ -833,6 +842,66 @@ def _coerce_crs(crs: CRS | str | int) -> CRS:
             else CRS.from_integer(int(crs))
         )
     return CRS.from_integer(crs)
+
+
+def _mosaic_affine_transform(
+    bbox: BoundingBox, height: int, width: int
+) -> tuple[float, float, float, float, float, float]:
+    """
+    North-up Affine ``(a, b, c, d, e, f)`` for the assembled mosaic.
+
+    Maps pixel ``(col, row)`` → geographic ``(x, y)`` with upper-left of the
+    upper-left pixel at ``(bbox.min_x, bbox.max_y)``. Derived only from the
+    planned mosaic bbox + shape — never from per-tile GeoTIFF tags.
+    """
+
+    if height < 1 or width < 1:
+        raise ValueError(f"Mosaic shape must be positive; got {(height, width)}")
+    pixel_width = (bbox.max_x - bbox.min_x) / width
+    pixel_height = (bbox.max_y - bbox.min_y) / height
+    return (pixel_width, 0.0, bbox.min_x, 0.0, -pixel_height, bbox.max_y)
+
+
+def _pixel_center_coords(
+    bbox: BoundingBox, height: int, width: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(y, x)`` coordinate arrays at pixel centers (north-up)."""
+
+    a, _b, c, _d, e, f = _mosaic_affine_transform(bbox, height, width)
+    cols = np.arange(width, dtype=np.float64) + 0.5
+    rows = np.arange(height, dtype=np.float64) + 0.5
+    x_coords = c + a * cols
+    y_coords = f + e * rows
+    return y_coords, x_coords
+
+
+def _geospatial_attrs(
+    *,
+    bbox: BoundingBox,
+    height: int,
+    width: int,
+    output_format: Format | None,
+) -> dict[str, Any]:
+    """
+    Analysis-ready CRS / transform / nodata / band-policy attrs for handoff.
+
+    CRS on the DataArray remains the mosaic request CRS (set separately).
+    """
+
+    transform = _mosaic_affine_transform(bbox, height, width)
+    attrs: dict[str, Any] = {
+        "transform": transform,
+        "transform_source": "mosaic_bbox",
+    }
+    if output_format is not None:
+        band_policy = DEFAULT_BAND_POLICIES.get(output_format)
+        if band_policy is not None:
+            attrs["band_policy"] = band_policy
+        if output_format == Format.GEOTIFF:
+            # Decode maps GDAL_NODATA / sentinels → NaN in pixels (#53/#77).
+            attrs["nodata"] = float("nan")
+            attrs["_FillValue"] = float("nan")
+    return attrs
 
 
 def _coerce_array_origin(value: object) -> tuple[float, float]:
