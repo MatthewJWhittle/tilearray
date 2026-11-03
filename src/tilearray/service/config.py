@@ -366,7 +366,10 @@ class WMTSConfig(ServiceConfig):
 
     layer: str = Field(..., description="WMTS layer identifier")
     tile_matrix_set: str = Field(..., description="Tile matrix set identifier")
-    tile_matrix: int = Field(..., ge=0, description="Tile matrix / zoom level")
+    tile_matrix: int | str = Field(
+        ...,
+        description="TileMatrix identifier (numeric zoom or non-numeric matrix id)",
+    )
     style: str = Field(default="", description="WMTS style identifier")
     url_template: str | None = Field(
         default=None,
@@ -384,7 +387,7 @@ class WMTSConfig(ServiceConfig):
         *,
         layer: str,
         tile_matrix_set: str,
-        tile_matrix: int,
+        tile_matrix: int | str,
         **kwargs: Any,
     ) -> WMTSConfig:
         """Convenience constructor for WMTS endpoints."""

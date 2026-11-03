@@ -61,4 +61,4 @@ def test_get_service_builds_wmts_implementation() -> None:
     )
     assert isinstance(service, WMTSService)
     assert service.layer == "roads"
-    assert service.tile_matrix == 10
+    assert service.tile_matrix == "10"

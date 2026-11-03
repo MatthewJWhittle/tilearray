@@ -84,7 +84,7 @@ No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. See 
 
 ## WMTS
 
-WMTS is supported via {py:class}`tilearray.WMTSConfig` (REST or KVP GetTile, same `create_array` → `compute_with_policy` path as WCS/WMS/XYZ). A copy-paste host guide is not published yet — configure with `WMTSConfig.from_url(...)` and follow the XYZ/WMS recipes above for compute habit and politeness.
+WMTS is supported via {py:class}`tilearray.WMTSConfig` (REST or KVP GetTile, same `create_array` → `compute_with_policy` path as WCS/WMS/XYZ). For non–Web-Mercator TileMatrixSets (for example EPSG:25833 or CRS84), load GetCapabilities (`WMTSService.get_capabilities` / `apply_capabilities`) or pass authoritative `matrix=` metadata so planning uses the service’s native CRS, scale, and tile indices — the mosaic is labelled with that matrix CRS and the tile-aligned extent. A copy-paste host guide is not published yet — configure with `WMTSConfig.from_url(...)` and follow the XYZ/WMS recipes above for compute habit and politeness.
 
 ## Private or keyed hosts
 

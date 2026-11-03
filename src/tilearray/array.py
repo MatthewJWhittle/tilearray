@@ -272,6 +272,15 @@ class ArrayRequest(BaseModel):
         ):
             self.grid_shape = inferred_grid
 
+        # Native WMTS grids: mosaic extent/CRS follow the planned tile matrix,
+        # not the caller's query bbox / crs= label (#93).
+        inferred_bbox = getattr(service, "inferred_mosaic_bbox", None)
+        if isinstance(inferred_bbox, BoundingBox):
+            if self.requested_bbox is None:
+                self.requested_bbox = self.bbox
+            self.bbox = inferred_bbox
+            self.target_crs = inferred_bbox.crs
+
         return tile_requests, tile_options
 
     def array_attrs(
@@ -294,13 +303,21 @@ class ArrayRequest(BaseModel):
             attrs["coverage_id"] = coverage_id
         if self.bbox_snap_delta is not None:
             attrs["bbox_snap_delta"] = dict(self.bbox_snap_delta)
-            if self.requested_bbox is not None:
-                attrs["bbox_requested"] = {
-                    "min_x": self.requested_bbox.min_x,
-                    "min_y": self.requested_bbox.min_y,
-                    "max_x": self.requested_bbox.max_x,
-                    "max_y": self.requested_bbox.max_y,
-                }
+        if self.requested_bbox is not None and (
+            self.bbox_snap_delta is not None
+            or self.requested_bbox.crs != self.bbox.crs
+            or self.requested_bbox.min_x != self.bbox.min_x
+            or self.requested_bbox.min_y != self.bbox.min_y
+            or self.requested_bbox.max_x != self.bbox.max_x
+            or self.requested_bbox.max_y != self.bbox.max_y
+        ):
+            attrs["bbox_requested"] = {
+                "min_x": self.requested_bbox.min_x,
+                "min_y": self.requested_bbox.min_y,
+                "max_x": self.requested_bbox.max_x,
+                "max_y": self.requested_bbox.max_y,
+                "crs": self.requested_bbox.crs.value,
+            }
         return attrs
 
 
