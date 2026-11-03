@@ -15,6 +15,7 @@ import numpy as np
 import tifffile
 from numpy.typing import NDArray
 
+from .errors import ConfigurationError
 from .types import Format, TileRequest, TileResponse
 
 try:  # pragma: no cover - optional dependency
@@ -248,7 +249,7 @@ def read_image_bytes(raw_bytes: bytes) -> NDArrayFloat:
         "PNG/JPEG decoding requires Pillow or imageio. "
         "Install one of these packages or provide a custom tile_decoder."
     )
-    raise RuntimeError(msg)
+    raise ConfigurationError(msg)
 
 
 def make_tile_decoder(

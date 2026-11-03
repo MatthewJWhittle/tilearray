@@ -6,6 +6,7 @@ import math
 from collections.abc import Iterable
 from typing import Any
 
+from ..errors import ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
 
@@ -28,9 +29,9 @@ class XYZService(BaseService):
     ) -> None:
         super().__init__(base_url, zoom=zoom, tile_size=tile_size, **config)
         if zoom < 0:
-            raise ValueError("zoom must be non-negative")
+            raise ValidationError("zoom must be non-negative")
         if tile_size <= 0:
-            raise ValueError("tile_size must be positive")
+            raise ValidationError("tile_size must be positive")
         self.url_template = base_url
         self.zoom = zoom
         self.tile_size = tile_size
@@ -41,7 +42,7 @@ class XYZService(BaseService):
     def from_url(cls, url: str, **config: Any) -> XYZService:
         zoom = config.get("zoom")
         if zoom is None:
-            raise ValueError("XYZ services require a zoom level")
+            raise ValidationError("XYZ services require a zoom level")
         return cls(url, **config)
 
     def plan_tiles(
@@ -108,7 +109,7 @@ class XYZService(BaseService):
 def _require_tile_index(tile_index: int | None, override: int | None) -> int:
     value = override if override is not None else tile_index
     if value is None:
-        raise ValueError("XYZ tile indices are required")
+        raise ValidationError("XYZ tile indices are required")
     return int(value)
 
 

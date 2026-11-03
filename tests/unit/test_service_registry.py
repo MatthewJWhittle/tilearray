@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from tilearray.errors import ConfigurationError
 from tilearray.service.base import detect_service_type, get_service
 from tilearray.service.wcs import WCSService
 from tilearray.service.wms import WMSService
@@ -35,7 +36,7 @@ def test_detect_service_type_uses_fallback() -> None:
 
 
 def test_detect_service_type_raises_when_unknown() -> None:
-    with pytest.raises(ValueError, match="Unable to detect service type"):
+    with pytest.raises(ConfigurationError, match="Unable to detect service type"):
         detect_service_type("https://example.com/unknown-endpoint")
 
 

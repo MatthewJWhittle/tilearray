@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..errors import ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
 
@@ -47,7 +48,7 @@ class WMSService(BaseService):
             **config,
         )
         if not layers:
-            raise ValueError("WMS layers must be provided")
+            raise ValidationError("WMS layers must be provided")
         self.layers = layers
         self.version = version
         self.styles = styles
@@ -60,13 +61,13 @@ class WMSService(BaseService):
     def from_url(cls, url: str, **config: Any) -> WMSService:
         layers = config.get("layers")
         if not layers:
-            raise ValueError("WMS services require layers")
+            raise ValidationError("WMS services require layers")
         return cls(url, **config)
 
     def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
         layers = str(options.get("layers") or self.layers)
         if not layers:
-            raise ValueError("WMS layers must be provided")
+            raise ValidationError("WMS layers must be provided")
 
         version = str(options.get("version") or self.version)
         styles = str(
@@ -110,8 +111,8 @@ class WMSService(BaseService):
             try:
                 return Format(fmt)
             except ValueError as exc:
-                raise ValueError(f"Unsupported WMS format: {fmt}") from exc
-        raise ValueError(f"Invalid WMS format value: {fmt!r}")
+                raise ValidationError(f"Unsupported WMS format: {fmt}") from exc
+        raise ValidationError(f"Invalid WMS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:
         if isinstance(crs, CRS):
@@ -124,4 +125,4 @@ class WMSService(BaseService):
             )
         if isinstance(crs, int):
             return CRS.from_integer(crs)
-        raise ValueError(f"Invalid CRS value: {crs!r}")
+        raise ValidationError(f"Invalid CRS value: {crs!r}")

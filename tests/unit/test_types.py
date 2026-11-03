@@ -6,6 +6,7 @@ from datetime import datetime
 
 import pytest
 
+from tilearray.errors import ValidationError
 from tilearray.types import (
     CRS,
     BoundingBox,
@@ -24,7 +25,7 @@ def test_crs_from_string_and_integer() -> None:
 
 
 def test_crs_from_string_rejects_invalid_format() -> None:
-    with pytest.raises(ValueError, match="Invalid CRS format"):
+    with pytest.raises(ValidationError, match="Invalid CRS format"):
         CRS.from_string("4326")
 
 

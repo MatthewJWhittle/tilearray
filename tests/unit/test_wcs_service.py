@@ -6,6 +6,7 @@ import requests
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from tilearray.errors import NetworkError, ValidationError
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WCSConfig, XYZConfig
 from tilearray.service.wcs import WCSParser, WCSService, normalize_crs_reference
@@ -104,7 +105,7 @@ def test_wcs_service_requires_coverage_id():
         crs=CRS.EPSG_4326,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         service.build_tile_request(geometry)
 
 
@@ -197,7 +198,7 @@ def test_wcs_plan_tiles_rejects_non_positive_resolution():
         crs=CRS.EPSG_4326,
     )
     bbox = BoundingBox(min_x=0, min_y=0, max_x=10, max_y=10, crs=CRS.EPSG_4326)
-    with pytest.raises(ValueError, match="resolution"):
+    with pytest.raises(ValidationError, match="resolution"):
         list(service.plan_tiles(bbox, (8, 8), resolution=(0.0, 1.0)))
 
 
@@ -209,7 +210,7 @@ def test_wcs_plan_tiles_rejects_invalid_origin():
         crs=CRS.EPSG_4326,
     )
     bbox = BoundingBox(min_x=0, min_y=0, max_x=10, max_y=10, crs=CRS.EPSG_4326)
-    with pytest.raises(ValueError, match="origin"):
+    with pytest.raises(ValidationError, match="origin"):
         list(service.plan_tiles(bbox, (8, 8), resolution=(1.0, 1.0), origin="bad"))
 
 
@@ -282,7 +283,7 @@ def test_wcs_config_build_service_raises_for_missing_coverage(monkeypatch):
 
     monkeypatch.setattr(WCSService, "describe_coverage", fake_describe)
 
-    with pytest.raises(ValueError, match="missing"):
+    with pytest.raises(NetworkError, match="missing"):
         config.build_service()
 
 
@@ -444,10 +445,10 @@ def test_wcs_service_coerce_helpers_validate_inputs() -> None:
     assert service._coerce_crs("EPSG:4326") == CRS.EPSG_4326
     assert service._coerce_crs(4326) == CRS.EPSG_4326
 
-    with pytest.raises(ValueError, match="Unsupported WCS format"):
+    with pytest.raises(ValidationError, match="Unsupported WCS format"):
         service._coerce_format("image/unknown")
 
-    with pytest.raises(ValueError, match="Invalid CRS value"):
+    with pytest.raises(ValidationError, match="Invalid CRS value"):
         service._coerce_crs(object())
 
 

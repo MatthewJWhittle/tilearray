@@ -70,7 +70,9 @@ Presets: `WCSConfig.for_ea_dsp`, `XYZConfig.for_openstreetmap`. Custom hosts: ea
    ConfigurationError
 ```
 
-{py:exc}`NetworkError` means a tile failed after retries — mosaics do not leave silent NaN holes **by default**.
+{py:exc}`NetworkError` means a tile failed after retries — mosaics do not leave silent NaN holes **by default**. Caps/capabilities HTTP failures (WCS/WMTS `requests` paths) also raise {py:exc}`NetworkError`.
+
+Prefer catching {py:exc}`TileArrayError` (or a subclass) at public boundaries: bad inputs → {py:exc}`ValidationError`, XML/capabilities parse → {py:exc}`ParseError`, service detection / missing decoder → {py:exc}`ConfigurationError`. Do not rely on bare `ValueError` / `RuntimeError` from library entry points.
 
 ## Tile errors (opt-in soft-fail)
 

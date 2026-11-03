@@ -10,6 +10,7 @@ from typing import Any
 
 import requests
 
+from ..errors import NetworkError, ParseError, ValidationError
 from ..types import (
     CRS,
     BoundingBox,
@@ -112,7 +113,7 @@ class WCSParser:
                 coverages=coverages,
             )
         except ET.ParseError as exc:  # pragma: no cover - defensive
-            raise ValueError(f"Invalid XML content: {exc}") from exc
+            raise ParseError(f"Invalid XML content: {exc}", cause=exc) from exc
 
     def parse_describe_coverage(self, xml_content: str) -> CoverageDescription:
         try:
@@ -124,13 +125,13 @@ class WCSParser:
             ):
                 coverage_elem = root
             if coverage_elem is None:
-                raise ValueError("No coverage description found in XML")
+                raise ParseError("No coverage description found in XML")
 
             identifier = self._get_text(coverage_elem, ".//gml:identifier")
             if not identifier:
                 identifier = self._get_text(coverage_elem, ".//wcs:CoverageId")
             if not identifier:
-                raise ValueError("Coverage identifier not found")
+                raise ParseError("Coverage identifier not found")
 
             title = self._get_text(coverage_elem, ".//gml:name")
             abstract = self._get_text(coverage_elem, ".//gml:description")
@@ -161,7 +162,7 @@ class WCSParser:
                 native_format=native_format,
             )
         except ET.ParseError as exc:  # pragma: no cover - defensive
-            raise ValueError(f"Invalid XML content: {exc}") from exc
+            raise ParseError(f"Invalid XML content: {exc}", cause=exc) from exc
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -438,33 +439,45 @@ class WCSService(BaseService):
     # Public API
     # ------------------------------------------------------------------
     def get_capabilities(self, **params: Any) -> ServiceCapabilities:
-        response = self.session.get(
-            self.base_url,
-            params={
-                "service": "WCS",
-                "version": self.version,
-                "request": "GetCapabilities",
-                **params,
-            },
-        )
-        response.raise_for_status()
+        try:
+            response = self.session.get(
+                self.base_url,
+                params={
+                    "service": "WCS",
+                    "version": self.version,
+                    "request": "GetCapabilities",
+                    **params,
+                },
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise NetworkError(
+                f"WCS GetCapabilities failed for {self.base_url}: {exc}",
+                cause=exc,
+            ) from exc
         return self.parser.parse_get_capabilities(response.text)
 
     def describe_coverage(
         self, coverage_id: str | None = None, **params: Any
     ) -> CoverageDescription:
         coverage = coverage_id or self._require_coverage_id()
-        response = self.session.get(
-            self.base_url,
-            params={
-                "service": "WCS",
-                "version": self.version,
-                "request": "DescribeCoverage",
-                "coverageId": coverage,
-                **params,
-            },
-        )
-        response.raise_for_status()
+        try:
+            response = self.session.get(
+                self.base_url,
+                params={
+                    "service": "WCS",
+                    "version": self.version,
+                    "request": "DescribeCoverage",
+                    "coverageId": coverage,
+                    **params,
+                },
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise NetworkError(
+                f"WCS DescribeCoverage failed for {coverage!r} at {self.base_url}: {exc}",
+                cause=exc,
+            ) from exc
         description = self.parser.parse_describe_coverage(response.text)
         self.set_coverage_metadata(description)
         return description
@@ -530,7 +543,7 @@ class WCSService(BaseService):
     def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
         coverage = options.get("coverage_id") or self.coverage_id
         if not coverage:
-            raise ValueError("WCS coverage_id must be provided")
+            raise ValidationError("WCS coverage_id must be provided")
 
         metadata = self._metadata_or_stub(coverage)
         fmt = self._coerce_format(
@@ -581,7 +594,7 @@ class WCSService(BaseService):
     # ------------------------------------------------------------------
     def _require_coverage_id(self) -> str:
         if not self.coverage_id:
-            raise ValueError("WCS coverage_id is required but was not provided")
+            raise ValidationError("WCS coverage_id is required but was not provided")
         return self.coverage_id
 
     def _metadata_or_stub(self, coverage_id: str) -> CoverageDescription:
@@ -601,8 +614,8 @@ class WCSService(BaseService):
             try:
                 return Format(fmt)
             except ValueError as exc:
-                raise ValueError(f"Unsupported WCS format: {fmt}") from exc
-        raise ValueError(f"Invalid WCS format value: {fmt!r}")
+                raise ValidationError(f"Unsupported WCS format: {fmt}") from exc
+        raise ValidationError(f"Invalid WCS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:
         if isinstance(crs, CRS):
@@ -615,7 +628,7 @@ class WCSService(BaseService):
             )
         if isinstance(crs, int):
             return CRS.from_integer(crs)
-        raise ValueError(f"Invalid CRS value: {crs!r}")
+        raise ValidationError(f"Invalid CRS value: {crs!r}")
 
     def _resolve_subset(
         self,

@@ -9,6 +9,8 @@ from typing import Any, Optional, Union
 from pydantic import BaseModel, Field, model_validator
 from pyproj import Transformer
 
+from .errors import ValidationError
+
 
 class CRS(str, Enum):
     """Common Coordinate Reference Systems."""
@@ -23,7 +25,7 @@ class CRS(str, Enum):
         """Create CRS from string."""
         if crs.startswith("EPSG:"):
             return cls(crs)
-        raise ValueError(
+        raise ValidationError(
             f"Invalid CRS format: {crs}. Expected string, integer, or CRS enum"
         )
 

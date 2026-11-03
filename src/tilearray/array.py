@@ -37,7 +37,7 @@ from .decode import (
 from .decode import (
     decoder_for_format as _decoder_for_format,
 )
-from .errors import NetworkError
+from .errors import ConfigurationError, NetworkError, ValidationError
 from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .service import get_service
 from .service.base import BaseService
@@ -143,7 +143,7 @@ class ArrayRequest(BaseModel):
         if resolution is not None:
             res_x, res_y = resolution
             if res_x <= 0 or res_y <= 0:
-                raise ValueError("resolution values must be positive")
+                raise ValidationError("resolution values must be positive")
             origin = _coerce_array_origin(user_options.get("origin"))
             snapped_bbox = snap_bbox_outward(normalized_bbox, resolution, origin)
             bbox_snap_delta = {
@@ -303,7 +303,7 @@ def _resolve_decoder(
         if decoder is not None:
             return decoder
 
-    raise RuntimeError(
+    raise ConfigurationError(
         f"No tile decoder available for format {fmt!r}; please provide tile_decoder."
     )
 
@@ -320,14 +320,14 @@ def _organize_tiles(
     cols: int,
 ) -> list[list[TileRequest]]:
     if len(tile_requests) != rows * cols:
-        raise ValueError(
+        raise ValidationError(
             f"Service produced {len(tile_requests)} tile requests; expected {rows * cols}"
         )
 
     annotated: list[tuple[TileRequest, BoundingBox]] = []
     for request in tile_requests:
         if request.bbox is None:
-            raise ValueError("TileRequest is missing spatial metadata (bbox)")
+            raise ValidationError("TileRequest is missing spatial metadata (bbox)")
         annotated.append((request, request.bbox))
 
     sorted_tiles = [
@@ -581,7 +581,7 @@ def _resolve_on_tile_error(
 
     if on_tile_error is not None:
         if soft_fail:
-            raise ValueError(
+            raise ValidationError(
                 "Pass either on_tile_error=... or soft_fail=True, not both"
             )
         return on_tile_error
@@ -683,7 +683,7 @@ def create_array(
         and service_type is not None
         and service_type != service_config.service_type
     ):
-        raise ValueError(
+        raise ValidationError(
             "Provided service_type does not match the ServiceConfig service_type"
         )
 
@@ -911,7 +911,7 @@ def _coerce_array_origin(value: object) -> tuple[float, float]:
         origin_x = value[0]
         origin_y = value[1]
         return (float(origin_x), float(origin_y))
-    raise ValueError("origin must be a tuple of two numbers")
+    raise ValidationError("origin must be a tuple of two numbers")
 
 
 def _normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
@@ -934,14 +934,14 @@ def _resolve_grid_shape(
 def _validate_grid_shape(grid: tuple[int, int]) -> tuple[int, int]:
     rows, cols = grid
     if rows <= 0 or cols <= 0:
-        raise ValueError("grid_shape must contain positive integers")
+        raise ValidationError("grid_shape must contain positive integers")
     return rows, cols
 
 
 def _validate_chunk_size(chunk_size: tuple[int, int]) -> tuple[int, int]:
     width, height = chunk_size
     if width <= 0 or height <= 0:
-        raise ValueError("chunk_size dimensions must be positive integers")
+        raise ValidationError("chunk_size dimensions must be positive integers")
     return height, width
 
 
@@ -1005,10 +1005,10 @@ def _resize_tile_array(
         return array
 
     if target_height <= 0 or target_width <= 0:
-        raise ValueError("target dimensions must be positive")
+        raise ValidationError("target dimensions must be positive")
 
     if actual_height < target_height or actual_width < target_width:
-        raise ValueError(
+        raise ValidationError(
             f"Decoded tile has shape {(actual_height, actual_width)}, expected at least {(target_height, target_width)}"
         )
 
@@ -1148,7 +1148,9 @@ def _load_tile_array(
     try:
         array = decoder(response, request)
         if array.ndim not in (2, 3):
-            raise ValueError("tile_decoder must return a 2D or 3D (y, x[, band]) array")
+            raise ValidationError(
+                "tile_decoder must return a 2D or 3D (y, x[, band]) array"
+            )
 
         target_height = request.height or array.shape[0]
         target_width = request.width or array.shape[1]

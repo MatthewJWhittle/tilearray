@@ -30,7 +30,7 @@ from tilearray.decode import (
     read_geotiff_path,
     unwrap_multipart,
 )
-from tilearray.errors import NetworkError
+from tilearray.errors import ConfigurationError, NetworkError, ValidationError
 from tilearray.fetch import FetchPolicy
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
@@ -162,7 +162,7 @@ def test_array_request_snaps_resolution_bbox_outward() -> None:
 
 
 def test_array_request_rejects_invalid_origin() -> None:
-    with pytest.raises(ValueError, match="origin"):
+    with pytest.raises(ValidationError, match="origin"):
         ArrayRequest.from_inputs(
             service_url="http://example.com/wcs",
             service_config=None,
@@ -232,7 +232,7 @@ def test_create_array_without_decoder_raises(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(array_module, "get_service", fake_service_factory)
     monkeypatch.setattr(decode_module, "_DECODER_REGISTRY", {})
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ConfigurationError):
         array_module.create_array(
             service_url="http://example.com/wcs",
             bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326),

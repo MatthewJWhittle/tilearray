@@ -8,6 +8,11 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from requests import RequestException
 
+from ..errors import (
+    ConfigurationError,
+    NetworkError,
+    TileArrayError,
+)
 from ..fetch import (
     _DEFAULT_MULTIPLICATIVE_DECREASE,
     FetchPolicy,
@@ -255,13 +260,20 @@ class WCSConfig(ServiceConfig):
 
         try:
             service.describe_coverage(self.coverage_id)
-        except ValueError as exc:
-            raise ValueError(
-                f"Coverage '{self.coverage_id}' is not available from {self.base_url}"  # noqa: G004
+        except NetworkError as exc:
+            raise NetworkError(
+                f"Failed to validate coverage '{self.coverage_id}' against {self.base_url}",  # noqa: G004
+                cause=exc,
             ) from exc
         except RequestException as exc:
-            raise ValueError(
-                f"Failed to validate coverage '{self.coverage_id}' against {self.base_url}"  # noqa: G004
+            raise NetworkError(
+                f"Failed to validate coverage '{self.coverage_id}' against {self.base_url}",  # noqa: G004
+                cause=exc,
+            ) from exc
+        except TileArrayError as exc:
+            raise ConfigurationError(
+                f"Coverage '{self.coverage_id}' is not available from {self.base_url}",  # noqa: G004
+                cause=exc,
             ) from exc
 
         return service
