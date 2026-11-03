@@ -17,8 +17,11 @@ The API may change.
 5. {doc}`example-sources` — public endpoints and presets
 6. {doc}`troubleshooting` — when fetches fail or shapes look wrong
 7. {doc}`api/index` — public API reference
-8. {doc}`design-principles` — product ethos, CRS roles, scope (canonical)
-9. {doc}`roadmap` — milestones and non-goals
+
+## Also useful
+
+- {doc}`design-principles` — product ethos, CRS roles, scope
+- {doc}`roadmap` — coverage today, direction, non-goals
 
 ```{toctree}
 :hidden:

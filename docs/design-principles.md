@@ -1,6 +1,6 @@
 # Design principles
 
-**Canonical product and API design for tilearray.** Other docs and agent guidance should link here rather than restate a second copy.
+**Canonical product and API design for tilearray.** Other docs should link here rather than restate a second copy.
 
 **Core promise:** turn remote tiled geospatial data into reliably georeferenced, lazy [xarray](https://docs.xarray.dev/) arrays, without requiring users to implement service protocols or depend on GDAL.
 
@@ -18,13 +18,13 @@ tilearray is a **data-access library**, not a raster-processing or GIS analysis 
 6. **Transparent behaviour** — a request has understandable contracts: area requested vs area returned; query CRS vs service/request CRS vs output CRS; native pixel size; tile snapping; dtype/bands/nodata; provenance.
 7. **GDAL-free by default, pragmatic dependencies** — supported paths must not require GDAL or a large GIS stack; do not pretend every dependency is pure Python, and do not forbid optional integrations later.
 8. **Responsible remote access** — respect rate/size limits, provider terms, authentication and secrets; avoid request storms when parallelising. Host ceilings live in presets and compose onto configs (`from_url` + `fetch_presets`); do not grow `for_*` host methods on protocol configs.
-9. **Evidence-led scope** — ground work in real problems and independent fixture expectations ([#97](https://github.com/MatthewJWhittle/tilearray/issues/97)). Resist unproven protocols, a provider catalogue, complex orchestration, and broad GIS functionality.
+9. **Evidence-led scope** — ground work in real problems and independent expectations. Resist unproven protocols, a provider catalogue, complex orchestration, and broad GIS functionality.
 
 ---
 
 ## Spatial contract (CRS roles)
 
-Keep these concepts separate in types, docs, tests, and the eventual public API:
+Keep these concepts separate in types, docs, and tests:
 
 | Role | Meaning | Suggested vocabulary |
 |------|---------|----------------------|
@@ -42,27 +42,16 @@ Keep these concepts separate in types, docs, tests, and the eventual public API:
 
 ### Current alpha behaviour (honest contract)
 
-Today `create_array(..., crs=)` is a **single** CRS argument used both to interpret the bbox and to label the mosaic (`attrs["crs"]`). Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS — but the three-role vocabulary above is the **target** design ([#92](https://github.com/MatthewJWhittle/tilearray/issues/92) and related). Do not document target `bbox_crs` separation as if it already shipped.
+Today `create_array(..., crs=)` is a **single** CRS argument used both to interpret the bbox and to label the mosaic (`attrs["crs"]`). Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS — but the three-role vocabulary above is the **target** design. Do not treat separate `bbox_crs` / output CRS as already shipped.
 
-Illustrative **target** direction (not a prescribed breaking change in this issue):
-
-```python
-data = create_array(
-    source,
-    bbox=(430000, 380000, 435000, 385000),
-    bbox_crs="EPSG:27700",
-)
-# data reports the true output CRS, resolution, transform, and extent.
-```
-
-Prefer a clean documented contract over preserving an ambiguous `crs` forever; design any migration explicitly during alpha.
+Prefer a clean documented contract over preserving an ambiguous `crs` forever; any migration will be explicit during alpha.
 
 ### Imagery vs numerical coverages
 
 | Kind | Typical path | Expect |
 |------|--------------|--------|
 | **Rendered imagery** (XYZ / WMS / many WMTS) | JPEG/PNG (often palette) | Visual tiles; bands may be RGB or single-band palette; nodata often omitted |
-| **Numerical coverages** (WCS elevation, etc.) | GeoTIFF | Analysis values; elevation path maps nodata → NaN; preserve dtype/band honesty ([#94](https://github.com/MatthewJWhittle/tilearray/issues/94)) |
+| **Numerical coverages** (WCS elevation, etc.) | GeoTIFF | Analysis values; elevation path maps nodata → NaN; preserve dtype/band honesty |
 
 Do not treat a colourful mosaic as proof of numerical fidelity, or elevation NaN rules as imagery defaults.
 
@@ -73,22 +62,6 @@ Do not treat a colourful mosaic as proof of numerical fidelity, or elevation NaN
 **In scope:** polite concurrent fetch and assemble of WCS / WMS / WMTS / XYZ into Dask-backed xarray; plan-time bind of fetch/error/decode behaviour; accurate mosaic metadata; progressive disclosure via policies and presets.
 
 **Out of scope (through ~0.3, see {doc}`roadmap`):** STAC/COG cube builders; map SDKs / tile servers; async-first rewrite; kitchen-sink auth frameworks; full temporal cube API; provider catalogue chase; local GIS processing (warp, resample, terrain, ML training, export).
-
-Related feature work stays on owning issues — this document constrains them; it does not rewrite them:
-
-| Issue | How it follows this contract |
-|-------|------------------------------|
-| [#92](https://github.com/MatthewJWhittle/tilearray/issues/92) | CRS representation beyond the four-value enum; enables honest bbox/output roles |
-| [#93](https://github.com/MatthewJWhittle/tilearray/issues/93) | WMTS native-CRS / non-Mercator matrix planning |
-| [#94](https://github.com/MatthewJWhittle/tilearray/issues/94) | Band / dtype / palette / nodata fidelity |
-| [#95](https://github.com/MatthewJWhittle/tilearray/issues/95) | WCS clipped/partial coverage alignment (no silent stretch) |
-| [#96](https://github.com/MatthewJWhittle/tilearray/issues/96) | Inspect unknown services → valid configs (design-first; no catalogue) |
-| [#97](https://github.com/MatthewJWhittle/tilearray/issues/97) | Community acceptance fixtures / independent expectations |
-| [#60](https://github.com/MatthewJWhittle/tilearray/issues/60) | WMTS productization after correctness |
-| [#61](https://github.com/MatthewJWhittle/tilearray/issues/61) | AOI / preflight / summary UX |
-| [#87](https://github.com/MatthewJWhittle/tilearray/issues/87) | Multi-AOI / ML samples — documented loops first; no orchestration grab |
-| [#88](https://github.com/MatthewJWhittle/tilearray/issues/88) | Actionable errors when correctness cannot be established |
-| [#59](https://github.com/MatthewJWhittle/tilearray/issues/59) | Distributed “don’t stampede” while preserving one API |
 
 ---
 
@@ -106,9 +79,9 @@ Related feature work stays on owning issues — this document constrains them; i
 
 ---
 
-## Design review questions (PR gate)
+## Design review questions
 
-Before merging a new public option or adapter:
+Before adding a new public option or adapter:
 
 1. What user job does it solve?
 2. Is there already a consistent concept/name for it?
@@ -118,4 +91,4 @@ Before merging a new public option or adapter:
 6. Are lossy transformations (if any) **explicit**, with accurate metadata and useful errors?
 7. Does the change keep GDAL-free defaults and host politeness intact?
 
-Engineering standards and the short checklist for contributors/agents live in [guidelines.md](https://github.com/MatthewJWhittle/tilearray/blob/main/guidelines.md) and [AGENTS.md](https://github.com/MatthewJWhittle/tilearray/blob/main/AGENTS.md). Product ethos stays here.
+Engineering standards for contributors live in [guidelines.md](https://github.com/MatthewJWhittle/tilearray/blob/main/guidelines.md) and [AGENTS.md](https://github.com/MatthewJWhittle/tilearray/blob/main/AGENTS.md). Product ethos stays here.

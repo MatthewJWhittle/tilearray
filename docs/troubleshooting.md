@@ -42,7 +42,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 | Symptom | Likely cause | What to do |
 |---------|--------------|------------|
 | “Wrong” CRS vs GeoTIFF tags | Mosaic CRS is the **`create_array(..., crs=)`** you passed, not tags inside tiles | Pass the CRS you planned with; see {doc}`how-it-works` georef contract |
-| Expected native-grid CRS ≠ query CRS | Alpha still uses one `crs=` for bbox + mosaic label; separate `bbox_crs` / output CRS is **target design** | Read {doc}`design-principles` spatial contract; follow [#92](https://github.com/MatthewJWhittle/tilearray/issues/92) / [#93](https://github.com/MatthewJWhittle/tilearray/issues/93) — do not assume a silent local warp |
+| Expected native-grid CRS ≠ query CRS | Alpha still uses one `crs=` for bbox + mosaic label; separate `bbox_crs` / output CRS is **target design** | Read {doc}`design-principles` spatial contract — do not assume a silent local warp |
 | Plot looks flipped | Expecting south-up rows | Arrays are **north-up** (row 0 = north); do not flip for display |
 | Missing `nodata` on RGB | Imagery path omits elevation nodata | Expected for JPEG/PNG; elevation GeoTIFF sets `nodata`/`_FillValue` to NaN |
 | Colour mosaic ≠ analysis values | Rendered imagery vs numerical coverage | XYZ/WMS are often pictures; WCS elevation carries numbers — see {doc}`design-principles` |
@@ -72,15 +72,6 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 - Layer names are year-suffixed (`Vegetation_Object_Model_2022`, …). Confirm the year in GetCapabilities before hard-coding.
 - Transparent PNG GetMap responses decode to **RGBA (4 bands)**.
 
-## Politeness soak evidence
-
-County-scale / multi-tile politeness is checked on a **split lane** (see {doc}`how-it-works`):
-
-- Nightly: `pytest -m soak` (also tagged `@net`/`@slow`) — modest cold mosaics under EA + OSM ceilings; deselected on PRs.
-- Maintainer: `uv run python scripts/soak_large_aoi_presets.py` — larger AOIs for 0.3-scale evidence; not a PR job.
-
-If a nightly soak fails with many 403s, check you did not raise concurrency past the preset. If a maintainer large soak fails mid-mosaic, prefer the preset ceiling and `compute_with_policy` before blaming the host.
-
 ## Failures are loud (by default)
 
 After retries, a failed tile raises {py:exc}`tilearray.NetworkError`. Mosaics do **not** succeed with silent NaN holes; sibling in-flight tile fetches abort when the session fails hard. Capabilities / DescribeCoverage HTTP failures on the WCS/WMTS **httpx** path also raise {py:exc}`tilearray.NetworkError`.
@@ -89,9 +80,9 @@ Bad inputs and setup mistakes raise other {py:exc}`tilearray.TileArrayError` sub
 
 Opt in to visible soft-fill with plan-time ``on_tile_error=soft_fail_exhausted_tiles`` (or ``soft_fail=True``). Soft-fill runs **only after** fetcher retries finish, never calls ``FetchProgress.abort``, and records failures in ``progress.errors`` / ``attrs["tilearray_tile_errors"]``. Auth (401), exhausted 429, and decode/library errors still hard-abort under the preset; a soft-fail fraction above ``soft_fail_max_fraction`` (default ``0.1``) also aborts.
 
-## Stage-gate mistakes (format / URL / coverage_id)
+## Format / URL / coverage mistakes
 
-These fail **before** a useful mosaic exists. Exception text names what was wrong, what was tried, and what to check next (#88).
+These fail **before** a useful mosaic exists. Exception text names what was wrong, what was tried, and what to check next.
 
 | Symptom (exception text / class) | Likely cause | What to do |
 |----------------------------------|--------------|------------|
@@ -118,7 +109,7 @@ Every `*Config` already accepts `params=` (extra query) and `headers=` (extra HT
 
 Prefer `params=` / `headers=` over baking secrets into XYZ URL templates (`?key=…` or `{key}` placeholders). Load values from the environment or a secret store; never commit keys. Soft-fail does **not** paper over bad credentials — auth **401** still hard-aborts (see above).
 
-Config `params=` / `headers=` also reach WCS/WMTS **GetCapabilities** / **DescribeCoverage** (same shared httpx policy as tiles) so private WCS can plan without a second credential path (#57). Keyed XYZ recipe: {doc}`example-sources`.
+Config `params=` / `headers=` also reach WCS/WMTS **GetCapabilities** / **DescribeCoverage** (same shared httpx policy as tiles) so private WCS can plan without a second credential path. Keyed XYZ recipe: {doc}`example-sources`.
 
 ## Custom endpoints
 

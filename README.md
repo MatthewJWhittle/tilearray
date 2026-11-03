@@ -73,7 +73,7 @@ elevation = compute_with_policy(da)
 print(elevation.shape, float(elevation.mean()))
 ```
 
-EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS is supported via `WMTSConfig`; a host guide is still TBD.
+EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS is supported via `WMTSConfig`; a published host guide is not available yet.
 
 ## Development
 

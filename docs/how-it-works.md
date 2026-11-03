@@ -70,23 +70,14 @@ Same-ish names, different jobs. **Host ceiling ≠ call politeness ≠ Dask thre
 
 | Name | Where | Job |
 |------|-------|-----|
-| `max_concurrent_requests` | `*Config` field **and** `create_array` override via `**service_options` | Config / preset **host ceiling** input. On a preset config, a **lower** override is call-local only; a **raise** lifts the shared ceiling ([#67](https://github.com/MatthewJWhittle/tilearray/pull/67)). |
+| `max_concurrent_requests` | `*Config` field **and** `create_array` override via `**service_options` | Config / preset **host ceiling** input. On a preset config, a **lower** override is call-local only; a **raise** lifts the shared ceiling. |
 | `FetchPolicy.max_concurrent` | Policy / attrs `tilearray_fetch_policy` | **Shared process-gate** (part of the fetcher `cache_key`). |
 | `call_max_concurrent` | `FetchPolicy` + `FetchProgress` | **Per-call / per-session** in-flight cap; **not** in `cache_key`. |
 | `compute_with_policy(..., max_concurrent=)` | Compute helper | **Dask worker sizing only** (merges into attrs policy for `num_workers`). The HTTP gate was fixed at `create_array`. |
 
 Do **not** treat `FetchPolicy(max_concurrent=1)` as the polite-call recipe — that shrinks the shared gate for sibling sessions. Prefer a lower `max_concurrent_requests=` override on `create_array` (or `call_max_concurrent` on the session) so the host ceiling stays intact.
 
-### Politeness evidence (nightly vs maintainer)
-
-Multi-tile cold mosaics under the EA + OSM presets are **evidence**, not folklore:
-
-| Lane | What runs | Scale | When |
-|------|-----------|-------|------|
-| **Nightly soak** | `tests/integration/test_preset_soak.py` (`@pytest.mark.soak`, also `@net` / `@slow`) | Tens of tiles (guide-scale EA 4×4, multi-tile OSM London) under preset ceilings; offline fail-loud abort under concurrent pressure | Nightly workflow (`pytest -m "net or slow"`). **Deselected on PRs** with default `not slow and not net` |
-| **Maintainer large-AOI soak** | `scripts/soak_large_aoi_presets.py` | Hundreds–thousands of tiles (county / valley profiles) — feeds the 0.3 large-AOI exit criterion | Opt-in on a laptop or larger machine; never always-on PR CI |
-
-Both lanes keep fail-loud defaults (hard `NetworkError` + sibling abort after retries; no silent NaN). Soft-fill stays plan-time opt-in. Do not raise concurrency past preset ceilings; do not add new host presets here (that is a separate roadmap track).
+Stay at or below preset ceilings on multi-tile cold mosaics. Soft-fill is plan-time opt-in; the default remains hard `NetworkError` + sibling abort after retries. Maintainer soak commands live in {doc}`building-docs`.
 
 ---
 
@@ -122,7 +113,7 @@ Product vocabulary (canonical: {doc}`design-principles`) separates three ideas:
 | **Service / request CRS** | CRS used when talking to the provider |
 | **Output / array CRS** | Actual CRS of returned pixels + transform |
 
-**Today:** one `crs=` argument both interprets the bbox and labels the mosaic. tilearray does **not** run a client-side raster warp onto a different CRS; pixels stay on the planned mosaic grid. **Target design:** callers may use a convenient `bbox_crs` while fixed grids (WMTS/XYZ) return native-grid pixels in their true output CRS (with reported snapped extent). Server-side WMS/WCS CRS changes, if exposed, stay explicit and must match returned metadata. Label anything beyond the current single-`crs=` behaviour as target work ([#92](https://github.com/MatthewJWhittle/tilearray/issues/92), [#93](https://github.com/MatthewJWhittle/tilearray/issues/93), [#95](https://github.com/MatthewJWhittle/tilearray/issues/95)) — not a shipped promise.
+**Today:** one `crs=` argument both interprets the bbox and labels the mosaic. tilearray does **not** run a client-side raster warp onto a different CRS; pixels stay on the planned mosaic grid. **Target design:** callers may use a convenient `bbox_crs` while fixed grids (WMTS/XYZ) return native-grid pixels in their true output CRS (with reported snapped extent). Server-side WMS/WCS CRS changes, if exposed, stay explicit and must match returned metadata. Do not treat separate CRS roles as already shipped — see {doc}`design-principles`.
 
 **Imagery vs numerical coverages:** XYZ/WMS (and many WMTS) paths are often *rendered* tiles (JPEG/PNG, sometimes palette → single band). WCS elevation is a *numerical* coverage (GeoTIFF, nodata → NaN). Do not assume colour mosaics imply analysis-grade values, or elevation nodata rules for imagery.
 
