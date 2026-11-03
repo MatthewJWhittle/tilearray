@@ -14,6 +14,15 @@ result = compute_with_policy(da)          # or compute_with_policy(da.mean())
 
 `create_array` stores fetch policy on `da.attrs`; `compute_with_policy` reads it automatically. You do not need to pass `max_concurrent` by hand.
 
+## CRS / attrs / rioxarray handoff
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| “Wrong” CRS vs GeoTIFF tags | Mosaic CRS is the **request** `crs=`, not tags inside tiles | Pass the CRS you planned with; see {doc}`how-it-works` georef contract |
+| Plot looks flipped | Expecting south-up rows | Arrays are **north-up** (row 0 = north); do not flip for display |
+| Missing `nodata` on RGB | Imagery path omits elevation nodata | Expected for JPEG/PNG; elevation GeoTIFF sets `nodata`/`_FillValue` to NaN |
+| Need rasterio/rioxarray write | Optional downstream | Use the rioxarray recipe in {doc}`how-it-works` § Downstream use (`write_crs` / `write_transform` / `write_nodata` from attrs) |
+
 ## Environment Agency WCS
 
 | Symptom | Likely cause | What to do |

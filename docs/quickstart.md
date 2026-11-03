@@ -49,9 +49,10 @@ bbox = (431900.0, 382700.0, 432700.0, 383500.0)
 da = create_array(config, bbox, CRS.EPSG_27700)
 elevation = compute_with_policy(da)
 print(elevation.shape, float(elevation.mean()))
+print(elevation.attrs["crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
 ```
 
-The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug.
+The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. Mosaic attrs carry CRS / Affine `transform` / NaN `nodata` for a simple rioxarray handoff ({doc}`how-it-works`).
 
 ## WMS — Environment Agency Vegetation Object Model
 
