@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Codify design principles: canonical `docs/design-principles.md` (ethos, CRS roles, access vs processing, imagery vs numerical coverages), root `AGENTS.md`, audited `guidelines.md` (Sphinx / Python 3.9+, API design checklist), and cross-links from CONTRIBUTING / README / how-it-works / API / troubleshooting. Labels current single-`crs=` behaviour vs target `bbox_crs` / native-grid output; no version bump (#98)
+
 ## [0.2.0] - 2026-11-03
 
 Trustworthy-core release: clean-env GeoTIFF install, analysis-ready mosaic attrs, one preferred compute habit, typed public errors, default tile progress, and actionable stage-gate DX — without holding the cut for multi-AOI orchestration or later uniqueness work.

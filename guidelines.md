@@ -1,329 +1,187 @@
-# Python Library Structure & Development Guidelines
+# Engineering guidelines — tilearray
 
-## 1. Core Principles
+Product ethos, spatial contract, and scope live in **[docs/design-principles.md](docs/design-principles.md)**. This file is for people changing the repository: layout, quality tools, tests, and the API design checklist used in PR review.
 
-* Use the `src/` layout. All importable code lives under `src/<package_name>/`.
-* Keep the **public API minimal**. Re-export core functions and classes in `__init__.py`.
-* **Separate logic and I/O.** Pure functions go in `core.py`; side effects and integrations go in `io.py`.
-* Avoid global state. Pass configuration explicitly or via dataclasses.
-* Prefer **composition over inheritance**. Use `Protocols` for interfaces.
+Coding agents: start at **[AGENTS.md](AGENTS.md)**.
 
 ---
 
-## 2. Project Structure
+## 1. Layout
 
-```bash
-project/
-├─ src/
-│  └─ mylib/
-│     ├─ __init__.py
-│     ├─ _version.py
-│     ├─ core.py
-│     ├─ io.py
-│     ├─ errors.py
-│     └─ typing.py
+Use the `src/` layout. Public surface is whatever `__init__.__all__` exports.
+
+```text
+tilearray/
+├─ src/tilearray/          # package (array, fetch, decode, service/, …)
 ├─ tests/
-│  ├─ conftest.py
-│  └─ test_core.py
-├─ docs/
-│  ├─ index.md
-│  └─ api.md
+│  ├─ unit/
+│  ├─ contract/            # VCR / recorded HTTP
+│  ├─ integration/         # @net / @slow / @soak
+│  └─ data/
+├─ docs/                   # Sphinx (MyST) — not MkDocs
+├─ scripts/                # docs artifacts, soaks, …
+├─ notebooks/
 ├─ pyproject.toml
-├─ README.md
-├─ LICENSE
+├─ Makefile
+├─ AGENTS.md
+├─ CONTRIBUTING.md
 ├─ CHANGELOG.md
-└─ .pre-commit-config.yaml
+└─ README.md
 ```
 
----
-
-## 3. Build & Packaging
-
-* Use **`pyproject.toml`** (PEP 621). Do not use `setup.py`.
-* Build with **Hatch** or **uv**.
-* Follow **Semantic Versioning** (`MAJOR.MINOR.PATCH`).
-* Source version from VCS tags (via `hatch-vcs` or `uv version`).
-* Keep runtime dependencies minimal. Use **extras** for optional stacks.
-* Include `py.typed` to ship type hints.
+- Prefer **composition** over inheritance; use `Protocol`s where interfaces help.
+- Avoid global state; pass configuration explicitly (dataclasses / pydantic models).
+- Separate planning, HTTP fetch, decode, and mosaic assembly; don’t overload one kwarg with three jobs.
 
 ---
 
-## 4. Code Quality
+## 2. Build & packaging
 
-* Use **Ruff** for linting and formatting.
-* Use **Mypy** with strict type checking.
-* Use **Pytest** for testing. Mirror `src/` layout.
-* Unit tests should be fast. Mark integration tests as `@pytest.mark.slow`.
-* Use **property-based tests** (`hypothesis`) for data validation.
-* Pre-commit hooks must run Ruff, Mypy, and Pytest before commit.
-
----
-
-## 5. Public API
-
-```python
-from .core import do_thing, Thing
-from .errors import MylibError
-__all__ = ["do_thing", "Thing", "MylibError"]
-```
-
-* Define exports explicitly in `__init__.py`.
-* Use `__version__` from `_version.py`.
-* Avoid exposing internal or unstable functions.
+- **`pyproject.toml`** (Hatchling) + **uv** for envs/locks.
+- **Semantic Versioning**; version from VCS tags (`hatch-vcs`).
+- Supported Python: **3.9–3.12** (`requires-python = ">=3.9"`).
+- Keep runtime deps minimal; optional stacks via extras. Ship `py.typed`.
+- Prefer fewer meaningful PyPI cuts; land work on `main` continuously.
 
 ---
 
-## 6. Error Handling & Logging
+## 3. Code quality
 
-* Define a **base exception** (`MylibError`) and subclass for specific cases.
-* Wrap third-party exceptions in custom errors.
-* Use `logging.getLogger(__name__)`; never use `print`.
-
----
-
-## 7. Typing & Interfaces
-
-* Use **Python 3.10+ typing features** (`|`, `TypeAlias`, `Protocol`, `Literal`).
-* Store shared aliases and protocols in `typing.py`.
-* Always run `mypy --strict`.
-* Mark the package as typed with a `py.typed` file.
-
----
-
-## 8. Documentation
-
-* Use **MkDocs Material** with `mkdocstrings`.
-* Use **Google or NumPy docstring style**.
-* Keep `README.md` concise:
-
-  * What it does
-  * How to install
-  * 60-second example
-  * Link to docs and changelog
-
----
-
-## 9. CI/CD
-
-* Use **GitHub Actions** or equivalent CI.
-* Run lint, type-check, tests, and build on every push and PR.
-* Test on **Python 3.10–3.12**.
-* On tag `v*`, build and publish to **PyPI** automatically.
-
----
-
-## 10. Dependencies
-
-* Keep runtime dependencies broad (`>=,<`) for compatibility.
-* Lock dev dependencies using **uv** or **Hatch** environments.
-* Use extras for heavy dependencies (`[gdal]`, `[torch]`, `[azure]`).
-
----
-
-## 11. Config & Data
-
-* No hidden config files.
-* Accept configuration via kwargs or TOML.
-* No secrets in the repository. Use **environment variables** or **Azure Key Vault**.
-* Avoid bundling binary assets. Use runtime downloads with caching.
-
----
-
-## 12. Testing Policy
-
-* Aim for **>90% coverage** of core logic.
-* Integration tests can run slower but must be isolated.
-* Every bug fix must include a reproducing test.
-* Keep fixtures simple and reusable.
-
----
-
-## 13. Release Process
-
-1. Update `CHANGELOG.md` following *Keep a Changelog* format.
-2. Bump version automatically from tag.
-3. Run full CI.
-4. Create tag `vX.Y.Z` to trigger PyPI and GitHub Release.
-
----
-
-## 14. Optional Geospatial / ML Notes
-
-* Normalise CRS at data boundaries; keep consistent internal CRS.
-* Gate heavy dependencies (`rasterio`, `torch`, `azureml`) behind extras.
-* Prefer `xarray` or `numpy` for array ops; avoid in-memory GDAL ops.
-* Always handle **nodata values** and **dtypes** explicitly.
-
----
-
-## 15. Summary Checklist
-
-* [ ] `src/` layout established
-* [ ] `pyproject.toml` configured with build tools and extras
-* [ ] Ruff, Mypy, Pytest, and Pre-commit set up
-* [ ] Custom exceptions and logging implemented
-* [ ] Typing complete with `py.typed`
-* [ ] Docs built with MkDocs
-* [ ] CI/CD pipeline operational
-* [ ] SemVer, changelog, and tagged release in place
-* [ ] Extras defined for optional dependencies
-
-# TESTING.md — Rules for AI Agent (Python Tile/Data Library)
-
-> Generic, enforceable rules for testing a Python library that fetches tiles/data from web services (XYZ/WMTS/WMS/HTTP APIs). Keep CI fast, deterministic, and provider‑agnostic.
-
----
-
-## 1. Scope & Goals
-
-* Validate **logic, protocols, and resilience** without depending on live services.
-* Default suite: **no network**, finishes **< 60 s** on CI Linux, Python 3.10–3.12.
-* Prove correctness at three layers: **unit → contract (recorded) → live (opt‑in)**.
-
-## 2. Test Taxonomy (must separate)
-
-1. **Unit (fast, pure):** No network; test tiling math, URL building, caching, retries/backoff policies, CRS conversions, content validation.
-2. **Contract (recorded HTTP):** Use recorded interactions (VCR) to assert protocol compatibility and header/query semantics. Secrets redacted.
-3. **Live Integration (opt‑in):** Real endpoints; marked; run only on scheduled/nightly.
-4. **Property‑based:** Randomised inputs to check invariants (tile↔bbox round‑trip, bounds handling, cache key stability).
-5. **Performance/Smoke:** Lightweight throughput/latency/import‑time checks with strict timeouts.
-
-## 3. Tooling (choose and standardise)
-
-* Test: **pytest**, **pytest‑xdist** (parallel), **pytest‑timeout**.
-* Property tests: **hypothesis**.
-* HTTP: Prefer **httpx**; mock with **respx** (or `responses` if using `requests`).
-* Recording: **vcrpy** or **pytest‑vcr**; redact tokens; record mode `once`.
-* Coverage: **coverage.py** (branch), target ≥ **85%** overall, ≥ **90%** for core logic.
-
-## 4. Layout
+- **Ruff** for format + lint; **mypy** on `src/tilearray`; **pytest** for tests.
+- Unit tests stay fast; mark network / long work `@pytest.mark.net` / `@pytest.mark.slow` (and `@soak` where applicable).
+- Pre-commit: Ruff + related hooks (`make pre-commit`).
+- Public signatures typed; don’t weaken types to ship.
 
 ```bash
-tests/
-  unit/
-    test_tiling_math.py
-    test_url_builder.py
-    test_cache_policy.py
-    test_retry_backoff.py
-    data/        # tiny fixture files (≤50 KB)
-  contract/
-    xyz/
-      test_xyz_contract.py
-      cassettes/
-    wmts/
-      test_wmts_contract.py
-      cassettes/
-  integration/
-    test_live_endpoints.py   # @net @slow, skipped on PRs
-  conftest.py                # shared fixtures, markers, VCR config
+make test
+make lint
+make docs          # Sphinx HTML under docs/_build/html/
 ```
 
-## 5. Mocking Policy
+---
 
-* **Mock:** network I/O, disk writes, clocks, randomness (in unit tests only).
-* **Do not mock:** library’s own retry/backoff/cache logic—test it against a **fake server**.
-* Provide a programmable **fake server** fixture (e.g., `pytest‑httpserver`) for redirects (301/302), rate limits (429), transient errors (5xx), gzip/chunked responses, and ETag flows.
+## 4. Public API
 
-## 6. Behaviours to Assert (tile/data clients)
+- Explicit `__all__` in `src/tilearray/__init__.py` is the contract.
+- Prefer configs + `create_array` / `load_array` / `compute_with_policy`; do not re-export parsers/services users don’t need.
+- One primary compute habit: **`compute_with_policy`** (not competing README folklore).
+- Host politeness: `tilearray.fetch_presets` composed onto `*Config.from_url` — **no** new `for_*` host methods on protocol configs.
+- Plan-time bind: fetch policy, `on_tile_error`, custom decoders are arguments to `create_array` before the Dask graph is built.
 
-* **URL templating:** `/{z}/{x}/{y}` patterns, subdomains, query strings; credentials in **headers**, not URLs.
-* **Tiling math:** bbox↔tile index round‑trip; parent/child relations; min/max zoom clamping; antimeridian and polar edges.
-* **HTTP contract:** explicit connect/read timeouts; retry on **idempotent + retryable** codes (429/502/503/504) with **jittered exponential backoff**; honour `Retry‑After`.
-* **Caching:** cache key = URL + relevant headers; `ETag`/`If‑None‑Match`, `Last‑Modified`/`If‑Modified‑Since`, TTL expiry, LRU eviction; assert hit→miss sequences.
-* **Content validation:** MIME type; minimal image sanity (dims >0, decodes); for rasters: dtype, shape, nodata; use **tolerant** comparisons (pixel MAE/SSIM), not byte‑equality.
-* **Concurrency:** thread/async safety; connection pool reuse; no FD leaks; bounded parallelism.
-* **Resource hygiene:** close responses/clients; clean temp files; context managers.
+---
 
-## 7. Raster/Image Comparison Rules
+## 5. Errors & logging
 
-* Compare numerically (MAE/PSNR/SSIM) with explicit tolerances.
-* Ignore volatile metadata (timestamps, software tags).
-* Provide helper `assert_image_like(a, b, *, max_mae=1.0)` and reuse it.
+- Raise the `TileArrayError` hierarchy (`ValidationError`, `NetworkError`, `ParseError`, `ConfigurationError`, `ServiceError`).
+- Wrap third-party failures at the public boundary; don’t raise bare `Exception`.
+- Use `logging.getLogger(__name__)`; never `print` for library diagnostics.
+- Prefer actionable messages (what failed, what to check) over opaque status dumps.
 
-## 8. Fixtures (required)
+---
 
-* `client()` — configured HTTP client with small timeouts.
-* `fake_server()` — programmable server for redirects/errors/gzip.
-* `tile_coords()` — `hypothesis` strategy constrained to valid ranges.
-* `tmp_cache_dir()` — isolated cache; expose metrics (hits/misses/evictions).
-* `vcr_config` — global cassette rules: redact headers (`Authorization`, `X‑API‑Key`), normalise dates, match on method+path+query; `record_mode="once"`.
+## 6. Documentation
 
-## 9. Markers & CI Policy
+- User docs are **Sphinx** + MyST (`docs/`, `make docs`). Do not assume MkDocs.
+- Docstrings: Google or NumPy style (Napoleon).
+- Usage guides should use real public hosts via notebooks / `make docs-artifacts`; the HTML build itself stays offline.
+- User-visible behaviour changes → update how-it-works / troubleshooting / API / quickstart as needed, plus **CHANGELOG** `[Unreleased]`.
+- Label **target design** vs **current alpha** honestly (especially CRS roles — see design principles).
 
-* Default run: **no network**, `-m "not slow and not net"`.
-* `@pytest.mark.slow` ⇒ >1 s; `@pytest.mark.net` ⇒ any outbound traffic; `@pytest.mark.contract` ⇒ VCR‑backed.
-* PR CI: unit + contract; fail if any cassette contains unredacted secrets (regex scan step).
-* Nightly CI: add `@net` integration; rate‑limit and randomise provider order; optional cassette refresh behind maintainer flag.
+---
 
-## 10. Data & Secrets Hygiene
+## 7. CI
 
-* Keep binary fixtures tiny and committed under `tests/data`.
-* Never commit real credentials; require via env vars; skip `@net` tests if missing.
-* Redact tokens from cassettes; enforce by CI job that scans repo + cassettes.
+- GitHub Actions: lint, type-check, tests, docs, build on PRs.
+- Default pytest: **no network** (`not slow and not net`).
+- Test matrix: Python **3.9–3.12**.
+- Tag `v*` publishes to PyPI (trusted publishing / attestations as configured).
 
-## 11. Failure Forensics (make debugging easy)
+---
 
-* On HTTP failure, error messages must include: URL, status, attempt count, backoff ms, and any request/trace IDs present.
-* Log cache events at DEBUG in tests; assert expected sequences.
+## 8. Config, secrets, data
 
-## 12. Performance Budgets
+- No secrets in the repository. Compose credentials via config `headers` / `params` (plan-time); prefer params over secrets in URL templates.
+- Tiny fixtures under `tests/data`; redacted cassettes for contract tests.
 
-* Importing the library: **< 200 ms** cold start.
-* Single tile fetch (mocked): **< 50 ms** median in unit tests.
-* Parallel fetch burst (mocked): throughput scales ~linearly up to configured limit; assert no starvation/deadlocks.
+---
 
-## 13. Bad Practices to Avoid
+## 9. API design checklist (PR review)
 
-* Using `try/except` in tests to suppress failures. Tests must fail visibly.
-* Imports inside tests instead of module-level imports (breaks collection and fixtures).
-* Over‑mocking or mocking internal logic.
-* Changing tests to fit broken code rather than fixing code to satisfy valid tests.
-* Testing private implementation details instead of public behaviour.
-* Writing excessively long tests that check multiple concerns instead of focused, short ones.
-* Using arbitrary `sleep()` or timing loops—use deterministic clocks or fake time.
-* Allowing hidden state between tests (globals, shared caches).
-* Writing assertions without context—always include diagnostic messages.
-* Network or file system access in unit tests.
+Use with [docs/design-principles.md](docs/design-principles.md). Reject or redesign when a box fails without an explicit, documented reason.
 
-## 14. Minimal Snippets (reference only)
+- [ ] **Intent-based names** — the name predicts behaviour; one meaning per term across configs, errors, and docs.
+- [ ] **Predictable defaults** — safe/loud/polite path unchanged unless the PR is *about* changing it (CHANGELOG + docs in the same PR).
+- [ ] **Explicit lossy transforms** — no silent local warp, resample, band drop, or falsely labelled CRS; server-side CRS change is opt-in and reflected in metadata.
+- [ ] **Accurate metadata** — returned CRS, transform, extent, dtype/bands/nodata match what was assembled.
+- [ ] **Useful errors** — typed hierarchy; actionable text; no silent success with partial/wrong coverage.
+- [ ] **Dependencies** — GDAL-free default path; no drive-by heavy stack.
+- [ ] **Tests as contract** — offline unit/contract coverage of the dangerous case (not only the happy path).
+- [ ] **Service politeness** — host ceiling preserved; call-local limits don’t redefine the shared gate; presets compose.
+- [ ] **Access vs processing** — change stays inside fetch/assemble boundaries (or is clearly out of scope).
+- [ ] **Surface area** — new public symbol justified; `__all__` + autosummary updated; no dual habit for an existing job.
 
-**Mock HTTP with respx (httpx):**
+Awkward patterns are **mistakes to fix**, not intentional design, unless evidence shows otherwise.
 
-```python
-import respx
-from httpx import Response
+---
 
-@respx.mock
-def test_retries_on_503(tile_client):
-    route = respx.get("https://tiles.example.com/1/2/3.png").mock(
-        side_effect=[Response(503), Response(200, content=b"PNG...")]
-    )
-    content = tile_client.get(1, 2, 3)
-    assert route.called
-    assert content.startswith(b"PNG")
-```
+## 10. Testing policy
 
-**Property test skeleton:**
+> Enforceable rules for a library that fetches tiles from web services. Keep CI fast, deterministic, and provider-agnostic.
 
-```python
-from hypothesis import given, strategies as st
+### Goals
 
-@given(z=st.integers(0, 20), x=st.integers(0, 2**20-1), y=st.integers(0, 2**20-1))
-def test_roundtrip(z, x, y):
-    x %= 1 << z; y %= 1 << z
-    bbox = tile_to_bbox(z, x, y)
-    z2, x2, y2 = bbox_to_tile(bbox, z)
-    assert (z, x, y) == (z2, x2, y2)
-```
+- Validate **logic, protocols, and resilience** without live services by default.
+- Default suite: **no network**, finishes quickly on CI Linux, Python 3.9–3.12.
+- Prove correctness at layers: **unit → contract (recorded) → live (opt-in)**.
 
-## 15. Final Checklist (enforced)
+### Taxonomy
 
-* [ ] Unit tests cover URL/tiling/caching/retry logic with **no network**.
-* [ ] Contract tests recorded; secrets redacted; expiries reviewed quarterly.
-* [ ] Live tests marked and excluded from PRs; require env‑gated creds.
-* [ ] Coverage thresholds met; branch coverage enabled.
-* [ ] CI includes secret‑leak scan and cassette policy checks.
-* [ ] Fixtures reusable; no global state; tests parallel‑safe.
-* [ ] No bad practices present in PRs (see section 13).
+1. **Unit (fast, pure):** no network — tiling math, URL building, retries/backoff, CRS handling, decode, mosaic attrs.
+2. **Contract (recorded HTTP):** VCR cassettes; secrets redacted.
+3. **Live integration (opt-in):** real endpoints; `@net` / `@slow` / `@soak`; nightly or maintainer only.
+4. **Property-based:** hypothesis for invariants (bounds, cache keys, planner edges).
+5. **Performance/smoke:** import-time and mocked throughput with timeouts where useful.
 
-**Owner:** AI Agent  • **Policy:** Do not deviate without explicit maintainer approval.
+### Tooling
+
+- **pytest** (+ xdist/timeout as configured); **hypothesis**; **httpx** + **respx**; **vcrpy** / pytest-vcr; **coverage.py**.
+
+### Markers & CI
+
+- Default: `-m "not slow and not net"` (project default).
+- PR CI: unit + contract; no live fetches.
+- Nightly: add `@net` / soak under presets; do not raise concurrency past preset ceilings.
+
+### Mocking
+
+- Mock network I/O, clocks, and randomness in unit tests.
+- Do **not** mock away the library’s own retry/backoff/fetch-gate logic — exercise it against fakes.
+- Prefer testing public behaviour over private implementation details.
+
+### Behaviours worth asserting
+
+- URL templating and credential placement (`headers`/`params`, not secrets in committed URLs).
+- Tiling / planning correctness (no silent drop of leftover coverage; no host-illegal sub-pixel requests).
+- HTTP: timeouts; retries on retryable codes; honour `Retry-After` where applicable.
+- Mosaic attrs: CRS, north-up Affine transform, pixel-centre coords, band/nodata policy.
+- Concurrency: shared host ceiling vs call-local caps; no FD leaks; bounded parallelism.
+- Content: dtype/shape; elevation nodata → NaN; imagery band honesty.
+
+### Bad practices
+
+- Catching exceptions in tests to hide failures.
+- Inline imports that break collection.
+- Changing tests to fit broken code.
+- Network or filesystem side effects in unit tests.
+- Assertions without diagnostic context.
+- Hidden shared state between tests.
+
+### Checklist
+
+- [ ] Unit coverage of planner/fetch/decode/mosaic logic with **no network**.
+- [ ] Contract tests recorded; secrets redacted.
+- [ ] Live tests marked and excluded from PRs.
+- [ ] Fixtures reusable; tests parallel-safe.
+- [ ] No bad practices from the list above.
+
+**Policy:** do not weaken this without maintainer approval. Product “will / will not” rules remain in `docs/design-principles.md`.

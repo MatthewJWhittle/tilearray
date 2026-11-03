@@ -100,6 +100,7 @@ Milestone: [1.0 Stable contract](https://github.com/MatthewJWhittle/tilearray/mi
 
 ## See also
 
+- {doc}`design-principles` — canonical ethos, CRS roles, scope/non-goals
 - {doc}`how-it-works` — plan → polite fetch → mosaic
 - {doc}`example-sources` — public endpoints and presets
 - {doc}`building-docs` — maintainer notes for Sphinx and figures

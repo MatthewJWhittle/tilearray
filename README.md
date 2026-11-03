@@ -1,6 +1,6 @@
 # <img src="https://matthewjwhittle.github.io/tilearray/_static/logo/tilearray-mark-128.png" alt="" width="36" height="36"> tilearray
 
-tilearray turns remote tile services into **Dask**-backed **xarray** arrays — one `create_array` call for WCS, WMS, WMTS, or XYZ. Shared fetch and decode keep mosaics polite to servers and analysis-ready on a laptop or a larger machine.
+tilearray turns remote tile services into **Dask**-backed **xarray** arrays — one `create_array` call for WCS, WMS, WMTS, or XYZ. Shared fetch and decode keep mosaics polite to servers and analysis-ready on a laptop or a larger machine. It is a **data-access** library (plan → fetch → assemble), not a GIS processing suite — see [design principles](https://matthewjwhittle.github.io/tilearray/design-principles.html).
 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Docs](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml)
@@ -8,7 +8,7 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays — 
 
 > **Alpha.** The API may change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one `create_array` entry point.
 
-**Docs:** [matthewjwhittle.github.io/tilearray](https://matthewjwhittle.github.io/tilearray/) — [install](https://matthewjwhittle.github.io/tilearray/install.html), [how it works](https://matthewjwhittle.github.io/tilearray/how-it-works.html), [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html), [usage guides](https://matthewjwhittle.github.io/tilearray/guides/index.html), [example sources](https://matthewjwhittle.github.io/tilearray/example-sources.html), [troubleshooting](https://matthewjwhittle.github.io/tilearray/troubleshooting.html), and [API](https://matthewjwhittle.github.io/tilearray/api/index.html).
+**Docs:** [matthewjwhittle.github.io/tilearray](https://matthewjwhittle.github.io/tilearray/) — [install](https://matthewjwhittle.github.io/tilearray/install.html), [how it works](https://matthewjwhittle.github.io/tilearray/how-it-works.html), [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html), [usage guides](https://matthewjwhittle.github.io/tilearray/guides/index.html), [example sources](https://matthewjwhittle.github.io/tilearray/example-sources.html), [troubleshooting](https://matthewjwhittle.github.io/tilearray/troubleshooting.html), [design principles](https://matthewjwhittle.github.io/tilearray/design-principles.html), and [API](https://matthewjwhittle.github.io/tilearray/api/index.html).
 
 ## Install
 
@@ -77,7 +77,7 @@ EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap su
 
 ## Development
 
-Clone, `uv sync --dev`, then `make test` / `make lint`. Full setup, docs builds, and project conventions: [CONTRIBUTING.md](CONTRIBUTING.md).
+Clone, `uv sync --dev`, then `make test` / `make lint`. Full setup, docs builds, and project conventions: [CONTRIBUTING.md](CONTRIBUTING.md). Agents: [AGENTS.md](AGENTS.md) → [docs/design-principles.md](docs/design-principles.md).
 
 ## License
 
