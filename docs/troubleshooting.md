@@ -57,6 +57,20 @@ Opt in to visible soft-fill with plan-time ``on_tile_error=soft_fail_exhausted_t
 
 Pass `cache_dir=` to `create_array` / `load_array` to reuse tile bytes across runs. Warm reads sniff the body when response headers lie (e.g. multipart WCS). Clear the directory if you change decode expectations or suspect corrupt cache entries.
 
+## Private / keyed hosts
+
+Every `*Config` already accepts `params=` (extra query) and `headers=` (extra HTTP headers) on **tile** requests — same path as public hosts. Put credentials there at plan time; there is no separate auth client.
+
+| Need | Put it on |
+|------|-----------|
+| API key / token query (`key=`, `api_key=`, …) | `params={"key": …}` |
+| Legacy username + password as query params | `params={"username": …, "password": …}` (vendor names vary) |
+| Bearer / API-key header / HTTP Basic | `headers={"Authorization": "Bearer …"}` (or `X-API-Key`, `Basic …`) |
+
+Prefer `params=` / `headers=` over baking secrets into XYZ URL templates (`?key=…` or `{key}` placeholders). Load values from the environment or a secret store; never commit keys. Soft-fail does **not** paper over bad credentials — auth **401** still hard-aborts (see above).
+
+**WCS / WMTS capabilities gap:** config credentials apply to tile fetches today. `DescribeCoverage` / `GetCapabilities` still use a bare `requests` session and may ignore config `headers`/`params`, so private WCS can fail at plan time before any tile runs. Tracked under [#57](https://github.com/MatthewJWhittle/tilearray/issues/57). XYZ and WMS (no library caps step) and WMTS with a known REST template are unaffected. Keyed XYZ recipe: {doc}`example-sources`.
+
 ## Custom endpoints
 
-Use `WCSConfig.from_url` / `WMSConfig.from_url` / `WMTSConfig.from_url` / `XYZConfig.from_url` and tune `FetchPolicy` / config knobs (`max_concurrent_requests`, `rate_limit_per_second`, AIMD fields). Presets exist only for known host quirks (EA DSP WCS, OSMF XYZ) — they are not a catalogue of every public layer.
+Use `WCSConfig.from_url` / `WMSConfig.from_url` / `WMTSConfig.from_url` / `XYZConfig.from_url` and tune `FetchPolicy` / config knobs (`max_concurrent_requests`, `rate_limit_per_second`, AIMD fields). Pass credentials via `params=` / `headers=` (see above). Presets exist only for known host quirks (EA DSP WCS, OSMF XYZ) — they are not a catalogue of every public layer.
