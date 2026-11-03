@@ -47,6 +47,15 @@ result = compute_with_policy(da)          # or compute_with_policy(da.mean())
 - Layer names are year-suffixed (`Vegetation_Object_Model_2022`, …). Confirm the year in GetCapabilities before hard-coding.
 - Transparent PNG GetMap responses decode to **RGBA (4 bands)**.
 
+## Politeness soak evidence
+
+County-scale / multi-tile politeness is checked on a **split lane** (see {doc}`how-it-works`):
+
+- Nightly: `pytest -m soak` (also tagged `@net`/`@slow`) — modest cold mosaics under EA + OSM ceilings; deselected on PRs.
+- Maintainer: `uv run python scripts/soak_large_aoi_presets.py` — larger AOIs for 0.3-scale evidence; not a PR job.
+
+If a nightly soak fails with many 403s, check you did not raise concurrency past the preset. If a maintainer large soak fails mid-mosaic, prefer the preset ceiling and `compute_with_policy` before blaming the host.
+
 ## Failures are loud (by default)
 
 After retries, a failed tile raises {py:exc}`tilearray.NetworkError`. Mosaics do **not** succeed with silent NaN holes; sibling in-flight tile fetches abort when the session fails hard. Capabilities / DescribeCoverage HTTP failures on the WCS/WMTS `requests` path also raise {py:exc}`tilearray.NetworkError`.

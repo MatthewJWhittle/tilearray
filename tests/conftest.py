@@ -16,6 +16,10 @@ def pytest_configure(config):
     """Configure test markers."""
     config.addinivalue_line("markers", "slow: marks tests as slow (>1s)")
     config.addinivalue_line("markers", "net: marks tests requiring network")
+    config.addinivalue_line(
+        "markers",
+        "soak: multi-tile politeness soak / bench (also mark net/slow; PR-deselected)",
+    )
     config.addinivalue_line("markers", "contract: marks VCR-backed tests")
     config.addinivalue_line("markers", "property: marks property-based tests")
     config.addinivalue_line("markers", "unit: marks unit tests (fast, pure logic)")

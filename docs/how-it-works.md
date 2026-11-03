@@ -50,6 +50,17 @@ WCS/WMTS **GetCapabilities** / **DescribeCoverage** (and direct `WCSService.get_
 
 AIMD only helps if Dask can schedule enough tile loads — use `compute_with_policy` for multi-tile mosaics.
 
+### Politeness evidence (nightly vs maintainer)
+
+Multi-tile cold mosaics under the EA + OSM presets are **evidence**, not folklore:
+
+| Lane | What runs | Scale | When |
+|------|-----------|-------|------|
+| **Nightly soak** | `tests/integration/test_preset_soak.py` (`@pytest.mark.soak`, also `@net` / `@slow`) | Tens of tiles (guide-scale EA 4×4, multi-tile OSM London) under preset ceilings; offline fail-loud abort under concurrent pressure | Nightly workflow (`pytest -m "net or slow"`). **Deselected on PRs** with default `not slow and not net` |
+| **Maintainer large-AOI soak** | `scripts/soak_large_aoi_presets.py` | Hundreds–thousands of tiles (county / valley profiles) — feeds the 0.3 large-AOI exit criterion | Opt-in on a laptop or larger machine; never always-on PR CI |
+
+Both lanes keep fail-loud defaults (hard `NetworkError` + sibling abort after retries; no silent NaN). Soft-fill stays plan-time opt-in. Do not raise concurrency past preset ceilings; do not add new host presets here (that is a separate roadmap track).
+
 ---
 
 ## 3 · Decode
