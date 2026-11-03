@@ -57,7 +57,7 @@ AIMD only helps if Dask can schedule enough tile loads — use `compute_with_pol
 :width: 700px
 ```
 
-Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into `float32` arrays. JPEG/PNG keep bands `(y, x, band)` when present; GeoTIFF elevation uses the first band.
+Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into `float32` arrays. JPEG/PNG keep bands `(y, x, band)` when present; GeoTIFF elevation uses the first band (pixels via `tifffile`, no GDAL/`zarr` pin cage).
 
 ---
 
@@ -68,7 +68,9 @@ Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into 
 :width: 740px
 ```
 
-Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xarray.DataArray` with coordinates and attrs (`crs`, `service_type`, fetch-policy summary, …). Shape is known when the graph is built; tile bytes load when something computes.
+Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xarray.DataArray` with coordinates and attrs (`crs`, mosaic `transform`, `band_policy`, optional elevation `nodata`, service/fetch summaries, …). Shape is known when the graph is built; tile bytes load when something computes.
+
+**Georef contract:** mosaic CRS is always the `create_array(..., crs=)` you passed — never silently replaced by per-tile GeoTIFF tags. `attrs["transform"]` is a north-up Affine `(a,b,c,d,e,f)` from the planned mosaic bbox + shape (`transform_source="mosaic_bbox"`). `y`/`x` are **pixel centers** consistent with that Affine (row 0 = north). Elevation GeoTIFF decode maps `GDAL_NODATA`/sentinels → NaN in pixels and sets `nodata`/`_FillValue` to NaN; RGB/RGBA imagery omits nodata and keeps `(y, x, band)`.
 
 ---
 
@@ -105,8 +107,20 @@ Memory tracks **what you compute** (full mosaic, a reduction, a window) — not 
 
 With a DataArray you can:
 
-- **Plot** a computed window or a reduction
+- **Plot** a computed window or a reduction (`da.plot()` / `da.isel(band=0).plot()`)
 - **Analyse** with xarray/Dask (stats, terrain, resample)
 - **Feed ML** — sample chips or materialise tensors from the same chunked array
+- **Handoff to rioxarray** (optional install) using mosaic attrs — no silent CRS rewrite:
+
+```python
+# pip install rioxarray
+import rioxarray  # noqa: F401 — registers .rio
+from affine import Affine
+
+da.rio.write_crs(da.attrs["crs"], inplace=True)
+da.rio.write_transform(Affine(*da.attrs["transform"]), inplace=True)
+if "nodata" in da.attrs:
+    da.rio.write_nodata(da.attrs["nodata"], inplace=True)
+```
 
 Next: {doc}`quickstart` or {doc}`guides/index`.

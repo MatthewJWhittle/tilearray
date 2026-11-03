@@ -1,4 +1,5 @@
 import base64
+import math
 import os
 import threading
 import time
@@ -601,9 +602,10 @@ def test_create_array_y_coords_north_at_row_zero(
     )
 
     y = result.coords["y"].values
-    assert y[0] == pytest.approx(bbox.max_y)
-    assert y[-1] == pytest.approx(bbox.min_y)
-    assert np.all(np.diff(y) <= 0)
+    # Pixel centers: first center is half a cell south of the north edge.
+    assert y[0] == pytest.approx(bbox.max_y - 0.5)
+    assert y[-1] == pytest.approx(bbox.min_y + 0.5)
+    assert np.all(np.diff(y) < 0)
 
     computed = result.compute()
     # Northern half of the mosaic (row 0) should sit at higher y than southern half.
@@ -613,7 +615,7 @@ def test_create_array_y_coords_north_at_row_zero(
 
 
 @pytest.mark.unit
-def test_create_array_single_tile_y_coords_span_bbox(
+def test_create_array_single_tile_pixel_center_coords(
     monkeypatch: MonkeyPatch,
 ) -> None:
     bbox = BoundingBox(min_x=10, min_y=20, max_x=30, max_y=40, crs=CRS.EPSG_4326)
@@ -651,12 +653,247 @@ def test_create_array_single_tile_y_coords_span_bbox(
         chunk_size=(4, 4),
     )
 
+    height, width = 4, 4
+    px_w = (bbox.max_x - bbox.min_x) / width
+    px_h = (bbox.max_y - bbox.min_y) / height
     y = result.coords["y"].values
     x = result.coords["x"].values
-    assert y[0] == pytest.approx(bbox.max_y)
-    assert y[-1] == pytest.approx(bbox.min_y)
-    assert x[0] == pytest.approx(bbox.min_x)
-    assert x[-1] == pytest.approx(bbox.max_x)
+    assert y[0] == pytest.approx(bbox.max_y - px_h / 2)
+    assert y[-1] == pytest.approx(bbox.min_y + px_h / 2)
+    assert x[0] == pytest.approx(bbox.min_x + px_w / 2)
+    assert x[-1] == pytest.approx(bbox.max_x - px_w / 2)
+    assert result.attrs["transform"] == (
+        px_w,
+        0.0,
+        bbox.min_x,
+        0.0,
+        -px_h,
+        bbox.max_y,
+    )
+    assert result.attrs["transform_source"] == "mosaic_bbox"
+
+
+@pytest.mark.unit
+def test_geotiff_elevation_attrs_crs_transform_nodata(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Elevation GeoTIFF path: mosaic CRS/transform + NaN nodata; no band dim."""
+
+    bbox = BoundingBox(
+        min_x=100.0, min_y=200.0, max_x=108.0, max_y=204.0, crs=CRS.EPSG_27700
+    )
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
+        return DummyService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        width = request.width or 1
+        height = request.height or 1
+        return TileResponse(
+            data=b"\x00" * (width * height),
+            content_type="application/octet-stream",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+
+    def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
+        height = request.height or 1
+        width = request.width or 1
+        return np.full((height, width), 42.0, dtype=np.float32)
+
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
+
+    result = array_module.create_array(
+        service_url="http://example.com/wcs",
+        bbox=bbox,
+        crs=CRS.EPSG_27700,
+        # DummyService treats chunk_size as (width, height).
+        chunk_size=(8, 4),
+        output_format=Format.GEOTIFF,
+    )
+
+    assert result.dims == ("y", "x")
+    assert result.shape == (4, 8)
+    assert result.attrs["crs"] == CRS.EPSG_27700.value
+    assert result.attrs["band_policy"] == "first_band"
+    assert result.attrs["transform_source"] == "mosaic_bbox"
+    assert math.isnan(result.attrs["nodata"])
+    assert math.isnan(result.attrs["_FillValue"])
+    a, b, c, d, e, f = result.attrs["transform"]
+    assert (a, b, c, d, e, f) == (1.0, 0.0, 100.0, 0.0, -1.0, 204.0)
+    # Centers consistent with Affine: x = c + a*(col+0.5), y = f + e*(row+0.5)
+    assert result.coords["x"].values[0] == pytest.approx(c + a * 0.5)
+    assert result.coords["y"].values[0] == pytest.approx(f + e * 0.5)
+    assert np.all(np.diff(result.coords["y"].values) < 0)
+
+
+@pytest.mark.unit
+def test_rgb_jpeg_attrs_preserve_bands_no_nodata(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """RGB imagery: preserve bands, mosaic transform, no nodata attrs."""
+
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    rgb[..., 0] = 10
+    rgb[..., 1] = 20
+    rgb[..., 2] = 30
+    with BytesIO() as buffer:
+        Image.fromarray(rgb, mode="RGB").save(buffer, format="JPEG")
+        jpeg_bytes = buffer.getvalue()
+
+    class JPEGService(BaseService):
+        service_type = ServiceTypeEnum.XYZ
+        output_format = Format.JPEG
+
+        def __init__(self) -> None:
+            super().__init__("http://example.com")
+
+        def generate_tile_requests(
+            self,
+            bbox: BoundingBox,
+            chunk_size: tuple[int, int],
+            **options: Any,
+        ) -> list[TileRequest]:
+            width, height = chunk_size
+            return [
+                TileRequest(
+                    url="http://example.com/0/0.jpg",
+                    params={},
+                    output_format=Format.JPEG,
+                    crs=bbox.crs,
+                    bbox=bbox,
+                    width=width,
+                    height=height,
+                )
+            ]
+
+        def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
+            return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
+
+    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: JPEGService())
+    monkeypatch.setattr(
+        array_module,
+        "fetch_tile",
+        lambda request, **kwargs: TileResponse(
+            data=jpeg_bytes,
+            content_type="image/jpeg",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        ),
+    )
+
+    bbox = BoundingBox(min_x=-1.0, min_y=50.0, max_x=0.0, max_y=51.0, crs=CRS.EPSG_4326)
+    result = array_module.create_array(
+        service_url="http://example.com",
+        bbox=bbox,
+        crs=CRS.EPSG_4326,
+        service_type=ServiceTypeEnum.XYZ,
+        chunk_size=(4, 4),
+        output_format=Format.JPEG,
+        compute=True,
+    )
+
+    assert result.dims == ("y", "x", "band")
+    assert result.sizes["band"] == 3
+    assert list(result.coords["band"].values) == [0, 1, 2]
+    assert result.attrs["crs"] == CRS.EPSG_4326.value
+    assert result.attrs["band_policy"] == "preserve"
+    assert result.attrs["transform_source"] == "mosaic_bbox"
+    assert "nodata" not in result.attrs
+    assert "_FillValue" not in result.attrs
+    assert len(result.attrs["transform"]) == 6
+
+
+@pytest.mark.unit
+def test_rgba_png_attrs_four_bands_no_nodata(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """RGBA PNG path keeps 4 bands and omits elevation nodata attrs."""
+
+    class PNGService(BaseService):
+        service_type = ServiceTypeEnum.WMS
+        output_format = Format.PNG
+
+        def __init__(self) -> None:
+            super().__init__("http://example.com/wms")
+
+        def generate_tile_requests(
+            self,
+            bbox: BoundingBox,
+            chunk_size: tuple[int, int],
+            **options: Any,
+        ) -> list[TileRequest]:
+            width, height = chunk_size
+            return [
+                TileRequest(
+                    url="http://example.com/wms",
+                    params={},
+                    output_format=Format.PNG,
+                    crs=bbox.crs,
+                    bbox=bbox,
+                    width=width,
+                    height=height,
+                )
+            ]
+
+        def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
+            return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
+
+    png_data = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR4nGP4"
+        "//8/AxJgYGBg+I8BADCBA/5Yy7d/AAAAAElFTkSuQmCC"
+    )
+
+    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: PNGService())
+    monkeypatch.setattr(
+        array_module,
+        "fetch_tile",
+        lambda request, **kwargs: TileResponse(
+            data=png_data,
+            content_type="image/png",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        ),
+    )
+
+    result = array_module.create_array(
+        service_url="http://example.com/wms",
+        bbox=(-1.0, 50.0, -0.5, 50.5),
+        crs=CRS.EPSG_4326,
+        chunk_size=(2, 2),
+        output_format=Format.PNG,
+        compute=True,
+    )
+
+    assert result.dims == ("y", "x", "band")
+    assert result.sizes["band"] == 4
+    assert result.attrs["band_policy"] == "preserve"
+    assert "nodata" not in result.attrs
+    assert result.attrs["transform_source"] == "mosaic_bbox"
+
+
+@pytest.mark.unit
+def test_mosaic_affine_and_pixel_centers_helpers() -> None:
+    bbox = BoundingBox(min_x=0.0, min_y=0.0, max_x=10.0, max_y=20.0, crs=CRS.EPSG_4326)
+    transform = array_module._mosaic_affine_transform(bbox, height=4, width=5)
+    assert transform == (2.0, 0.0, 0.0, 0.0, -5.0, 20.0)
+    y, x = array_module._pixel_center_coords(bbox, height=4, width=5)
+    assert x[0] == pytest.approx(1.0)
+    assert x[-1] == pytest.approx(9.0)
+    assert y[0] == pytest.approx(17.5)
+    assert y[-1] == pytest.approx(2.5)
 
 
 def test_organize_tiles_orders_by_bbox() -> None:
