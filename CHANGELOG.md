@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-03
+
+Trustworthy-core release: clean-env GeoTIFF install, analysis-ready mosaic attrs, one preferred compute habit, typed public errors, default tile progress, and actionable stage-gate DX — without holding the cut for multi-AOI orchestration or later uniqueness work.
+
 ### Documentation
 
 - Maintainer stage-gate notebook (`notebooks/stage_gate_0_2.ipynb`) + run notes in `notebooks/README.md`: local editable install → live OSM / EA DSP mosaics → politeness knobs, soft-fail attrs, and a human checklist before the 0.2.0 cut
@@ -106,6 +110,7 @@ Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
 - Package renamed from scaffold `ogc-array` to `tilearray`; README, CI, and metadata aligned with shipped API
 - EA Lidar WCS GeoTIFF decode and non-divisible tile resize for native-resolution tiles
 
-[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/MatthewJWhittle/tilearray/releases/tag/v0.1.0
