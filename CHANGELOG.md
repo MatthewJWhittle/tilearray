@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Public `__all__` no longer advertises parsers (`WCSParser`, `WMTSParser`), concrete services (`WCSService`, `WMSService`, `WMTSService`, `XYZService`), or `BaseService`. Prefer configs + `create_array`; low-level clients remain importable from `tilearray.service` / submodules during alpha (#70)
 - Mosaic `y`/`x` coordinates are **pixel centers** consistent with `attrs["transform"]` (north-up Affine from planned bbox + shape), instead of edge-span `linspace` endpoints (#54)
+- Docs: `**service_options` key families (fetch / planner / identity) and `max_concurrent*` one-job-per-name map in how-it-works, with API + troubleshooting cross-links — no public signature change (#71)
 
 ## [0.1.1] - 2026-11-01
 
