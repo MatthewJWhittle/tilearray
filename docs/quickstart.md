@@ -82,9 +82,34 @@ print(img.shape, da.attrs["service_type"])
 
 No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. See {doc}`example-sources` for layer quirks.
 
-## WMTS
+## WMTS — Kartverket topo (EPSG:25833)
 
-WMTS is supported via {py:class}`tilearray.WMTSConfig` (REST or KVP GetTile, same `create_array` → `compute_with_policy` path as WCS/WMS/XYZ). For non–Web-Mercator TileMatrixSets (for example EPSG:25833 or CRS84), load GetCapabilities (`WMTSService.get_capabilities` / `apply_capabilities`) or pass authoritative `matrix=` metadata so planning uses the service’s native CRS, scale, and tile indices — the mosaic is labelled with that matrix CRS and the tile-aligned extent. A copy-paste host guide is not published yet — configure with `WMTSConfig.from_url(...)` and follow the XYZ/WMS recipes above for compute habit and politeness.
+```python
+from tilearray import WMTSConfig, compute_with_policy, create_array
+from tilearray.types import Format
+
+config = WMTSConfig.from_url(
+    "https://cache.kartverket.no/v1/service",
+    layer="topo",
+    tile_matrix_set="utm33n",
+    tile_matrix=8,
+    style="default",
+    output_format=Format.PNG,
+    chunk_size=(256, 256),
+    max_concurrent_requests=2,
+    rate_limit_per_second=2.0,
+    headers={
+        "User-Agent": "tilearray/0.2 (+https://github.com/MatthewJWhittle/tilearray/issues)",
+    },
+)
+
+# Lon/lat AOI → native UTM33 mosaic (tile-aligned extent may expand)
+da = create_array(config, bbox=(10.6, 59.85, 10.8, 59.95), crs="EPSG:4326")
+arr = compute_with_policy(da)
+print(arr.shape, da.attrs["crs"])  # CRS is EPSG:25833
+```
+
+Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough + simpler GIBS WMTS recipe: {doc}`guides/wmts`.
 
 ## Private or keyed hosts
 

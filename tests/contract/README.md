@@ -9,19 +9,25 @@ DTM endpoint while keeping default CI network-free.
 ```
 tests/contract/
 ├── README.md
-└── wcs/
-    ├── test_wcs_contract.py
-    └── cassettes/          # one YAML per test method
-        ├── TestEALidarWCSContract.test_get_capabilities.yaml
-        ├── TestEALidarWCSContract.test_describe_coverage.yaml
-        ├── TestEALidarWCSContract.test_get_coverage.yaml
-        ├── TestUSGS3DEPWCSContract.test_describe_coverage_axis_labels.yaml
-        └── TestUSGS3DEPWCSContract.test_get_coverage_multipart_geotiff.yaml
+├── wcs/
+│   ├── test_wcs_contract.py
+│   └── cassettes/          # one YAML per test method
+│       ├── TestEALidarWCSContract.test_get_capabilities.yaml
+│       ├── TestEALidarWCSContract.test_describe_coverage.yaml
+│       ├── TestEALidarWCSContract.test_get_coverage.yaml
+│       ├── TestUSGS3DEPWCSContract.test_describe_coverage_axis_labels.yaml
+│       └── TestUSGS3DEPWCSContract.test_get_coverage_multipart_geotiff.yaml
+└── wmts/
+    ├── test_wmts_contract.py
+    └── cassettes/
+        ├── TestKartverketWMTSContract.test_get_capabilities_utm33n_matrix.yaml
+        └── TestKartverketWMTSContract.test_plan_tiles_oslo_window_native_bounds.yaml
 ```
 
 Keep cassettes small (CI enforces a per-file size budget via
 `scripts/check_cassettes.py`). Prefer tiny request windows when recording;
-multipart GeoTIFF bodies bloat YAML quickly.
+multipart GeoTIFF bodies bloat YAML quickly. WMTS Kartverket cassettes are
+GetCapabilities-only (planning is offline against the recorded XML).
 
 ## Running
 
@@ -55,8 +61,8 @@ uv run pytest tests/contract/wcs/test_wcs_contract.py \
 
 To force a live run without playback (e.g. debugging), use `--disable-vcr`.
 
-## Source endpoint
+## Source endpoints
 
-- **Service**: EA Lidar Composite DTM 1 m WCS
-- **URL**: `https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs`
+- **WCS**: EA Lidar Composite DTM 1 m — `https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs`
+- **WMTS**: Kartverket topo / utm33n — `https://cache.kartverket.no/v1/service`
 - Documented in [`docs/example-sources.md`](../../docs/example-sources.md) (stub at repo root points at the hosted page).

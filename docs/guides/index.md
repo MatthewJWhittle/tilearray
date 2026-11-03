@@ -8,6 +8,7 @@ Load tiles from public hosts, plot the result, and run a little analysis. Backgr
 osm-london
 gibs-bluemarble
 ea-lidar
+wmts
 ```
 
 | Guide | Host / area | What you see |
@@ -15,3 +16,4 @@ ea-lidar
 | {doc}`osm-london` | OpenStreetMap XYZ · central London | Street mosaic |
 | {doc}`gibs-bluemarble` | NASA GIBS XYZ · mid-Atlantic | RGB Blue Marble |
 | {doc}`ea-lidar` | EA Lidar WCS · OSGB window | Elevation map + histogram |
+| {doc}`wmts` | GIBS WMTS + Kartverket topo · Oslo | Web Mercator + EPSG:25833 mosaics |
