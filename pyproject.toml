@@ -68,11 +68,14 @@ dev = [
     "pytest-httpserver>=1.1.3",
     "pytest-timeout>=2.4.0",
     "pytest-vcr>=1.0.2",
+    # Pin past pytest-vcr's 4.3.0 resolution on 3.9 — that build's httpx stubs
+    # fail cassette replay (`content` is None). vcrpy 7 supports 3.9.
+    "vcrpy>=7.0.0",
     "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
     "ruff>=0.1.0",
     # Stubs only needed where CI mypy runs (3.11+). On 3.9, types-tqdm pulls
-    # types-requests → urllib3 2.x, which breaks pytest-vcr / vcrpy 4.3.
+    # types-requests → urllib3 2.x, which breaks pytest-vcr / vcrpy.
     "types-tqdm>=4.67.3.20260205; python_version >= '3.10'",
 ]
 docs = [
@@ -251,6 +254,7 @@ dev = [
     "pytest-httpserver>=1.1.3",
     "pytest-timeout>=2.4.0",
     "pytest-vcr>=1.0.2",
+    "vcrpy>=7.0.0",
     "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
     "ruff>=0.1.0",
