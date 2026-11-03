@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build publish docs docs-artifacts docs-clean
+.PHONY: help install install-dev test test-cov lint format clean build publish docs docs-check docs-artifacts docs-clean
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
