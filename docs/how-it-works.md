@@ -29,6 +29,30 @@ WCS, WMS, WMTS, and XYZ share one request-and-decode path. Host **presets** in `
 
 Adapters turn your bbox + chunk/grid settings into an ordered list of tile requests (XYZ/WMTS grids, WCS coverage subsets). A larger AOI means more requests — not a different client API. For non-slippy WMTS TileMatrixSets, `create_array` loads GetCapabilities automatically (or you can pass an explicit `matrix=`). Planning uses that set’s SupportedCRS and ScaleDenominator in CRS units; the mosaic extent and `attrs["crs"]` follow the native tile grid rather than a guessed Web Mercator layout. See {doc}`guides/wmts`.
 
+### Inspect the plan before you fetch
+
+For a large AOI, call {py:func}`~tilearray.plan_array` with the same config / bbox / crs (and optional `resolution=` / `chunk_size=` / `cache_dir=`) you would pass to `create_array`. It returns an {py:class}`~tilearray.ArrayPlan` — printable via `print(plan)` / `plan.summary()` — covering:
+
+- requested vs planned (snapped) bbox and CRS
+- `grid_shape`, chunk size, mosaic pixel dimensions, request count
+- dtype; band count and rough in-memory bytes **when known** (GeoTIFF elevation policy = 1 band; JPEG/PNG stay unknown until a probe or `create_array`)
+- fetch concurrency ceiling (`max_concurrent` / optional `call_max_concurrent`)
+- cache directory warm/cold tile counts when `cache_dir=` is set
+
+Estimates never invent transfer time, provider cost, or band counts. XYZ/WMTS notes call out **native zoom / matrix** selection — tilearray does not resample pixels to an arbitrary client resolution. WCS `resolution=` sizes GetCoverage requests (the server may resample); that is not a local warp.
+
+Pure geometry helper when you only need the grid: {py:func}`~tilearray.recommend_grid_shape` (`bbox` + `chunk_size` + `resolution` → `(rows, cols)`). After compute (or mid-flight on a lazy array), {py:func}`~tilearray.fetch_summary` reports done/total, soft-fails, and fetcher pressure counters when available.
+
+```python
+from tilearray import plan_array, create_array, compute_with_policy, fetch_summary
+
+plan = plan_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
+print(plan)                       # read-only preflight
+da = create_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
+result = compute_with_policy(da)
+print(fetch_summary(da))          # progress / pressure snapshot
+```
+
 ---
 
 ## 2 · Polite concurrent fetch
@@ -140,7 +164,9 @@ Product vocabulary (canonical: {doc}`design-principles`) separates three ideas:
 
 **Tile progress:** multi-tile mosaics show a tqdm-style bar by default while tiles complete (same `on_progress` / `FetchProgress` path in scripts and notebooks). Quiet for CI / redirected scripts with `show_progress=False` or `TILEARRAY_PROGRESS=0`. Pass your own `on_progress=` to replace the default bar. Single-tile plans stay quiet unless you force progress.
 
-Memory tracks **what you compute** (full mosaic, a reduction, a window) — not automatically the whole AOI. Scale with bbox, chunks, and fetch policy.
+**Cache lifecycle:** each successful tile write stores `{sha256}.tile` plus a small `{sha256}.meta` sidecar under `cache_dir`. Keys hash URL, params, format, bbox, and width/height — change any of those and you miss. Warm hits skip HTTP but still decode; they do not bypass the shared host concurrency gate when a cold sibling is fetching. Clear the directory (or delete individual `.tile` files) after changing decode expectations, credentials, or when you suspect corruption. {py:func}`~tilearray.plan_array` reports how many planned tiles are already warm so you can size a cold run before `compute_with_policy`.
+
+Memory tracks **what you compute** (full mosaic, a reduction, a window) — not automatically the whole AOI. Scale with bbox, chunks, and fetch policy. Use `plan_array` for a rough in-memory byte estimate when band count is known.
 
 ---
 

@@ -692,6 +692,18 @@ class TileFetcher:
                 cls._instances[key] = fetcher
             return fetcher
 
+    @classmethod
+    def get_if_cached(cls, policy: FetchPolicy | None = None) -> TileFetcher | None:
+        """Return an existing shared fetcher for ``policy``, or ``None``.
+
+        Unlike :meth:`for_policy`, this never constructs a fetcher — useful for
+        read-only summaries that must not start HTTP clients as a side effect.
+        """
+
+        effective = policy or FetchPolicy()
+        with cls._instances_lock:
+            return cls._instances.get(effective.cache_key())
+
     def close(self) -> None:
         self._client.close()
 

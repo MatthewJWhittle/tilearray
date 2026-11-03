@@ -177,20 +177,13 @@ class ArrayRequest(BaseModel):
             and fallback_grid is None
             and resolution is not None
         ):
-            res_x, res_y = resolution
-            span_x = normalized_bbox.max_x - normalized_bbox.min_x
-            span_y = normalized_bbox.max_y - normalized_bbox.min_y
-            cols = (
-                max(1, int(math.ceil(span_x / (chunk_width * res_x))))
-                if chunk_width > 0
-                else 1
+            origin = _coerce_array_origin(user_options.get("origin"))
+            grid = recommend_grid_shape(
+                normalized_bbox,
+                chunk_size=(chunk_width, chunk_height),
+                resolution=resolution,
+                origin=origin,
             )
-            rows = (
-                max(1, int(math.ceil(span_y / (chunk_height * res_y))))
-                if chunk_height > 0
-                else 1
-            )
-            grid = (rows, cols)
 
         cache_candidate = cache_dir_input or defaults.get("cache_dir")
         cache_path = (
@@ -1064,6 +1057,51 @@ def _normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
     if isinstance(bbox, BoundingBox):
         return bbox if bbox.crs == crs else bbox.to_crs(crs)
     return BoundingBox.from_tuple(bbox, crs)
+
+
+def recommend_grid_shape(
+    bbox: BoundingBox | BBoxTuple,
+    *,
+    chunk_size: tuple[int, int],
+    resolution: tuple[float, float],
+    crs: CRS | str | int | None = None,
+    origin: tuple[float, float] = (0.0, 0.0),
+) -> tuple[int, int]:
+    """Infer ``(rows, cols)`` covering ``bbox`` at ``resolution`` × ``chunk_size``.
+
+    ``chunk_size`` matches :func:`create_array`: ``(width, height)`` in pixels.
+    The bbox is snapped outward onto the resolution grid before counting tiles.
+    Geometry only — no host contact and no client-side pixel resampling.
+    """
+
+    res_x, res_y = resolution
+    if res_x <= 0 or res_y <= 0:
+        raise ValidationError("resolution values must be positive")
+
+    if isinstance(bbox, BoundingBox):
+        if crs is None:
+            normalized = bbox
+        else:
+            target_crs = _coerce_crs(crs)
+            normalized = bbox if bbox.crs == target_crs else bbox.to_crs(target_crs)
+    else:
+        if crs is None:
+            raise ValidationError("crs is required when bbox is a coordinate tuple")
+        normalized = _normalize_bbox(bbox, _coerce_crs(crs))
+
+    chunk_height, chunk_width = _validate_chunk_size(chunk_size)
+    snapped = snap_bbox_outward(normalized, resolution, origin)
+    span_x = snapped.max_x - snapped.min_x
+    span_y = snapped.max_y - snapped.min_y
+    cols = (
+        max(1, int(math.ceil(span_x / (chunk_width * res_x)))) if chunk_width > 0 else 1
+    )
+    rows = (
+        max(1, int(math.ceil(span_y / (chunk_height * res_y))))
+        if chunk_height > 0
+        else 1
+    )
+    return rows, cols
 
 
 def _resolve_grid_shape(
