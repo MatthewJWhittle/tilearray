@@ -50,6 +50,7 @@ dependencies = [
     "tenacity>=9.0.0",
     "tifffile>=2024.8.30",
     "xarray>=2024.7.0",
+    "tqdm>=4.70.1",
 ]
 
 [project.optional-dependencies]
@@ -250,4 +251,5 @@ dev = [
     "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
     "ruff>=0.1.0",
+    "types-tqdm>=4.67.3.20260205",
 ]
