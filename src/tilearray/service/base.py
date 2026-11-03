@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from ..errors import ConfigurationError, ValidationError
 from ..tiles import snap_bbox_outward
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .requests import compose_tile_request as _compose_tile_request
@@ -97,7 +98,7 @@ class BaseService(ABC):
         if resolution:
             res_x, res_y = cast(tuple[float, float], resolution)
             if res_x <= 0 or res_y <= 0:
-                raise ValueError("resolution values must be positive")
+                raise ValidationError("resolution values must be positive")
 
             origin = _coerce_grid_origin(options.get("origin"))
             snapped = snap_bbox_outward(bbox, (res_x, res_y), origin)
@@ -155,13 +156,15 @@ class BaseService(ABC):
                 grid_tuple_raw = cast(tuple[Any, Any], grid_shape_option)
                 row_raw, col_raw = grid_tuple_raw
             except ValueError as exc:  # pragma: no cover - guard
-                raise ValueError("grid_shape must be a tuple of two integers") from exc
+                raise ValidationError(
+                    "grid_shape must be a tuple of two integers"
+                ) from exc
 
             rows, cols = int(row_raw), int(col_raw)
         else:
-            raise ValueError("grid_shape must be a tuple of two integers")
+            raise ValidationError("grid_shape must be a tuple of two integers")
         if rows <= 0 or cols <= 0:
-            raise ValueError("grid_shape dimensions must be positive integers")
+            raise ValidationError("grid_shape dimensions must be positive integers")
 
         x_span = float(bbox.max_x - bbox.min_x)
         y_span = float(bbox.max_y - bbox.min_y)
@@ -239,7 +242,7 @@ def _coerce_grid_origin(value: object) -> tuple[float, float]:
         origin_x = value[0]
         origin_y = value[1]
         return (float(origin_x), float(origin_y))
-    raise ValueError("origin must be a tuple of two numbers")
+    raise ValidationError("origin must be a tuple of two numbers")
 
 
 # ----------------------------------------------------------------------
@@ -291,7 +294,7 @@ def detect_service_type(
     if fallback is not None:
         return fallback
 
-    raise ValueError(f"Unable to detect service type from URL: {url}")
+    raise ConfigurationError(f"Unable to detect service type from URL: {url}")
 
 
 def get_service(
@@ -307,6 +310,8 @@ def get_service(
     try:
         service_cls = _SERVICE_REGISTRY[detected_type]
     except KeyError as exc:  # pragma: no cover - defensive path
-        raise ValueError(f"No service registered for type {detected_type}") from exc
+        raise ConfigurationError(
+            f"No service registered for type {detected_type}"
+        ) from exc
 
     return service_cls.from_url(url, **config)

@@ -14,6 +14,7 @@ from PIL import Image
 from pytest import MonkeyPatch
 
 from tilearray.array import create_array
+from tilearray.errors import ValidationError
 from tilearray.fetch import TileFetcher
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WMSConfig
@@ -115,7 +116,7 @@ def test_wms_service_build_tile_request_includes_headers() -> None:
 
 
 def test_wms_service_requires_layers() -> None:
-    with pytest.raises(ValueError, match="layers"):
+    with pytest.raises(ValidationError, match="layers"):
         WMSService(WMS_URL, layers="")
 
 

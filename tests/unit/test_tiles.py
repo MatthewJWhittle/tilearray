@@ -11,6 +11,7 @@ import httpx
 import pytest
 import respx
 
+from tilearray.errors import ValidationError
 from tilearray.fetch import FetchPolicy, TileFetcher
 from tilearray.tiles import create_tile_grid, fetch_tile, save_tile, snap_bbox_outward
 from tilearray.types import CRS, BoundingBox, Format, TileRequest, TileResponse
@@ -53,7 +54,7 @@ def test_snap_bbox_outward_leaves_aligned_bbox_unchanged() -> None:
 
 def test_snap_bbox_outward_rejects_non_positive_resolution() -> None:
     bbox = _bbox(0, 0, 10, 10)
-    with pytest.raises(ValueError, match="resolution"):
+    with pytest.raises(ValidationError, match="resolution"):
         snap_bbox_outward(bbox, resolution=(0.0, 1.0), origin=(0.0, 0.0))
 
 
@@ -141,14 +142,14 @@ def test_create_tile_grid_uses_anisotropic_resolution() -> None:
 def test_create_tile_grid_rejects_invalid_resolution() -> None:
     bbox = _bbox(0, 0, 10, 10)
 
-    with pytest.raises(ValueError, match="resolution"):
+    with pytest.raises(ValidationError, match="resolution"):
         create_tile_grid(bbox, tile_size=(10, 10), origin=(0, 0), resolution=(0.0, 1.0))
 
 
 def test_create_tile_grid_rejects_invalid_tile_size() -> None:
     bbox = _bbox(0, 0, 10, 10)
 
-    with pytest.raises(ValueError, match="tile_size"):
+    with pytest.raises(ValidationError, match="tile_size"):
         create_tile_grid(bbox, tile_size=(0, 10), origin=(0, 0), resolution=(1.0, 1.0))
 
 
@@ -177,7 +178,7 @@ def test_create_tile_grid_boundary_on_grid_line() -> None:
 def test_fetch_tile_requires_url() -> None:
     request = TileRequest(url="", params={})
 
-    with pytest.raises(ValueError, match="URL is required"):
+    with pytest.raises(ValidationError, match="URL is required"):
         fetch_tile(request)
 
 

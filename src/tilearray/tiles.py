@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .errors import ValidationError
 from .fetch import (
     FetchPolicy,
     FetchProgress,
@@ -99,7 +100,7 @@ def snap_bbox_outward(
     """
     res_x, res_y = resolution
     if res_x <= 0 or res_y <= 0:
-        raise ValueError("resolution values must be positive")
+        raise ValidationError("resolution values must be positive")
 
     origin_x, origin_y = origin
     col_min = math.floor((bbox.min_x - origin_x) / res_x)
@@ -150,9 +151,9 @@ def create_tile_grid(
     tile_width, tile_height = tile_size
     res_x, res_y = resolution
     if tile_width <= 0 or tile_height <= 0:
-        raise ValueError("tile_size dimensions must be positive")
+        raise ValidationError("tile_size dimensions must be positive")
     if res_x <= 0 or res_y <= 0:
-        raise ValueError("resolution values must be positive")
+        raise ValidationError("resolution values must be positive")
 
     origin_x, origin_y = origin
     tile_width_units = tile_width * res_x

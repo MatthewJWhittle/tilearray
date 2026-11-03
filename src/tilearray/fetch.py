@@ -19,7 +19,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from .errors import NetworkError
+from .errors import NetworkError, ValidationError
 from .pressure import (
     DEFAULT_PRESSURE_CLASSIFIER,
     PressureClassifier,
@@ -61,7 +61,7 @@ class PerHostRateLimiter:
 
     def __init__(self, rate_per_second: float) -> None:
         if rate_per_second <= 0:
-            raise ValueError("rate_per_second must be positive")
+            raise ValidationError("rate_per_second must be positive")
         self._min_interval = 1.0 / rate_per_second
         self._last_request: dict[str, float] = {}
         self._lock = threading.Lock()
@@ -81,9 +81,9 @@ class TokenBucketRateLimiter:
 
     def __init__(self, rate_per_second: float, *, burst: int) -> None:
         if rate_per_second <= 0:
-            raise ValueError("rate_per_second must be positive")
+            raise ValidationError("rate_per_second must be positive")
         if burst <= 0:
-            raise ValueError("burst must be positive")
+            raise ValidationError("burst must be positive")
         self._rate_per_second = rate_per_second
         self._burst = float(burst)
         self._tokens: dict[str, float] = {}
@@ -142,13 +142,13 @@ class AdaptiveConcurrencyGate:
         forbidden_cooldown_seconds: float = 15.0,
     ) -> None:
         if initial <= 0 or minimum <= 0 or maximum <= 0:
-            raise ValueError("concurrency limits must be positive")
+            raise ValidationError("concurrency limits must be positive")
         if minimum > initial:
-            raise ValueError("minimum cannot exceed initial")
+            raise ValidationError("minimum cannot exceed initial")
         if initial > maximum:
-            raise ValueError("initial cannot exceed maximum")
+            raise ValidationError("initial cannot exceed maximum")
         if not 0.0 < multiplicative_decrease < 1.0:
-            raise ValueError("multiplicative_decrease must be between 0 and 1")
+            raise ValidationError("multiplicative_decrease must be between 0 and 1")
         self._initial = initial
         self._minimum = minimum
         self._maximum = maximum
@@ -516,7 +516,7 @@ class FetchProgress:
     def __post_init__(self) -> None:
         if self.call_max_concurrent is not None:
             if self.call_max_concurrent < 1:
-                raise ValueError("call_max_concurrent must be >= 1")
+                raise ValidationError("call_max_concurrent must be >= 1")
             self._call_semaphore = threading.Semaphore(self.call_max_concurrent)
 
     def abort(self, reason: str) -> None:
@@ -770,7 +770,7 @@ class TileFetcher:
         progress: FetchProgress | None = None,
     ) -> TileResponse:
         if not request.url:
-            raise ValueError("URL is required")
+            raise ValidationError("URL is required")
 
         if progress is not None:
             progress.check_not_aborted()

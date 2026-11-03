@@ -12,6 +12,7 @@ import respx
 
 from tilearray import (
     NetworkError,
+    ValidationError,
     soft_fail_exhausted_tiles,
 )
 from tilearray.array import _load_tile_array, create_array
@@ -607,7 +608,7 @@ def test_on_tile_error_and_soft_fail_mutually_exclusive(
 ) -> None:
     _patch_grid(monkeypatch, rows=1, cols=1, fail_every=None)
     bbox = BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326)
-    with pytest.raises(ValueError, match="either on_tile_error"):
+    with pytest.raises(ValidationError, match="either on_tile_error"):
         create_array(
             service_url="https://example.com",
             bbox=bbox,

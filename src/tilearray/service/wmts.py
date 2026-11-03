@@ -12,6 +12,7 @@ from urllib.parse import quote
 
 import requests
 
+from ..errors import NetworkError, ParseError, ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
 from .xyz import _tile_bounds, _tile_range_for_bbox
@@ -72,7 +73,7 @@ class WMTSParser:
         try:
             root = ET.fromstring(xml_content)
         except ET.ParseError as exc:  # pragma: no cover - defensive
-            raise ValueError(f"Invalid XML content: {exc}") from exc
+            raise ParseError(f"Invalid XML content: {exc}", cause=exc) from exc
 
         capabilities = WMTSCapabilities()
         for tms_elem in root.findall(".//wmts:TileMatrixSet", self.namespaces):
@@ -204,11 +205,11 @@ class WMTSService(BaseService):
             **config,
         )
         if not layer:
-            raise ValueError("WMTS layer must be provided")
+            raise ValidationError("WMTS layer must be provided")
         if not tile_matrix_set:
-            raise ValueError("WMTS tile_matrix_set must be provided")
+            raise ValidationError("WMTS tile_matrix_set must be provided")
         if tile_matrix < 0:
-            raise ValueError("tile_matrix must be non-negative")
+            raise ValidationError("tile_matrix must be non-negative")
 
         self.layer = layer
         self.tile_matrix_set = tile_matrix_set
@@ -227,24 +228,30 @@ class WMTSService(BaseService):
     @classmethod
     def from_url(cls, url: str, **config: Any) -> WMTSService:
         if config.get("layer") is None:
-            raise ValueError("WMTS services require a layer")
+            raise ValidationError("WMTS services require a layer")
         if config.get("tile_matrix_set") is None:
-            raise ValueError("WMTS services require a tile_matrix_set")
+            raise ValidationError("WMTS services require a tile_matrix_set")
         if config.get("tile_matrix") is None:
-            raise ValueError("WMTS services require a tile_matrix")
+            raise ValidationError("WMTS services require a tile_matrix")
         return cls(url, **config)
 
     def get_capabilities(self, **params: Any) -> WMTSCapabilities:
-        response = self.session.get(
-            self.base_url,
-            params={
-                "service": "WMTS",
-                "version": self.version,
-                "request": "GetCapabilities",
-                **params,
-            },
-        )
-        response.raise_for_status()
+        try:
+            response = self.session.get(
+                self.base_url,
+                params={
+                    "service": "WMTS",
+                    "version": self.version,
+                    "request": "GetCapabilities",
+                    **params,
+                },
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise NetworkError(
+                f"WMTS GetCapabilities failed for {self.base_url}: {exc}",
+                cause=exc,
+            ) from exc
         self._capabilities = self.parser.parse_get_capabilities(response.text)
         return self._capabilities
 
@@ -510,8 +517,8 @@ class WMTSService(BaseService):
             try:
                 return Format(fmt)
             except ValueError as exc:
-                raise ValueError(f"Unsupported WMTS format: {fmt}") from exc
-        raise ValueError(f"Invalid WMTS format value: {fmt!r}")
+                raise ValidationError(f"Unsupported WMTS format: {fmt}") from exc
+        raise ValidationError(f"Invalid WMTS format value: {fmt!r}")
 
     def _coerce_crs(self, crs: Any) -> CRS:
         if isinstance(crs, CRS):
@@ -524,13 +531,13 @@ class WMTSService(BaseService):
             )
         if isinstance(crs, int):
             return CRS.from_integer(crs)
-        raise ValueError(f"Invalid CRS value: {crs!r}")
+        raise ValidationError(f"Invalid CRS value: {crs!r}")
 
 
 def _require_index(value: int | None, override: int | None) -> int:
     resolved = override if override is not None else value
     if resolved is None:
-        raise ValueError("WMTS tile indices are required")
+        raise ValidationError("WMTS tile indices are required")
     return int(resolved)
 
 
@@ -570,7 +577,7 @@ def _format_extension(fmt: Format) -> str:
         return "jpg"
     if fmt == Format.GEOTIFF:
         return "tif"
-    raise ValueError(f"Unsupported format: {fmt}")
+    raise ValidationError(f"Unsupported format: {fmt}")
 
 
 def _matrix_index(

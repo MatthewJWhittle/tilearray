@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 
-from tilearray.errors import NetworkError
+from tilearray.errors import NetworkError, ValidationError
 from tilearray.fetch import (
     AdaptiveConcurrencyGate,
     FetchPolicy,
@@ -938,7 +938,7 @@ def test_call_max_concurrent_excluded_from_cache_key() -> None:
 
 
 def test_fetch_progress_rejects_non_positive_call_max_concurrent() -> None:
-    with pytest.raises(ValueError, match="call_max_concurrent"):
+    with pytest.raises(ValidationError, match="call_max_concurrent"):
         FetchProgress(total=1, call_max_concurrent=0)
 
 
