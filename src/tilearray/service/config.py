@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
-from requests import RequestException
 
 from ..errors import (
     ConfigurationError,
@@ -180,6 +180,8 @@ class ServiceConfig(BaseModel):
             kwargs["headers"] = dict(self.headers)
         if self.params:
             kwargs["params"] = dict(self.params)
+        # Plan-time caps / DescribeCoverage share the tile fetch timeout policy.
+        kwargs["fetch_timeout"] = self.fetch_timeout
         return kwargs
 
     def tile_kwargs(self) -> dict[str, Any]:
@@ -265,7 +267,7 @@ class WCSConfig(ServiceConfig):
                 f"Failed to validate coverage '{self.coverage_id}' against {self.base_url}",  # noqa: G004
                 cause=exc,
             ) from exc
-        except RequestException as exc:
+        except httpx.HTTPError as exc:
             raise NetworkError(
                 f"Failed to validate coverage '{self.coverage_id}' against {self.base_url}",  # noqa: G004
                 cause=exc,

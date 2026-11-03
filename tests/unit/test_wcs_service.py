@@ -1,14 +1,15 @@
 from pathlib import Path
-from unittest.mock import MagicMock
 
+import httpx
 import pytest
-import requests
+import respx
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from tilearray.errors import NetworkError, ValidationError
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WCSConfig, XYZConfig
+from tilearray.service.http import DEFAULT_HTTP_TIMEOUT, default_headers
 from tilearray.service.wcs import WCSParser, WCSService, normalize_crs_reference
 from tilearray.service.xyz import XYZService
 from tilearray.types import CRS, BoundingBox, CoverageDescription, Format
@@ -279,7 +280,7 @@ def test_wcs_config_build_service_raises_for_missing_coverage(monkeypatch):
     config = WCSConfig.from_url("http://example.com/wcs", coverage_id="missing")
 
     def fake_describe(self, coverage_id=None, **params):
-        raise requests.HTTPError("not found")
+        raise httpx.HTTPError("not found")
 
     monkeypatch.setattr(WCSService, "describe_coverage", fake_describe)
 
@@ -324,7 +325,8 @@ def test_wcs_parser_parses_describe_coverage_with_extent() -> None:
     assert description.temporal_extent.start_time is not None
 
 
-def test_wcs_service_get_coverage_handles_request_errors(monkeypatch) -> None:
+@respx.mock
+def test_wcs_service_get_coverage_handles_request_errors() -> None:
     service = WCSService(
         "http://example.com/wcs",
         coverage_id="coverage-1",
@@ -338,10 +340,9 @@ def test_wcs_service_get_coverage_handles_request_errors(monkeypatch) -> None:
         )
     )
 
-    def fake_get(*args, **kwargs):
-        raise requests.HTTPError("bad gateway", response=MagicMock(status_code=502))
-
-    monkeypatch.setattr(service.session, "get", fake_get)
+    respx.get("http://example.com/wcs").mock(
+        return_value=httpx.Response(502, text="bad gateway")
+    )
 
     response = service.get_coverage(
         "coverage-1",
@@ -352,6 +353,73 @@ def test_wcs_service_get_coverage_handles_request_errors(monkeypatch) -> None:
 
     assert response.success is False
     assert response.status_code == 502
+
+
+@respx.mock
+def test_wcs_describe_coverage_sends_config_headers_and_params() -> None:
+    """Private-server auth on config must reach DescribeCoverage (#57)."""
+
+    captured: dict[str, object] = {}
+    describe_xml = """<?xml version='1.0' encoding='UTF-8'?>
+<wcs:CoverageDescription xmlns:wcs="http://www.opengis.net/wcs/2.0"
+                         xmlns:gml="http://www.opengis.net/gml/3.2">
+    <wcs:CoverageId>coverage-1</wcs:CoverageId>
+</wcs:CoverageDescription>"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["headers"] = dict(request.headers)
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, text=describe_xml)
+
+    respx.get("https://private.example/wcs").mock(side_effect=handler)
+
+    service = WCSService(
+        "https://private.example/wcs",
+        coverage_id="coverage-1",
+        headers={
+            "User-Agent": "tilearray-caps-test/1.0",
+            "Authorization": "Bearer secret-token",
+        },
+        params={"username": "gis-user", "password": "gis-pass"},
+        fetch_timeout=12.5,
+    )
+    description = service.describe_coverage()
+
+    assert description.identifier == "coverage-1"
+    headers = captured["headers"]
+    assert isinstance(headers, dict)
+    assert headers.get("user-agent") == "tilearray-caps-test/1.0"
+    assert headers.get("authorization") == "Bearer secret-token"
+    params = captured["params"]
+    assert isinstance(params, dict)
+    assert params.get("request") == "DescribeCoverage"
+    assert params.get("coverageId") == "coverage-1"
+    assert params.get("username") == "gis-user"
+    assert params.get("password") == "gis-pass"
+
+
+@respx.mock
+def test_wcs_get_capabilities_applies_default_user_agent() -> None:
+    captured_ua: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_ua.append(request.headers.get("user-agent", ""))
+        return httpx.Response(
+            200,
+            text="""<?xml version='1.0' encoding='UTF-8'?>
+            <wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0"
+                              xmlns:ows="http://www.opengis.net/ows/1.1"
+                              version="2.0.1">
+              <wcs:Contents/>
+            </wcs:Capabilities>""",
+        )
+
+    respx.get("https://example.com/wcs").mock(side_effect=handler)
+    WCSService("https://example.com/wcs").get_capabilities()
+
+    assert captured_ua
+    assert captured_ua[0] == default_headers()["User-Agent"]
+    assert DEFAULT_HTTP_TIMEOUT == 30.0
 
 
 def test_wcs_parser_reads_axis_labels_from_describe_coverage_fixtures() -> None:

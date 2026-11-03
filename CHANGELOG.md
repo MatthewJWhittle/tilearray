@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-- Document private/keyed hosts via existing config `params=` / `headers=` (query keys, legacy username/password query params, Bearer/Basic headers); OS Maps XYZ recipe uses env-backed `params` instead of `?key=` in the URL template; note WCS/WMTS capabilities auth gap (#57) and that soft-fail still hard-aborts 401 (related #58)
+- Document private/keyed hosts via existing config `params=` / `headers=` (query keys, legacy username/password query params, Bearer/Basic headers); OS Maps XYZ recipe uses env-backed `params` instead of `?key=` in the URL template; soft-fail still hard-aborts 401 (related #58). Caps credential parity for WCS/WMTS is under Changed (#57)
 
 ### Changed
 
 - WCS GeoTIFF decode now uses ``tifffile`` directly (bytes or path); dropped the ``geotiff`` → ``zarr<2.13`` / ``numcodecs<0.16`` pin cage so clean-env installs no longer need that dependency gymnastics. XYZ-without-GDAL posture unchanged (no hard rasterio/GDAL runtime dep) (#53)
-- Public-boundary failures now raise the typed `TileArrayError` hierarchy instead of bare `ValueError` / `RuntimeError`: bad inputs → `ValidationError`, caps/XML parse → `ParseError`, service detection / missing decoder → `ConfigurationError`, WCS/WMTS capabilities HTTP (`requests`) → `NetworkError`. **Compat:** callers that catch bare `ValueError` for library validation must switch to `TileArrayError` / the specific subclass (or catch both during transition). Pydantic model field checks (`BoundingBox` coordinates, etc.) still surface via pydantic as before (#72)
+- Public-boundary failures now raise the typed `TileArrayError` hierarchy instead of bare `ValueError` / `RuntimeError`: bad inputs → `ValidationError`, caps/XML parse → `ParseError`, service detection / missing decoder → `ConfigurationError`, WCS/WMTS capabilities HTTP (`httpx`) → `NetworkError`. **Compat:** callers that catch bare `ValueError` for library validation must switch to `TileArrayError` / the specific subclass (or catch both during transition). Pydantic model field checks (`BoundingBox` coordinates, etc.) still surface via pydantic as before (#72)
+- WCS/WMTS capabilities and DescribeCoverage (plus direct `WCSService.get_coverage`) now use sync **httpx** with one shared UA/timeout policy and inherit config `headers`/`params` — private-server credentials reach plan-time GETs the same way they reach tiles. Drops the runtime `requests` dependency (#57)
 
 ### Added
 

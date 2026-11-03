@@ -61,7 +61,7 @@ Pass `cache_dir=` to `create_array` / `load_array` to reuse tile bytes across ru
 
 ## Private / keyed hosts
 
-Every `*Config` already accepts `params=` (extra query) and `headers=` (extra HTTP headers) on **tile** requests — same path as public hosts. Put credentials there at plan time; there is no separate auth client.
+Every `*Config` already accepts `params=` (extra query) and `headers=` (extra HTTP headers) — same path as public hosts. Put credentials there at plan time; there is no separate auth client.
 
 | Need | Put it on |
 |------|-----------|
@@ -71,7 +71,7 @@ Every `*Config` already accepts `params=` (extra query) and `headers=` (extra HT
 
 Prefer `params=` / `headers=` over baking secrets into XYZ URL templates (`?key=…` or `{key}` placeholders). Load values from the environment or a secret store; never commit keys. Soft-fail does **not** paper over bad credentials — auth **401** still hard-aborts (see above).
 
-**WCS / WMTS capabilities gap:** config credentials apply to tile fetches today. `DescribeCoverage` / `GetCapabilities` still use a bare `requests` session and may ignore config `headers`/`params`, so private WCS can fail at plan time before any tile runs. Tracked under [#57](https://github.com/MatthewJWhittle/tilearray/issues/57). XYZ and WMS (no library caps step) and WMTS with a known REST template are unaffected. Keyed XYZ recipe: {doc}`example-sources`.
+Config `params=` / `headers=` also reach WCS/WMTS **GetCapabilities** / **DescribeCoverage** (same shared httpx policy as tiles) so private WCS can plan without a second credential path (#57). Keyed XYZ recipe: {doc}`example-sources`.
 
 ## Custom endpoints
 

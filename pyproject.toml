@@ -47,7 +47,6 @@ dependencies = [
     "pillow>=11.3.0",
     "pydantic>=2.12.3",
     "pyproj>=3.6.1",
-    "requests>=2.32.5",
     "tenacity>=9.0.0",
     "tifffile>=2024.8.30",
     "xarray>=2024.7.0",
@@ -198,8 +197,6 @@ disable_error_code = ["unreachable", "assignment", "redundant-cast"]
 
 [[tool.mypy.overrides]]
 module = [
-    "requests",
-    "requests.*",
     "httpx",
     "httpx.*",
     "tenacity",

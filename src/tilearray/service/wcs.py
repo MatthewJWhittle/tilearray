@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
 
-import requests
+import httpx
 
 from ..errors import NetworkError, ParseError, ValidationError
 from ..types import (
@@ -24,6 +24,12 @@ from ..types import (
     WCSResponse,
 )
 from .base import BaseService, TileGeometry, register_service
+from .http import (
+    compose_http_headers,
+    compose_http_params,
+    http_get,
+    resolve_timeout,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -388,14 +394,14 @@ class WCSService(BaseService):
         base_url: str,
         *,
         version: str = "2.0.1",
-        session: requests.Session | None = None,
+        client: httpx.Client | None = None,
         coverage_id: str | None = None,
         output_format: Format | None = None,
         crs: CRS | None = None,
         **config: Any,
     ) -> None:
         super().__init__(base_url, version=version, **config)
-        self.session = session or requests.Session()
+        self._client = client
         self.version = version
         self.coverage_id = coverage_id or config.get("layer_id")
         self.parser = WCSParser(self.base_url)
@@ -438,19 +444,33 @@ class WCSService(BaseService):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    def _service_get(
+        self,
+        params: dict[str, Any],
+        *,
+        extra_params: dict[str, Any] | None = None,
+    ) -> httpx.Response:
+        """GET against ``base_url`` with shared UA/timeout and config credentials."""
+
+        return http_get(
+            self.base_url,
+            params=compose_http_params(params, self.config, extra_params),
+            headers=compose_http_headers(self.config),
+            timeout=resolve_timeout(self.config),
+            client=self._client,
+        )
+
     def get_capabilities(self, **params: Any) -> ServiceCapabilities:
         try:
-            response = self.session.get(
-                self.base_url,
-                params={
+            response = self._service_get(
+                {
                     "service": "WCS",
                     "version": self.version,
                     "request": "GetCapabilities",
-                    **params,
                 },
+                extra_params=params or None,
             )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+        except httpx.HTTPError as exc:
             raise NetworkError(
                 f"WCS GetCapabilities failed for {self.base_url}: {exc}",
                 cause=exc,
@@ -462,18 +482,16 @@ class WCSService(BaseService):
     ) -> CoverageDescription:
         coverage = coverage_id or self._require_coverage_id()
         try:
-            response = self.session.get(
-                self.base_url,
-                params={
+            response = self._service_get(
+                {
                     "service": "WCS",
                     "version": self.version,
                     "request": "DescribeCoverage",
                     "coverageId": coverage,
-                    **params,
                 },
+                extra_params=params or None,
             )
-            response.raise_for_status()
-        except requests.RequestException as exc:
+        except httpx.HTTPError as exc:
             raise NetworkError(
                 f"WCS DescribeCoverage failed for {coverage!r} at {self.base_url}: {exc}",
                 cause=exc,
@@ -515,21 +533,23 @@ class WCSService(BaseService):
             "width": str(width),
             "height": str(height),
             "subsettingCRS": subset_crs.value,
-            **params,
         }
 
         try:
-            response = self.session.get(self.base_url, params=request_params)
-            response.raise_for_status()
+            response = self._service_get(request_params, extra_params=params or None)
             return WCSResponse(
                 success=True,
                 data=response.content,
                 error_message=None,
                 status_code=response.status_code,
             )
-        except requests.RequestException as exc:
+        except httpx.HTTPError as exc:
             logger.debug("WCS GetCoverage failed: %s", exc, exc_info=True)
-            status_code = exc.response.status_code if exc.response is not None else None
+            status_code = (
+                exc.response.status_code
+                if isinstance(exc, httpx.HTTPStatusError)
+                else None
+            )
             return WCSResponse(
                 success=False,
                 data=None,

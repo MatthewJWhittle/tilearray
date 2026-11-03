@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
 
+import httpx
 import pytest
-import requests
 
 from tilearray.errors import (
     ConfigurationError,
@@ -69,13 +68,13 @@ def test_wcs_describe_coverage_http_failure_raises_network_error(
     service = WCSService("http://example.com/wcs", coverage_id="cov-1")
 
     def boom(*args: Any, **kwargs: Any) -> Any:
-        raise requests.ConnectionError("refused")
+        raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr(service.session, "get", boom)
+    monkeypatch.setattr("tilearray.service.wcs.http_get", boom)
 
     with pytest.raises(NetworkError, match="DescribeCoverage") as exc_info:
         service.describe_coverage()
-    assert isinstance(exc_info.value.cause, requests.ConnectionError)
+    assert isinstance(exc_info.value.cause, httpx.ConnectError)
 
 
 def test_wcs_get_capabilities_http_failure_raises_network_error(
@@ -83,9 +82,14 @@ def test_wcs_get_capabilities_http_failure_raises_network_error(
 ) -> None:
     service = WCSService("http://example.com/wcs", coverage_id="cov-1")
 
-    response = MagicMock()
-    response.raise_for_status.side_effect = requests.HTTPError("500")
-    monkeypatch.setattr(service.session, "get", MagicMock(return_value=response))
+    def boom(*args: Any, **kwargs: Any) -> Any:
+        raise httpx.HTTPStatusError(
+            "500",
+            request=httpx.Request("GET", "http://example.com/wcs"),
+            response=httpx.Response(500),
+        )
+
+    monkeypatch.setattr("tilearray.service.wcs.http_get", boom)
 
     with pytest.raises(NetworkError, match="GetCapabilities"):
         service.get_capabilities()
@@ -100,15 +104,17 @@ def test_wmts_get_capabilities_http_failure_raises_network_error(
         tile_matrix_set="GoogleMapsCompatible",
         tile_matrix=0,
     )
-    response = MagicMock()
-    response.raise_for_status.side_effect = requests.Timeout("slow")
-    monkeypatch.setattr(service.session, "get", MagicMock(return_value=response))
+
+    def boom(*args: Any, **kwargs: Any) -> Any:
+        raise httpx.TimeoutException("slow")
+
+    monkeypatch.setattr("tilearray.service.wmts.http_get", boom)
 
     with pytest.raises(NetworkError, match="WMTS GetCapabilities"):
         service.get_capabilities()
 
 
-def test_wcs_config_build_service_wraps_request_exception(
+def test_wcs_config_build_service_wraps_http_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = WCSConfig.from_url("http://example.com/wcs", coverage_id="missing")
@@ -116,7 +122,7 @@ def test_wcs_config_build_service_wraps_request_exception(
     def fake_describe(
         self: WCSService, coverage_id: str | None = None, **params: Any
     ) -> Any:
-        raise requests.HTTPError("not found")
+        raise httpx.HTTPError("not found")
 
     monkeypatch.setattr(WCSService, "describe_coverage", fake_describe)
 

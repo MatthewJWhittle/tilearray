@@ -46,6 +46,8 @@ Fetching uses **synchronous HTTP** (`httpx.Client`) with a concurrency gate:
 - Optional **circuit breaker** (EA DSP preset): a burst of pressure freezes concurrency at the floor for a cooldown.
 - Retries with `Retry-After` support; hard failure raises `NetworkError` by default (no silent NaN holes). Opt-in `on_tile_error` / `soft_fail=True` can soft-fill exhausted tile-local failures after retries without aborting siblings.
 
+WCS/WMTS **GetCapabilities** / **DescribeCoverage** (and direct `WCSService.get_coverage`) use the same sync httpx stack: library User-Agent by default, `ServiceConfig.fetch_timeout` (default 30s), and config `headers`/`params` so private-server credentials apply at plan time as well as on tiles.
+
 AIMD only helps if Dask can schedule enough tile loads — use `compute_with_policy` for multi-tile mosaics.
 
 ---
