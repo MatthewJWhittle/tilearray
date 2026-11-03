@@ -14,22 +14,18 @@ from .errors import (
     TileArrayError,
     ValidationError,
 )
+from .fetch import FetchPolicy
 from .service import (
-    BaseService,
     ServiceConfig,
     TileGeometry,
     WCSConfig,
     WMSConfig,
     WMTSConfig,
     XYZConfig,
-    XYZService,
     detect_service_type,
     get_service,
     register_service,
 )
-from .service.wcs import WCSParser, WCSService
-from .service.wms import WMSService
-from .service.wmts import WMTSParser, WMTSService
 from .tile_errors import (
     TileErrorAction,
     TileErrorContext,
@@ -58,6 +54,7 @@ __all__ = [
     "compute_with_policy",
     "create_array",
     "load_array",
+    "FetchPolicy",
     "TileArrayError",
     "ServiceError",
     "ValidationError",
@@ -68,22 +65,15 @@ __all__ = [
     "TileErrorContext",
     "TileErrorHandler",
     "soft_fail_exhausted_tiles",
-    "BaseService",
     "TileGeometry",
     "detect_service_type",
     "get_service",
     "register_service",
     "ServiceConfig",
     "XYZConfig",
-    "XYZService",
     "WCSConfig",
     "WMSConfig",
     "WMTSConfig",
-    "WCSParser",
-    "WCSService",
-    "WMSService",
-    "WMTSParser",
-    "WMTSService",
     "BBoxTuple",
     "BoundingBox",
     "CoverageDescription",
