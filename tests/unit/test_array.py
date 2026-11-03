@@ -32,6 +32,7 @@ from tilearray.decode import (
 )
 from tilearray.errors import ConfigurationError, NetworkError, ValidationError
 from tilearray.fetch import FetchPolicy
+from tilearray.fetch_presets import ea_dsp_fetch_defaults
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
 from tilearray.types import (
@@ -1193,9 +1194,10 @@ def test_compute_thread_pool_size_at_least_fetch_ceiling() -> None:
 def test_resolve_fetch_policy_keeps_host_ceiling_on_lower_override() -> None:
     """Lower max_concurrent_requests on a preset config is call-local, not shared."""
 
-    config = WCSConfig.for_ea_dsp(
+    config = WCSConfig.from_url(
         "https://environment.data.gov.uk/example/wcs",
         coverage_id="test-coverage",
+        **ea_dsp_fetch_defaults(),
     )
     assert config.max_concurrent_requests == 10
 

@@ -6,9 +6,10 @@ These examples hit **live** public hosts. Prefer {py:func}`tilearray.compute_wit
 
 ```python
 from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
 from tilearray.types import CRS
 
-config = XYZConfig.for_openstreetmap(zoom=16)
+config = XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 
 da = create_array(
     config,
@@ -20,12 +21,13 @@ arr = compute_with_policy(da)
 print(arr.shape, da.attrs["service_type"])
 ```
 
-The OSM preset sets an identifiable User-Agent and polite limits (max 2 in-flight, ~2 req/s). Include © OpenStreetMap contributors when displaying map imagery.
+`osm_fetch_defaults()` sets an identifiable User-Agent and polite limits (max 2 in-flight, ~2 req/s). Include © OpenStreetMap contributors when displaying map imagery.
 
 ## WCS — Environment Agency Lidar
 
 ```python
 from tilearray import WCSConfig, compute_with_policy, create_array
+from tilearray.fetch_presets import ea_dsp_fetch_defaults
 from tilearray.types import CRS, Format
 
 wcs_url = (
@@ -36,13 +38,14 @@ coverage_id = (
     "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m"
 )
 
-config = WCSConfig.for_ea_dsp(
+config = WCSConfig.from_url(
     wcs_url,
-    coverage_id=coverage_id,
+    coverage_id,
     crs=CRS.EPSG_27700,
     output_format=Format.GEOTIFF,
     chunk_size=(800, 800),
     grid_shape=(1, 1),
+    **ea_dsp_fetch_defaults(),
 )
 
 bbox = (431900.0, 382700.0, 432700.0, 383500.0)
@@ -93,16 +96,18 @@ For multi-tile lazy mosaics, `compute_with_policy` reads fetch policy from `da.a
 
 ```python
 from tilearray import WCSConfig, compute_with_policy, create_array
+from tilearray.fetch_presets import ea_dsp_fetch_defaults
 from tilearray.types import CRS, Format
 
-config = WCSConfig.for_ea_dsp(
+config = WCSConfig.from_url(
     "https://environment.data.gov.uk/spatialdata/"
     "lidar-composite-digital-terrain-model-dtm-1m/wcs",
-    coverage_id="13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
+    "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
     crs=CRS.EPSG_27700,
     output_format=Format.GEOTIFF,
     chunk_size=(128, 128),
     resolution=(1.0, 1.0),
+    **ea_dsp_fetch_defaults(),
 )
 
 bbox = (418_000.0, 451_400.0, 419_024.0, 452_424.0)

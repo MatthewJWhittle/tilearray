@@ -2,7 +2,7 @@
 
 Load a small slippy-map window, compute it, and plot the mosaic.
 
-Uses `XYZConfig.for_openstreetmap` (identifiable User-Agent, max 2 in-flight, ~2 req/s). Include **© OpenStreetMap contributors** when displaying the imagery.
+Uses `XYZConfig.from_url(OSM_TILE_TEMPLATE, …, **osm_fetch_defaults())` (identifiable User-Agent, max 2 in-flight, ~2 req/s). Include **© OpenStreetMap contributors** when displaying the imagery.
 
 ```{note}
 OSM raster tiles are often **palette PNGs**, so the mosaic may be single-band (grayscale) today. For a full-colour RGB XYZ example see {doc}`gibs-bluemarble`.
@@ -12,12 +12,15 @@ OSM raster tiles are often **palette PNGs**, so the mosaic may be single-band (g
 
 ```python
 from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
 from tilearray.types import CRS, Format
 
-config = XYZConfig.for_openstreetmap(
+config = XYZConfig.from_url(
+    OSM_TILE_TEMPLATE,
     zoom=16,
     output_format=Format.PNG,
     chunk_size=(256, 256),
+    **osm_fetch_defaults(),
 )
 
 bbox = (-0.005, 51.495, 0.005, 51.505)  # ~central London

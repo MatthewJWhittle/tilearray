@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Soft-fail observability: `compute_with_policy` refreshes `attrs["tilearray_tile_errors"]` (`soft_failed`, `aborted`, `examples`) from `FetchProgress` after lazy `create_array` — same counters as the eager `compute=True` path (#73)
 
+### Breaking
+
+- Removed `WCSConfig.for_ea_dsp` and `XYZConfig.for_openstreetmap`. Protocol configs stay on `from_url`; host politeness comes from `tilearray.fetch_presets` — compose with `WCSConfig.from_url(url, coverage_id, **ea_dsp_fetch_defaults())` and `XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=…, **osm_fetch_defaults())`. Docs, soak scripts, and tests updated to the compose path (alpha; no deprecation shim).
+
 ### Changed
 
 - WCS GeoTIFF decode now uses ``tifffile`` directly (bytes or path); dropped the ``geotiff`` → ``zarr<2.13`` / ``numcodecs<0.16`` pin cage so clean-env installs no longer need that dependency gymnastics. XYZ-without-GDAL posture unchanged (no hard rasterio/GDAL runtime dep) (#53)

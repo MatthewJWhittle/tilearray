@@ -37,7 +37,40 @@ Public entry points for building lazy mosaics, configuring services, and handlin
    XYZConfig
 ```
 
-Presets: `WCSConfig.for_ea_dsp`, `XYZConfig.for_openstreetmap`. Custom hosts: each config's `from_url`. `WCSConfig.build_service()` validates coverage via live DescribeCoverage (network on first `create_array` path that needs capabilities, not only at import time).
+Configs stay protocol-shaped (`from_url`, …). Host politeness lives in `tilearray.fetch_presets` — compose rather than a second config habit:
+
+```python
+from tilearray import WCSConfig, XYZConfig
+from tilearray.fetch_presets import (
+    OSM_TILE_TEMPLATE,
+    ea_dsp_fetch_defaults,
+    osm_fetch_defaults,
+)
+
+WCSConfig.from_url(url, coverage_id, **ea_dsp_fetch_defaults())
+XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
+```
+
+Custom hosts: `from_url` alone (no preset unpack). `WCSConfig.build_service()` validates coverage via live DescribeCoverage (network on first `create_array` path that needs capabilities, not only at import time).
+
+## Fetch presets
+
+```{eval-rst}
+.. currentmodule:: tilearray.fetch_presets
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   ea_dsp_fetch_defaults
+   osm_fetch_defaults
+   tilearray_user_agent
+   OSM_TILE_TEMPLATE
+   EA_LIDAR_WCS_URL
+   EA_LIDAR_COVERAGE_ID
+```
+
+Import from `tilearray.fetch_presets` (not re-exported on the package root — keeps host folklore off the primary config surface). Constants such as `EA_LIDAR_BENCH_BBOX` are for tests/benches; prefer the helpers above for callers.
 
 ## Types
 

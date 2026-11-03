@@ -2,12 +2,13 @@
 
 Fetch a small British National Grid window from the Environment Agency Lidar composite DTM (WCS), plot elevation, and summarise the distribution.
 
-Uses `WCSConfig.for_ea_dsp` (AIMD under a hard ceiling, pressure circuit breaker). Keep large cold mosaics at or below the preset ceiling — higher limits can trip gateway pressure.
+Uses `WCSConfig.from_url(..., **ea_dsp_fetch_defaults())` (AIMD under a hard ceiling, pressure circuit breaker). Keep large cold mosaics at or below the preset ceiling — higher limits can trip gateway pressure.
 
 ## Code
 
 ```python
 from tilearray import WCSConfig, compute_with_policy, create_array
+from tilearray.fetch_presets import ea_dsp_fetch_defaults
 from tilearray.types import CRS, Format
 
 wcs_url = (
@@ -18,13 +19,14 @@ coverage_id = (
     "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m"
 )
 
-config = WCSConfig.for_ea_dsp(
+config = WCSConfig.from_url(
     wcs_url,
-    coverage_id=coverage_id,
+    coverage_id,
     crs=CRS.EPSG_27700,
     output_format=Format.GEOTIFF,
     chunk_size=(64, 64),
     resolution=(1.0, 1.0),
+    **ea_dsp_fetch_defaults(),
 )
 
 # ~256 m OSGB window
