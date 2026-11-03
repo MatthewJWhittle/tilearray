@@ -13,9 +13,15 @@ import respx
 from tilearray import (
     NetworkError,
     ValidationError,
+    compute_with_policy,
     soft_fail_exhausted_tiles,
 )
-from tilearray.array import _load_tile_array, create_array
+from tilearray.array import (
+    _PROGRESS_REF_ATTR,
+    _TILE_ERRORS_ATTR,
+    _load_tile_array,
+    create_array,
+)
 from tilearray.fetch import FetchPolicy, FetchProgress, TileFetcher
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.tile_errors import TileErrorAction, TileErrorContext
@@ -242,6 +248,56 @@ def test_mosaic_soft_fail_every_tenth_completes(
     assert nan_count == 2 * 4 * 4
     assert int(np.isfinite(result.values).sum()) == result.size - nan_count
     assert any(not ok for _, _, ok in progress_events)
+    assert _PROGRESS_REF_ATTR not in result.attrs
+
+
+def test_mosaic_soft_fail_attrs_refresh_via_compute_with_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lazy create_array → compute_with_policy must refresh tilearray_tile_errors (#73)."""
+
+    rows, cols = 4, 5  # 20 tiles; indices 0,10 soft-fail → 2/20 = 0.1
+    _patch_grid(monkeypatch, rows=rows, cols=cols, fail_every=10, fail_status=404)
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=10, max_y=8, crs=CRS.EPSG_4326)
+
+    lazy = create_array(
+        service_url="https://example.com",
+        bbox=bbox,
+        crs=CRS.EPSG_4326,
+        service_type=ServiceTypeEnum.XYZ,
+        chunk_size=(4, 4),
+        grid_shape=(rows, cols),
+        output_format=Format.GEOTIFF,
+        compute=False,
+        tile_decoder=_decoder,
+        soft_fail=True,
+        soft_fail_max_fraction=0.1,
+        max_concurrent_requests=4,
+        rate_limit_per_second=None,
+        fetch_retries=0,
+    )
+
+    # Plan-time attrs are armed but counters still zero until compute.
+    lazy_errors = lazy.attrs[_TILE_ERRORS_ATTR]
+    assert lazy_errors["armed"] is True
+    assert lazy_errors["soft_failed"] == 0
+    assert isinstance(lazy.attrs.get(_PROGRESS_REF_ATTR), FetchProgress)
+
+    result = compute_with_policy(lazy)
+
+    tile_errors = result.attrs[_TILE_ERRORS_ATTR]
+    assert tile_errors["armed"] is True
+    assert tile_errors["soft_failed"] == 2
+    assert tile_errors["aborted"] is False
+    assert len(tile_errors["examples"]) >= 1
+    assert _PROGRESS_REF_ATTR not in result.attrs
+
+    # Source lazy attrs also refreshed for post-compute inspection.
+    assert lazy.attrs[_TILE_ERRORS_ATTR]["soft_failed"] == 2
+
+    nan_count = int(np.isnan(result.values).sum())
+    assert nan_count == 2 * 4 * 4
+    assert int(np.isfinite(result.values).sum()) == result.size - nan_count
 
 
 def test_mosaic_without_soft_fail_aborts(
