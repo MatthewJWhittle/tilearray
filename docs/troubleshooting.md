@@ -41,9 +41,11 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 
 | Symptom | Likely cause | What to do |
 |---------|--------------|------------|
-| “Wrong” CRS vs GeoTIFF tags | Mosaic CRS is the **request** `crs=`, not tags inside tiles | Pass the CRS you planned with; see {doc}`how-it-works` georef contract |
+| “Wrong” CRS vs GeoTIFF tags | Mosaic CRS is the **`create_array(..., crs=)`** you passed, not tags inside tiles | Pass the CRS you planned with; see {doc}`how-it-works` georef contract |
+| Expected native-grid CRS ≠ query CRS | Alpha still uses one `crs=` for bbox + mosaic label; separate `bbox_crs` / output CRS is **target design** | Read {doc}`design-principles` spatial contract; follow [#92](https://github.com/MatthewJWhittle/tilearray/issues/92) / [#93](https://github.com/MatthewJWhittle/tilearray/issues/93) — do not assume a silent local warp |
 | Plot looks flipped | Expecting south-up rows | Arrays are **north-up** (row 0 = north); do not flip for display |
 | Missing `nodata` on RGB | Imagery path omits elevation nodata | Expected for JPEG/PNG; elevation GeoTIFF sets `nodata`/`_FillValue` to NaN |
+| Colour mosaic ≠ analysis values | Rendered imagery vs numerical coverage | XYZ/WMS are often pictures; WCS elevation carries numbers — see {doc}`design-principles` |
 | Need rasterio/rioxarray write | Optional downstream | Use the rioxarray recipe in {doc}`how-it-works` § Downstream use (`write_crs` / `write_transform` / `write_nodata` from attrs) |
 
 ## Environment Agency WCS

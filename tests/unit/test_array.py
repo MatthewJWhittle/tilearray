@@ -675,6 +675,63 @@ def test_create_array_single_tile_pixel_center_coords(
 
 
 @pytest.mark.unit
+def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Design contract (#98): mosaic attrs CRS is the request crs=; no silent retag.
+
+    Alpha uses one ``crs=`` for bbox interpretation and mosaic labelling. Pixel
+    values are not client-warped onto another CRS; GeoTIFF tags must not replace
+    ``attrs["crs"]``. Separate ``bbox_crs`` / output CRS is target design only.
+    """
+
+    bbox = BoundingBox(
+        min_x=100.0, min_y=200.0, max_x=108.0, max_y=204.0, crs=CRS.EPSG_27700
+    )
+
+    def fake_get_service(*args: Any, **kwargs: Any) -> DummyService:
+        return DummyService()
+
+    def fake_fetch_tile(request: TileRequest, **kwargs: Any) -> TileResponse:
+        width = request.width or 1
+        height = request.height or 1
+        return TileResponse(
+            data=b"\x00" * (width * height),
+            content_type="application/octet-stream",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+            error_message=None,
+        )
+
+    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
+
+    def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
+        height = request.height or 1
+        width = request.width or 1
+        return np.full((height, width), 7.0, dtype=np.float32)
+
+    decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
+
+    result = array_module.create_array(
+        service_url="http://example.com/wcs",
+        bbox=bbox,
+        crs=CRS.EPSG_27700,
+        chunk_size=(8, 4),
+        output_format=Format.GEOTIFF,
+    )
+
+    assert result.attrs["crs"] == CRS.EPSG_27700.value
+    assert result.attrs["transform_source"] == "mosaic_bbox"
+    a, b, c, d, e, f = result.attrs["transform"]
+    assert (a, b, c, d, e, f) == (1.0, 0.0, 100.0, 0.0, -1.0, 204.0)
+    assert result.coords["x"].values[0] == pytest.approx(c + a * 0.5)
+    assert result.coords["y"].values[0] == pytest.approx(f + e * 0.5)
+
+
+@pytest.mark.unit
 def test_geotiff_elevation_attrs_crs_transform_nodata(
     monkeypatch: MonkeyPatch,
 ) -> None:

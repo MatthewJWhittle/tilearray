@@ -110,7 +110,21 @@ Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into 
 
 Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xarray.DataArray` with coordinates and attrs (`crs`, mosaic `transform`, `band_policy`, optional elevation `nodata`, service/fetch summaries, …). Shape is known when the graph is built; tile bytes load when something computes.
 
-**Georef contract:** mosaic CRS is always the `create_array(..., crs=)` you passed — never silently replaced by per-tile GeoTIFF tags. `attrs["transform"]` is a north-up Affine `(a,b,c,d,e,f)` from the planned mosaic bbox + shape (`transform_source="mosaic_bbox"`). `y`/`x` are **pixel centers** consistent with that Affine (row 0 = north). Elevation GeoTIFF decode maps `GDAL_NODATA`/sentinels → NaN in pixels and sets `nodata`/`_FillValue` to NaN; RGB/RGBA imagery omits nodata and keeps `(y, x, band)`.
+**Georef contract (current alpha):** mosaic CRS is always the `create_array(..., crs=)` you passed — never silently replaced by per-tile GeoTIFF tags. `attrs["transform"]` is a north-up Affine `(a,b,c,d,e,f)` from the planned mosaic bbox + shape (`transform_source="mosaic_bbox"`). `y`/`x` are **pixel centers** consistent with that Affine (row 0 = north). Elevation GeoTIFF decode maps `GDAL_NODATA`/sentinels → NaN in pixels and sets `nodata`/`_FillValue` to NaN; RGB/RGBA imagery omits nodata and keeps `(y, x, band)`.
+
+### CRS roles — query vs service vs output
+
+Product vocabulary (canonical: {doc}`design-principles`) separates three ideas:
+
+| Role | Meaning |
+|------|---------|
+| **Query / bbox CRS** | How you describe the AOI |
+| **Service / request CRS** | CRS used when talking to the provider |
+| **Output / array CRS** | Actual CRS of returned pixels + transform |
+
+**Today:** one `crs=` argument both interprets the bbox and labels the mosaic. tilearray does **not** run a client-side raster warp onto a different CRS; pixels stay on the planned mosaic grid. **Target design:** callers may use a convenient `bbox_crs` while fixed grids (WMTS/XYZ) return native-grid pixels in their true output CRS (with reported snapped extent). Server-side WMS/WCS CRS changes, if exposed, stay explicit and must match returned metadata. Label anything beyond the current single-`crs=` behaviour as target work ([#92](https://github.com/MatthewJWhittle/tilearray/issues/92), [#93](https://github.com/MatthewJWhittle/tilearray/issues/93), [#95](https://github.com/MatthewJWhittle/tilearray/issues/95)) — not a shipped promise.
+
+**Imagery vs numerical coverages:** XYZ/WMS (and many WMTS) paths are often *rendered* tiles (JPEG/PNG, sometimes palette → single band). WCS elevation is a *numerical* coverage (GeoTIFF, nodata → NaN). Do not assume colour mosaics imply analysis-grade values, or elevation nodata rules for imagery.
 
 ---
 
@@ -165,4 +179,4 @@ if "nodata" in da.attrs:
     da.rio.write_nodata(da.attrs["nodata"], inplace=True)
 ```
 
-Next: {doc}`quickstart` or {doc}`guides/index`.
+Next: {doc}`quickstart`, {doc}`guides/index`, or {doc}`design-principles`.
