@@ -44,4 +44,5 @@ roadmap
 :maxdepth: 1
 
 building-docs
+docs-writing-principles
 ```
