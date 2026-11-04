@@ -2,15 +2,15 @@
 
 Fetch **many small, noncontiguous bboxes** (training chips, sample sites) without building one country-wide mosaic.
 
-**Job:** loop `create_array` per bbox → `compute_with_policy` → save → release. Stay polite under the shared host ceiling. Do **not** union distant boxes into one `bbox=`.
+Loop `create_array` per bbox, then `compute_with_policy`, save, and release. Stay polite under the shared host ceiling. Do **not** union distant boxes into one `bbox=`.
 
 Background: {doc}`how-it-works`. Copy-paste hosts: {doc}`quickstart`.
 
 ---
 
-## One bbox → one mosaic
+## One mosaic per bbox
 
-Each `create_array` call plans and assembles **one** contiguous mosaic for its bbox. Distant UK (or other) sample sites are separate arrays — not one empty-heavy megagrid.
+Each `create_array` call plans and assembles **one** contiguous mosaic for its bbox. Distant sample sites are separate arrays — not one sparse mosaic over a union bbox.
 
 ```text
 boxes → [create_array(config, b, crs, ...) for b in boxes]   # lazy list is fine
@@ -24,9 +24,9 @@ Planning twenty graphs is cheap. HTTP cost appears at compute. Prefer **compute 
 
 ---
 
-## Recipe — noncontiguous WMTS patches
+## Example — noncontiguous WMTS patches
 
-Same habit as XYZ/WMS: shared config + per-bbox `create_array` → `compute_with_policy`. Below uses three separated Web Mercator windows at one matrix level (swap host / layer / matrix for your service).
+Same habit as XYZ/WMS: shared config + per-bbox `create_array` then `compute_with_policy`. Below uses three separated Web Mercator windows at one matrix level (swap host / layer / matrix for your service).
 
 ```python
 from pathlib import Path
@@ -90,11 +90,11 @@ Do **not**:
 
 - Raise the shared ceiling because you have “20 jobs”
 - Set `FetchPolicy(max_concurrent=1)` (or a raised-then-shared override) to “be polite” on one call — that serialises siblings. Prefer a lower `max_concurrent_requests=` on that `create_array` (call-local) or `call_max_concurrent` — see the name map in {doc}`how-it-works`
-- Union every sample into one megabbox “for convenience”
+- Union every sample into one huge bbox “for convenience”
 
 ---
 
-## Dask-friendly without an orchestrator
+## Lists of lazy mosaics
 
 A **list of lazy mosaics** is already a set of ordinary Dask graphs. You can:
 
@@ -102,9 +102,9 @@ A **list of lazy mosaics** is already a set of ordinary Dask graphs. You can:
 2. Compute / save as patches become ready (sequential loop above, or a small concurrent batch)
 3. Keep IO vs CPU balance in *your* scheduler — tilearray does not ship a multi-AOI job runner
 
-Overlapping computes stay under the shared gate automatically. Future multi-machine work must still respect host politeness (no stampede); that is separate from this recipe.
+Overlapping computes stay under the shared gate automatically. Multi-machine runs must still keep each worker under the host’s concurrency ceiling; that coordination is outside this guide.
 
-There is **no** `map_aois` helper today. Prefer this loop until a documented friction needs a thin sugar API (design note first).
+There is **no** `map_aois` helper today. Prefer this loop unless a documented friction needs a thin sugar API.
 
 ---
 
@@ -118,7 +118,7 @@ There is **no** `map_aois` helper today. Prefer this loop until a documented fri
 | **Shape** | Known at plan time from chunk/grid (or inferred WMTS/XYZ tile coverage); distant patches do **not** share one pixel grid unless you align them yourself |
 | **Provenance** | `attrs["service_type"]`, fetch-policy summary, optional coverage/layer identity — use these when writing training metadata |
 
-One public `crs=` still interprets the bbox; native-WMTS output CRS is already shipped. A separate `bbox_crs=` for every protocol remains **target** — {doc}`design-principles`. Do not assume client-side warp to an arbitrary patch size.
+Full CRS roles and planned `bbox_crs=`: {doc}`design-principles`. Do not assume client-side warp to an arbitrary patch size.
 
 ---
 
@@ -134,7 +134,6 @@ Symptom table: {doc}`troubleshooting`.
 
 ## Related
 
-- {doc}`how-it-works` — plan → polite fetch → lazy mosaic; concurrency name map
+- {doc}`how-it-works` — plan, polite fetch, lazy mosaic; concurrency name map and scaling without overwhelming the host
 - {doc}`troubleshooting` — hung compute, politeness mix-ups, CRS handoff
 - {doc}`guides/index` — live-host visual guides (single AOI)
-- Roadmap scale themes (AOI preflight / distributed don’t-stampede) stay separate; this page is the near-term multi-site recipe only

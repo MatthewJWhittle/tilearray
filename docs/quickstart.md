@@ -111,7 +111,7 @@ print(arr.shape, da.attrs["crs"])  # CRS is EPSG:25833
 
 Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough + simpler GIBS WMTS recipe: {doc}`guides/wmts`. To discover layer / TileMatrixSet / matrix ids on an unfamiliar host, use {doc}`inspect-endpoint`.
 
-Many noncontiguous sample boxes (ML chips): {doc}`multi-aoi-ml-patches` — one `create_array` per bbox, not a union megamosaic.
+Many noncontiguous sample boxes (ML chips): {doc}`multi-aoi-ml-patches` — one `create_array` per bbox, not one mosaic over the union of all boxes.
 
 ## Private or keyed hosts
 

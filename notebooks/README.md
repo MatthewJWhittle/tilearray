@@ -2,11 +2,11 @@
 
 Prefer the Sphinx **usage guides** under [`docs/guides/`](../docs/guides/) for published examples.
 
-This directory is for local experimentation, maintainer stage-gates, and **driveable problem-shaped examples**. See [`docs/building-docs.md`](../docs/building-docs.md) if you need to rebuild the docs site or regenerate figures.
+This directory is for local experimentation, maintainer checkout notebooks, and interactive worked examples. See [`docs/building-docs.md`](../docs/building-docs.md) if you need to rebuild the docs site or regenerate figures.
 
-## Community problem-shaped examples
+## Worked examples
 
-[`community_worked_examples.ipynb`](community_worked_examples.ipynb) — four problem classes (tile-grid AOI georef, WCS size habits, config/CRS mistakes, polite multi-tile fetch). Live public hosts where polite; offline only for CRS typo checks. Companion guide: [`docs/guides/problem-shaped-examples.md`](../docs/guides/problem-shaped-examples.md).
+[`community_worked_examples.ipynb`](community_worked_examples.ipynb) — four jobs (tile-grid AOI georef, WCS size habits, config/CRS mistakes, polite multi-tile fetch). Live public hosts where polite; offline only for CRS typo checks. Companion guide: [`docs/guides/worked-examples.md`](../docs/guides/worked-examples.md).
 
 ```bash
 uv sync --dev

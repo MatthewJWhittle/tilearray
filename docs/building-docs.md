@@ -41,4 +41,4 @@ Do not wire large profiles into always-on PR jobs. User-facing fetch behaviour: 
 
 ## API freeze / Alpha graduation
 
-Before a stable-contract cut, walk {doc}`api-freeze-checklist` (current `__all__`, pending open-PR surface, SemVer draft, graduation boxes). Do not remove the Alpha badge from that checklist alone.
+Before a stable-contract cut, walk [api-freeze-checklist.md](api-freeze-checklist.md) (current `__all__`, pending open-PR surface, SemVer draft, graduation boxes). Do not remove the Alpha badge from that checklist alone.

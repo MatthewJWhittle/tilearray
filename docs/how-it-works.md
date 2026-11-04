@@ -88,9 +88,9 @@ Soft-fail knobs (`on_tile_error`, `soft_fail`, `soft_fill_value`, `soft_fail_max
 
 API surface: {doc}`api/index`. When a knob misbehaves: {doc}`troubleshooting`.
 
-### `max_concurrent*` — one job per name
+### Concurrency names: what each one controls
 
-Same-ish names, different jobs. **Host ceiling ≠ call politeness ≠ Dask threads.**
+Similar names, different jobs. **Host ceiling ≠ call politeness ≠ Dask threads.**
 
 | Name | Where | Job |
 |------|-------|-----|
@@ -99,21 +99,21 @@ Same-ish names, different jobs. **Host ceiling ≠ call politeness ≠ Dask thre
 | `call_max_concurrent` | `FetchPolicy` + `FetchProgress` | **Per-call / per-session** in-flight cap; **not** in `cache_key`. |
 | `compute_with_policy(..., max_concurrent=)` | Compute helper | **Dask worker sizing only** (merges into attrs policy for `num_workers`). The HTTP gate was fixed at `create_array`. |
 
-Do **not** treat `FetchPolicy(max_concurrent=1)` as the polite-call recipe — that shrinks the shared gate for sibling sessions. Prefer a lower `max_concurrent_requests=` override on `create_array` (or `call_max_concurrent` on the session) so the host ceiling stays intact.
+Do **not** treat `FetchPolicy(max_concurrent=1)` as the polite-call setting — that shrinks the shared gate for sibling sessions. Prefer a lower `max_concurrent_requests=` override on `create_array` (or `call_max_concurrent` on the session) so the host ceiling stays intact.
 
-Stay at or below preset ceilings on multi-tile cold mosaics. Soft-fill is plan-time opt-in; the default remains hard `NetworkError` + sibling abort after retries. Maintainer soak commands live in {doc}`building-docs`.
+Stay at or below preset ceilings on multi-tile cold mosaics. Soft-fill is plan-time opt-in; the default remains hard `NetworkError` + sibling abort after retries.
 
-### Laptop → larger machine (don’t stampede)
+### Scaling up without overwhelming the host
 
-The fetch gate (fixed semaphore or AIMD) is **process-local**. Threads in one Python process share it; separate OS processes and Dask distributed workers do **not**. Scaling “the wrong way” multiplies in-flight HTTP by worker count even when each worker looks polite.
+Avoid flooding a server when you move from a laptop to a larger machine. The fetch gate (fixed semaphore or AIMD) is **process-local**. Threads in one Python process share it; separate OS processes and Dask distributed workers do **not**. Using more workers the wrong way multiplies in-flight HTTP by worker count even when each worker looks polite.
 
-| Scale shape | What the gate does | Recipe |
-|-------------|--------------------|--------|
+| Scale shape | What the gate does | Do this |
+|-------------|--------------------|---------|
 | **One process, Dask threads** | Shared ceiling holds for sibling mosaics | Prefer {py:func}`~tilearray.compute_with_policy` (always uses `scheduler="threads"`). Keep preset host ceilings; lower per-call with `max_concurrent_requests=` / `call_max_concurrent`. |
 | **Several mosaics, same process** | Aggregate in-flight ≤ host ceiling | Same configs / presets; do not shrink `FetchPolicy.max_concurrent` for one polite call. |
-| **Multi-process or distributed workers** | Each process has its own gate — **no global ceiling** | Do **not** advertise a cluster-wide host limit. Either stay on threads, or set each worker’s ceiling to about `floor(preset_ceiling / N_workers)` and treat that as a conservative recipe, not a library guarantee. |
+| **Multi-process or distributed workers** | Each process has its own gate — **no global ceiling** | Do **not** advertise a cluster-wide host limit. Either stay on threads, or set each worker’s ceiling to about `floor(preset_ceiling / N_workers)` and treat that as a conservative approach, not a library guarantee. |
 
-**Don’ts**
+**What not to do**
 
 - Do not use `da.compute(scheduler="processes")` or a Dask distributed cluster expecting the AIMD / semaphore gate to protect the host — those workers do not share one gate.
 - Do not raise `max_concurrent_requests` past the preset to “use the bigger machine”; more CPU does not raise the provider’s ceiling.
@@ -122,7 +122,7 @@ The fetch gate (fixed semaphore or AIMD) is **process-local**. Threads in one Py
 
 `Retry-After`, AIMD pressure backoff, circuit breakers, and hard-fail / soft-fail abort still apply **inside** each process. Concurrent mosaics in one process share that behaviour; across processes you only get N independent copies.
 
-Same public API on a larger box: `create_array` → `compute_with_policy`. Bigger machines help when the bottleneck is CPU/RAM for decode and assemble under an honest host ceiling — not by multiplying HTTP storms.
+Same public API on a larger box: `create_array` then `compute_with_policy`. Bigger machines help when the bottleneck is CPU/RAM for decode and assemble under the preset host ceiling — not by multiplying concurrent HTTP requests.
 
 ---
 
@@ -154,7 +154,7 @@ Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xa
 
 ### CRS roles — query vs service vs output
 
-Product vocabulary (canonical: {doc}`design-principles`) separates three ideas:
+Three CRS roles matter ({doc}`design-principles`):
 
 | Role | Meaning |
 |------|---------|
@@ -162,7 +162,7 @@ Product vocabulary (canonical: {doc}`design-principles`) separates three ideas:
 | **Service / request CRS** | CRS used when talking to the provider |
 | **Output / array CRS** | Actual CRS of returned pixels + transform |
 
-**Today:** one `crs=` argument interprets the bbox for planning. Any pyproj-valid CRS works (presets such as `CRS.EPSG_27700`, or strings like `"EPSG:25833"` / `"EPSG:28992"`); invalid identifiers raise {py:exc}`~tilearray.ValidationError` before planning. That same argument still labels the mosaic for WCS / WMS / XYZ / slippy WMTS. **Already shipped for metadata-backed WMTS:** pixels stay on the native TileMatrixSet grid; `attrs["crs"]` and the planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). tilearray does **not** run a client-side raster warp — Kartverket-style lon/lat query → EPSG:25833 mosaic is planning + native-grid assemble, not a local reprojection of pixels. **Still target:** a separate public `bbox_crs=` for every protocol, and treating XYZ the same way as native WMTS. Server-side WMS/WCS CRS changes, if exposed, stay explicit and must match returned metadata — see {doc}`design-principles`. Parameter reference: {py:func}`~tilearray.create_array`.
+Today one `crs=` argument interprets the bbox for planning. Any pyproj-valid CRS works (presets such as `CRS.EPSG_27700`, or strings like `"EPSG:25833"` / `"EPSG:28992"`); invalid identifiers raise {py:exc}`~tilearray.ValidationError` before planning. For WCS / WMS / XYZ / slippy WMTS that same argument also labels the mosaic. For **WMTS with TileMatrixSet metadata**, pixels stay on the native grid; `attrs["crs"]` and the planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). tilearray does **not** warp pixels client-side — a lon/lat query against a projected TileMatrixSet is planning plus native-grid assemble. Planned: a separate public `bbox_crs=` for every protocol — see {doc}`design-principles`. Parameter reference: {py:func}`~tilearray.create_array`.
 
 **Imagery vs numerical coverages:** XYZ/WMS (and many WMTS) paths are often *rendered* tiles (JPEG/PNG, sometimes palette indices unless `expand_palette=True`). WCS elevation is a *numerical* coverage (GeoTIFF, nodata → NaN). Do not assume colour mosaics imply analysis-grade values, or elevation nodata rules for imagery.
 
@@ -207,7 +207,7 @@ With a DataArray you can:
 
 - **Plot** a computed window or a reduction (`da.plot()` / `da.isel(band=0).plot()`)
 - **Analyse** with xarray/Dask (stats, terrain, resample)
-- **Feed ML** — sample chips from one mosaic, or many noncontiguous sites via a per-bbox loop ({doc}`multi-aoi-ml-patches`); do not union distant boxes into one megagrid
+- **Feed ML** — sample chips from one mosaic, or many noncontiguous sites via a per-bbox loop ({doc}`multi-aoi-ml-patches`); do not union distant boxes into a single mosaic
 - **Handoff to rioxarray** (optional install) using mosaic attrs — no silent CRS rewrite:
 
 ```python
