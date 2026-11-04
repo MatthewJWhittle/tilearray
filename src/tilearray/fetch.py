@@ -436,9 +436,11 @@ class FetchStats:
 class FetchPolicy:
     """Configuration for :class:`TileFetcher`.
 
-    ``max_concurrent`` is the **shared process-gate ceiling** (host / preset limit).
-    It participates in :meth:`cache_key` so callers that intentionally configure the
-    same host ceiling share one fetcher and concurrency gate.
+    ``max_concurrent`` is the **shared process-local gate ceiling** (host / preset
+    limit). Threads in one Python process that resolve the same
+    :meth:`cache_key` share one fetcher and concurrency gate. Separate OS
+    processes and Dask distributed workers each get their own gate — there is
+    no cross-process host ceiling.
 
     ``call_max_concurrent`` is an optional **per-call / per-session** limit. It is
     not part of :meth:`cache_key`, so one caller's local politeness cannot shrink
@@ -732,10 +734,11 @@ class TileFetcher:
             self._serial_warned_keys.add(key)
         logger.warning(
             "Shared fetch concurrency is 1 while multiple callers are waiting. "
-            "FetchPolicy.max_concurrent is the process-wide gate (host/preset "
-            "ceiling); use FetchProgress(call_max_concurrent=...) or "
+            "FetchPolicy.max_concurrent is the process-local gate (host/preset "
+            "ceiling for this Python process); use "
+            "FetchProgress(call_max_concurrent=...) or "
             "FetchPolicy.call_max_concurrent for per-call politeness so siblings "
-            "are not serialised."
+            "are not serialised. Separate processes do not share this gate."
         )
 
     def _acquire_concurrency(self, host: str) -> None:

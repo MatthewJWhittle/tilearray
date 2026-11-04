@@ -206,6 +206,20 @@ def test_compute_with_policy_merges_user_compute_kwargs(
     assert recorded["scheduler"] == "threads"
 
 
+def test_compute_with_policy_warns_on_non_threads_scheduler(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Honesty: non-threads scheduler= is ignored; gate stays process-local (#59)."""
+
+    da = _lazy_array(monkeypatch)
+    recorded = _patch_dataarray_compute(monkeypatch)
+
+    with pytest.warns(UserWarning, match="ignores scheduler='processes'"):
+        compute_with_policy(da, scheduler="processes")
+
+    assert recorded["scheduler"] == "threads"
+
+
 def test_compute_with_policy_default_policy_when_no_attrs(
     monkeypatch: MonkeyPatch,
 ) -> None:

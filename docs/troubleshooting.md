@@ -48,6 +48,8 @@ Host ceiling / concurrency semantics are unchanged — progress only observes ti
 | Twenty ML sites → huge empty mosaic / host stampede | Union bbox, or raised ceiling “for 20 jobs” | One `create_array` per bbox; sequential (or small-batch) compute under the shared gate — {doc}`multi-aoi-ml-patches` |
 | `compute_with_policy(..., max_concurrent=N)` changed HTTP in-flight | That kwarg sizes **Dask workers only** | Set fetch politeness at `create_array` / config; see the name map in {doc}`how-it-works` |
 | Headers / `resolution` / AIMD knobs “ignored” or applied oddly | Same `**service_options` bag feeds **fetch**, **planner**, and **identity** families | Match the key to its family in {doc}`how-it-works` (fetch keys are popped into `FetchPolicy` first) |
+| Many 403/429 after moving to “more workers” / processes / distributed | Process-local gate × N workers = host stampede | Stay on `compute_with_policy` (threads). Multi-process/distributed does **not** share one ceiling — see {doc}`how-it-works` don’t-stampede notes; divide ceilings by worker count only as a conservative recipe |
+| `compute_with_policy(..., scheduler="processes")` still threads | Helper **always** uses `scheduler="threads"` so the process gate can apply | Use threads on purpose; for processes, read the don’t-stampede section first — there is no cross-process host gate |
 
 Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `**service_options` key.
 

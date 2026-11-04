@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import os
+import warnings
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -527,6 +528,11 @@ def compute_with_policy(
     when AIMD allows more parallel HTTP. This helper runs the threaded scheduler with
     ``num_workers=compute_thread_pool_size(policy)``.
 
+    Always uses ``scheduler="threads"`` so tile loads share the **process-local**
+    fetch gate. Passing another ``scheduler=`` in ``compute_kwargs`` is ignored
+    with a :class:`UserWarning` — multi-process / distributed schedulers do not
+    share one host ceiling (see don't-stampede guidance in the docs).
+
     Policy resolution order: explicit ``fetch_policy``; else ``tilearray_fetch_policy``
     on ``obj.attrs`` (set by :func:`create_array`) with optional ``max_concurrent``
     merged in (preserves AIMD / circuit-breaker fields from attrs); else
@@ -553,6 +559,16 @@ def compute_with_policy(
                 num_workers = int(recommended)
 
     workers = compute_thread_pool_size(policy, override=num_workers)
+    requested_scheduler = compute_kwargs.get("scheduler")
+    if requested_scheduler is not None and requested_scheduler != "threads":
+        warnings.warn(
+            "compute_with_policy ignores scheduler="
+            f"{requested_scheduler!r} and uses scheduler='threads' so the "
+            "process-local fetch gate can keep host ceilings polite. "
+            "Multi-process / distributed workers do not share that gate.",
+            UserWarning,
+            stacklevel=2,
+        )
     merged = dict(compute_kwargs)
     merged["scheduler"] = "threads"
     merged["num_workers"] = workers
@@ -583,11 +599,12 @@ def _resolve_fetch_policy(
 ) -> FetchPolicy:
     """Build the fetch policy for :func:`create_array`.
 
-    ``max_concurrent`` on the returned policy is the **shared process-gate
-    ceiling** (host / preset). A lower ``max_concurrent_requests`` override on a
-    configured service becomes ``call_max_concurrent`` so one caller's local
-    politeness cannot shrink the shared gate for siblings. Raising the override
-    (or setting it without a service config) still sets the shared ceiling.
+    ``max_concurrent`` on the returned policy is the **shared process-local
+    gate ceiling** (host / preset). A lower ``max_concurrent_requests`` override
+    on a configured service becomes ``call_max_concurrent`` so one caller's
+    local politeness cannot shrink the shared gate for siblings. Raising the
+    override (or setting it without a service config) still sets the shared
+    ceiling. Separate OS processes do not share this gate.
     """
 
     base = (
