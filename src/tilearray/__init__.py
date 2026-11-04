@@ -9,7 +9,6 @@ from .array import (
     compute_with_policy,
     create_array,
     load_array,
-    recommend_grid_shape,
 )
 from .errors import (
     ConfigurationError,
@@ -27,7 +26,13 @@ from .inspect import (
     inspect_capabilities,
     inspect_endpoint,
 )
-from .plan import ArrayPlan, FetchSummary, fetch_summary, plan_array
+from .plan import (
+    ArrayPlan,
+    FetchSummary,
+    fetch_summary,
+    plan_array,
+    recommend_grid_shape,
+)
 from .service import (
     ServiceConfig,
     TileGeometry,

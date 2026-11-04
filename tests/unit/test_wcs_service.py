@@ -512,21 +512,21 @@ def test_wcs_service_coerce_helpers_validate_inputs() -> None:
 
     assert service._coerce_format(Format.PNG) == Format.PNG
     assert service._coerce_format("image/png") == Format.PNG
-    assert service._coerce_crs(CRS.EPSG_4326) == CRS.EPSG_4326
-    assert service._coerce_crs("EPSG:4326") == CRS.EPSG_4326
-    assert service._coerce_crs(4326) == CRS.EPSG_4326
+    assert CRS.parse(CRS.EPSG_4326) == CRS.EPSG_4326
+    assert CRS.parse("EPSG:4326") == CRS.EPSG_4326
+    assert CRS.parse(4326) == CRS.EPSG_4326
 
     with pytest.raises(ValidationError, match="Unsupported WCS format"):
         service._coerce_format("image/unknown")
 
-    assert service._coerce_crs("EPSG:25833") == "EPSG:25833"
-    assert service._coerce_crs(32632) == "EPSG:32632"
+    assert CRS.parse("EPSG:25833") == "EPSG:25833"
+    assert CRS.parse(32632) == "EPSG:32632"
 
     with pytest.raises(ValidationError, match="Did you mean 'EPSG:28992'"):
-        service._coerce_crs("EPGS:28992")
+        CRS.parse("EPGS:28992")
 
     with pytest.raises(ValidationError, match="Invalid CRS"):
-        service._coerce_crs(object())
+        CRS.parse(object())
 
 
 def test_wcs_default_subset_axes_respect_angular_vs_linear() -> None:

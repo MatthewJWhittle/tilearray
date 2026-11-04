@@ -3,6 +3,10 @@
 Read-only preflight for large mosaics: inspect the planned grid and
 concurrency ceiling before ``create_array`` / ``compute_with_policy``.
 Does not invent wall-clock time, provider cost, or a second compute path.
+
+Shared request / policy / grid / cache helpers live in
+:mod:`tilearray._planning` — this module imports nothing private from
+:mod:`tilearray.array`.
 """
 
 from __future__ import annotations
@@ -14,19 +18,19 @@ from typing import Any, Literal
 import numpy as np
 import xarray as xr
 
-from .array import (
-    _FETCH_POLICY_ATTR,
-    _PROGRESS_REF_ATTR,
-    _TILE_ERRORS_ATTR,
+from ._planning import (
+    FETCH_POLICY_ATTR,
+    PROGRESS_REF_ATTR,
+    TILE_ERRORS_ATTR,
     ArrayRequest,
-    _cache_key,
-    _fetch_policy_from_summary,
-    _fetch_policy_summary,
-    _organize_tiles,
-    _probe_tile_band_count,
-    _resolve_decoder,
-    _resolve_fetch_policy,
+    cache_key,
+    fetch_policy_from_summary,
+    fetch_policy_summary,
+    organize_tiles,
+    probe_tile_band_count,
     recommend_grid_shape,
+    resolve_decoder,
+    resolve_fetch_policy,
 )
 from .decode import default_band_count_for_format
 from .errors import ValidationError
@@ -253,7 +257,7 @@ def plan_array(
         )
 
     options = dict(service_options)
-    fetch_policy = _resolve_fetch_policy(service_config, options)
+    fetch_policy = resolve_fetch_policy(service_config, options)
 
     request = ArrayRequest.from_inputs(
         service_url=base_service_url,
@@ -273,7 +277,7 @@ def plan_array(
         raise ValidationError("Planning produced no tile requests for this AOI")
 
     rows, cols = request.grid_shape
-    tile_grid = _organize_tiles(tile_requests, rows, cols)
+    tile_grid = organize_tiles(tile_requests, rows, cols)
     chunk_height, chunk_width = request.chunk_size
     pixel_height, pixel_width = _mosaic_pixel_size(
         tile_grid, chunk_height=chunk_height, chunk_width=chunk_width
@@ -291,8 +295,8 @@ def plan_array(
         effective_format, band_policy=band_policy
     )
     if probe_bands:
-        decoder = _resolve_decoder(request, service, None)
-        bands = _probe_tile_band_count(
+        decoder = resolve_decoder(request, service, None)
+        bands = probe_tile_band_count(
             tile_requests[0],
             request.cache_path,
             decoder,
@@ -384,7 +388,7 @@ def plan_array(
         estimated_nbytes=estimated_nbytes,
         cache_dir=cache_path,
         cached_tiles=cached_tiles,
-        fetch_policy=_fetch_policy_summary(fetch_policy),
+        fetch_policy=fetch_policy_summary(fetch_policy),
         service_type=service_type_str,
         output_format=format_value,
         unknowns=tuple(unknowns),
@@ -412,7 +416,7 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
     soft_failed: int | None = None
     aborted: bool | None = None
 
-    progress = attrs.get(_PROGRESS_REF_ATTR)
+    progress = attrs.get(PROGRESS_REF_ATTR)
     if isinstance(progress, FetchProgress):
         total = progress.total
         done = progress.done
@@ -420,7 +424,7 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
         aborted = progress.is_aborted()
         errors.extend(progress.errors[:5])
     else:
-        tile_errors = attrs.get(_TILE_ERRORS_ATTR)
+        tile_errors = attrs.get(TILE_ERRORS_ATTR)
         if isinstance(tile_errors, dict):
             soft_raw = tile_errors.get("soft_failed")
             soft_failed = int(soft_raw) if soft_raw is not None else None
@@ -443,9 +447,9 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
     circuit_breaker_trips: int | None = None
     circuit_breaker_frozen: bool | None = None
 
-    policy_summary = attrs.get(_FETCH_POLICY_ATTR)
+    policy_summary = attrs.get(FETCH_POLICY_ATTR)
     if isinstance(policy_summary, dict):
-        policy = _fetch_policy_from_summary(policy_summary)
+        policy = fetch_policy_from_summary(policy_summary)
         fetcher = TileFetcher.get_if_cached(policy)
         if fetcher is not None:
             stats = fetcher.stats
@@ -494,7 +498,7 @@ def _mosaic_pixel_size(
 
 
 def _cache_tile_exists(cache_dir: Path, request: TileRequest) -> bool:
-    return (cache_dir / f"{_cache_key(request)}.tile").exists()
+    return (cache_dir / f"{cache_key(request)}.tile").exists()
 
 
 def _bands_phrase(bands: int | None, source: BandsSource) -> str:

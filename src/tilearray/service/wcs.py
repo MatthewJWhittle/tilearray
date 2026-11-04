@@ -421,9 +421,7 @@ class WCSService(BaseService):
         self.output_format = self._coerce_format(
             output_format or config.get("format") or Format.GEOTIFF
         )
-        self.subsetting_crs = self._coerce_crs(
-            crs or config.get("crs") or CRS.EPSG_4326
-        )
+        self.subsetting_crs = CRS.parse(crs or config.get("crs") or CRS.EPSG_4326)
 
     @classmethod
     def from_url(cls, url: str, **config: Any) -> WCSService:
@@ -604,7 +602,7 @@ class WCSService(BaseService):
         fmt = self._coerce_format(
             options.get("output_format") or self.output_format or metadata.native_format
         )
-        requested_crs = self._coerce_crs(options.get("crs") or tile.crs)
+        requested_crs = CRS.parse(options.get("crs") or tile.crs)
         subset_crs, subset_bbox, subset_parts = self._resolve_subset(
             tile.bbox, requested_crs, metadata
         )
@@ -677,9 +675,6 @@ class WCSService(BaseService):
                     )
                 ) from exc
             raise ValidationError(f"Invalid WCS format value: {fmt!r}") from exc
-
-    def _coerce_crs(self, crs: Any) -> CRS:
-        return CRS.parse(crs)
 
     def _resolve_subset(
         self,

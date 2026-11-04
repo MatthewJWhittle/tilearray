@@ -246,7 +246,7 @@ def test_multi_tile_fail_loud_aborts_under_pressure(
             dtype=np.float32,
         )
 
-    monkeypatch.setattr("tilearray.array.get_service", fake_get_service)
+    monkeypatch.setattr("tilearray._planning.get_service", fake_get_service)
     monkeypatch.setattr("tilearray.array.fetch_tile", fake_fetch_tile)
 
     bbox = BoundingBox(min_x=0, min_y=0, max_x=16, max_y=16, crs=CRS.EPSG_4326)

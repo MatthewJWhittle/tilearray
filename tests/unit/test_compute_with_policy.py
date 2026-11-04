@@ -10,6 +10,7 @@ import pytest
 import xarray as xr
 from pytest import MonkeyPatch
 
+import tilearray._planning as planning_module
 import tilearray.array as array_module
 import tilearray.decode as decode_module
 from tilearray.array import (
@@ -84,7 +85,7 @@ def _lazy_array(monkeypatch: MonkeyPatch) -> Any:
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
     decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 

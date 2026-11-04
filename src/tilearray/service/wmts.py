@@ -269,7 +269,7 @@ class WMTSService(BaseService):
         self.output_format = self._coerce_format(
             output_format or config.get("format") or Format.PNG
         )
-        self.native_crs = self._coerce_crs(crs or config.get("crs") or CRS.EPSG_4326)
+        self.native_crs = CRS.parse(crs or config.get("crs") or CRS.EPSG_4326)
         self.url_template = url_template or config.get("url_template")
         self._client = client
         self.parser = WMTSParser()
@@ -419,7 +419,7 @@ class WMTSService(BaseService):
             options.get("style") if options.get("style") is not None else self.style
         )
         fmt = self._coerce_format(options.get("output_format") or self.output_format)
-        crs = self._coerce_crs(options.get("crs") or tile.crs or self.native_crs)
+        crs = CRS.parse(options.get("crs") or tile.crs or self.native_crs)
 
         tile_col = _require_index(tile.tile_x, options.get("tile_col"))
         tile_row = _require_index(tile.tile_y, options.get("tile_row"))
@@ -718,9 +718,6 @@ class WMTSService(BaseService):
             if isinstance(fmt, str):
                 raise ValidationError(unsupported_format_message("WMTS", fmt)) from exc
             raise ValidationError(f"Invalid WMTS format value: {fmt!r}") from exc
-
-    def _coerce_crs(self, crs: Any) -> CRS:
-        return CRS.parse(crs)
 
 
 def _parse_supported_crs(crs_text: str, *, tms_id: str) -> CRS:
