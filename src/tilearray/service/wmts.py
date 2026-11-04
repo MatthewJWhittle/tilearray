@@ -712,31 +712,23 @@ class WMTSService(BaseService):
                 )
 
     def _coerce_format(self, fmt: Any) -> Format:
-        if isinstance(fmt, Format):
-            return fmt
-        if isinstance(fmt, str):
-            try:
-                return Format(fmt)
-            except ValueError as exc:
+        try:
+            return Format.coerce(fmt)
+        except ValueError as exc:
+            if isinstance(fmt, str):
                 raise ValidationError(unsupported_format_message("WMTS", fmt)) from exc
-        raise ValidationError(f"Invalid WMTS format value: {fmt!r}")
+            raise ValidationError(f"Invalid WMTS format value: {fmt!r}") from exc
 
     def _coerce_crs(self, crs: Any) -> CRS:
         return CRS.parse(crs)
 
 
 def _parse_supported_crs(crs_text: str, *, tms_id: str) -> CRS:
+    """Parse TileMatrixSet SupportedCRS (URN/URI forms via :meth:`CRS.parse`)."""
+
     try:
         return CRS.parse(crs_text)
     except ValidationError as exc:
-        upper = crs_text.upper()
-        # Common URN spellings pyproj may not accept verbatim.
-        if "CRS84" in upper or upper.endswith(":84"):
-            return CRS.parse("OGC:CRS84")
-        if upper.endswith("4326") or ":4326" in upper:
-            return CRS.EPSG_4326
-        if "3857" in upper:
-            return CRS.EPSG_3857
         raise ValidationError(
             f"WMTS TileMatrixSet {tms_id!r} has unsupported SupportedCRS "
             f"{crs_text!r}. Provide a pyproj-recognised CRS (for example "

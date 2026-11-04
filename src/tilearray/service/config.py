@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..error_messages import (
     coverage_build_service_config_message,
@@ -16,6 +16,7 @@ from ..errors import (
     ConfigurationError,
     NetworkError,
     TileArrayError,
+    ValidationError,
 )
 from ..fetch import (
     _DEFAULT_MULTIPLICATIVE_DECREASE,
@@ -55,6 +56,21 @@ class ServiceConfig(BaseModel):
         None,
         description="Default grid shape (rows, cols) to use when planning tiles",
     )
+
+    @field_validator("chunk_size", "grid_shape")
+    @classmethod
+    def _positive_size_pair(
+        cls, value: tuple[int, int] | None
+    ) -> tuple[int, int] | None:
+        if value is None:
+            return None
+        if len(value) != 2:
+            raise ValidationError("size fields must be a pair of positive integers")
+        a, b = int(value[0]), int(value[1])
+        if a <= 0 or b <= 0:
+            raise ValidationError("size fields must contain positive integers")
+        return a, b
+
     cache_dir: str | Path | None = Field(
         None, description="Optional cache directory for fetched tiles"
     )

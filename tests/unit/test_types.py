@@ -47,6 +47,12 @@ def test_crs_parse_accepts_integer_and_pyproj() -> None:
     assert CRS("epsg:32632") == CRS.parse("EPSG:32632")
 
 
+def test_crs_parse_accepts_ogc_urn_and_uri_spellings() -> None:
+    assert CRS.parse("urn:ogc:def:crs:EPSG::25833") == "EPSG:25833"
+    assert CRS.parse("http://www.opengis.net/def/crs/EPSG/0/3857") == CRS.EPSG_3857
+    assert CRS.parse("urn:ogc:def:crs:OGC:1.3:CRS84") == CRS.parse("OGC:CRS84")
+
+
 def test_crs_presets_remain_usable() -> None:
     assert CRS.EPSG_4326.value == "EPSG:4326"
     assert CRS.EPSG_3857 == "EPSG:3857"
@@ -135,3 +141,12 @@ def test_temporal_extent_validation() -> None:
 def test_format_enum_values() -> None:
     assert Format.GEOTIFF.value == "image/tiff"
     assert Format.PNG.value == "image/png"
+
+
+def test_format_coerce_accepts_member_and_mime() -> None:
+    assert Format.coerce(Format.PNG) is Format.PNG
+    assert Format.coerce("image/jpeg") is Format.JPEG
+    with pytest.raises(ValueError):
+        Format.coerce("image/webp")
+    with pytest.raises(ValueError, match="Invalid format value"):
+        Format.coerce(123)

@@ -6,11 +6,12 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
 from urllib.parse import urlparse
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 from tenacity import (
     RetryCallState,
     retry,
@@ -19,6 +20,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from ._http_client import make_sync_client
 from .error_messages import looks_like_html, redact_url
 from .errors import NetworkError, ValidationError
 from .pressure import (
@@ -432,8 +434,7 @@ class FetchStats:
                 self.circuit_breaker_frozen = gate.circuit_breaker_frozen(host)
 
 
-@dataclass(frozen=True)
-class FetchPolicy:
+class FetchPolicy(BaseModel):
     """Configuration for :class:`TileFetcher`.
 
     ``max_concurrent`` is the **shared process-local gate ceiling** (host / preset
@@ -446,25 +447,32 @@ class FetchPolicy:
     not part of :meth:`cache_key`, so one caller's local politeness cannot shrink
     the shared gate for siblings. Apply it via :class:`FetchProgress` (see
     ``call_max_concurrent`` there) so each mosaic / call gets its own limiter.
+
+    Field bounds match :class:`~tilearray.service.config.ServiceConfig` fetch
+    knobs so invalid policies fail at construction instead of later in the gate.
     """
 
-    max_concurrent: int = _DEFAULT_MAX_CONCURRENT
-    max_connections: int | None = None
-    retries: int = 3
-    timeout: float = 30.0
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+
+    max_concurrent: int = Field(default=_DEFAULT_MAX_CONCURRENT, ge=1)
+    max_connections: int | None = Field(default=None, ge=1)
+    retries: int = Field(default=3, ge=0)
+    timeout: float = Field(default=30.0, gt=0)
     rate_limit_per_second: float | None = _DEFAULT_RATE_LIMIT_PER_SECOND
     rate_limiter: HostRateLimiter | None = None
     adaptive_concurrency: bool = False
-    initial_concurrent: int = _DEFAULT_INITIAL_CONCURRENT
-    min_concurrent: int = _DEFAULT_MIN_CONCURRENT
-    multiplicative_decrease: float = _DEFAULT_MULTIPLICATIVE_DECREASE
-    additive_increase: int = _DEFAULT_ADDITIVE_INCREASE
+    initial_concurrent: int = Field(default=_DEFAULT_INITIAL_CONCURRENT, ge=1)
+    min_concurrent: int = Field(default=_DEFAULT_MIN_CONCURRENT, ge=1)
+    multiplicative_decrease: float = Field(
+        default=_DEFAULT_MULTIPLICATIVE_DECREASE, gt=0.0, lt=1.0
+    )
+    additive_increase: int = Field(default=_DEFAULT_ADDITIVE_INCREASE, ge=1)
     forbidden_circuit_breaker: bool = False
-    forbidden_window_seconds: float = 5.0
-    forbidden_threshold: int = 6
-    forbidden_cooldown_seconds: float = 15.0
+    forbidden_window_seconds: float = Field(default=5.0, gt=0)
+    forbidden_threshold: int = Field(default=6, ge=1)
+    forbidden_cooldown_seconds: float = Field(default=15.0, gt=0)
     pressure_classifier: PressureClassifier | None = None
-    call_max_concurrent: int | None = None
+    call_max_concurrent: int | None = Field(default=None, ge=1)
 
     def cache_key(self) -> tuple[Any, ...]:
         """Hashable key for sharing fetcher instances (shared gate identity).
@@ -641,12 +649,12 @@ class TileFetcher:
         )
         self.stats = FetchStats()
         pool_size = self._policy.max_connections or self._policy.max_concurrent
-        self._client = httpx.Client(
+        self._client = make_sync_client(
+            timeout=self._policy.timeout,
             limits=httpx.Limits(
                 max_connections=pool_size,
                 max_keepalive_connections=self._policy.max_concurrent,
             ),
-            timeout=httpx.Timeout(self._policy.timeout),
         )
         self._adaptive_gate: AdaptiveConcurrencyGate | None = None
         self._semaphore: threading.Semaphore | None = None
@@ -686,7 +694,7 @@ class TileFetcher:
             if fetcher is None:
                 # Shared gate uses max_concurrent only; strip call-local limit.
                 gate_policy = (
-                    replace(effective, call_max_concurrent=None)
+                    effective.model_copy(update={"call_max_concurrent": None})
                     if effective.call_max_concurrent is not None
                     else effective
                 )

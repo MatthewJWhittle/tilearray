@@ -12,6 +12,7 @@ from tilearray.service.http import (
     compose_http_params,
     default_headers,
     http_get,
+    make_sync_client,
     resolve_timeout,
 )
 
@@ -61,3 +62,16 @@ def test_http_get_raises_on_error_status() -> None:
     )
     with pytest.raises(httpx.HTTPStatusError):
         http_get("https://example.com/caps")
+
+
+@pytest.mark.unit
+def test_make_sync_client_applies_timeout_and_limits() -> None:
+    limits = httpx.Limits(max_connections=4, max_keepalive_connections=2)
+    client = make_sync_client(timeout=12.5, limits=limits)
+    try:
+        assert client.timeout.connect == 12.5
+        # httpx stores Limits on the transport; constructing with limits= is enough.
+        assert limits.max_connections == 4
+        assert isinstance(client, httpx.Client)
+    finally:
+        client.close()

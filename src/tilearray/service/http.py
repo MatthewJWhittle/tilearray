@@ -23,11 +23,19 @@ from typing import Any
 
 import httpx
 
+from .._http_client import DEFAULT_HTTP_TIMEOUT, make_sync_client
 from ..fetch_presets import tilearray_user_agent
 from .requests import merge_params, merge_str_mappings
 
-# Align with FetchPolicy.timeout / ServiceConfig.fetch_timeout defaults.
-DEFAULT_HTTP_TIMEOUT = 30.0
+__all__ = [
+    "DEFAULT_HTTP_TIMEOUT",
+    "compose_http_headers",
+    "compose_http_params",
+    "default_headers",
+    "http_get",
+    "make_sync_client",
+    "resolve_timeout",
+]
 
 
 def default_headers() -> dict[str, str]:
@@ -90,7 +98,7 @@ def http_get(
 
     timeout_value = DEFAULT_HTTP_TIMEOUT if timeout is None else timeout
     owns_client = client is None
-    http = client or httpx.Client(timeout=httpx.Timeout(timeout_value))
+    http = client or make_sync_client(timeout=timeout_value)
     try:
         response = http.get(
             url,

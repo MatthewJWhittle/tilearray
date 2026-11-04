@@ -4,6 +4,7 @@ Generic type definitions and models for tile-based geospatial data processing.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from enum import Enum
 from functools import lru_cache
@@ -16,6 +17,39 @@ from pyproj import Transformer
 from pyproj.exceptions import CRSError
 
 from .errors import ValidationError
+
+# OGC HTTP URIs and URNs that spell EPSG codes pyproj may not accept verbatim.
+_OGC_EPSG_URI_RE = re.compile(r"/EPSG/(?:0/)?(\d+)/?$", re.I)
+_URN_EPSG_RE = re.compile(
+    r"(?:URN:OGC:DEF:CRS:)?EPSG(?::+(?:\d+\.?\d*:)?)?:*?(\d+)",
+    re.I,
+)
+
+
+def canonicalize_crs_input(value: str) -> str:
+    """Rewrite common OGC URN/URI CRS spellings to forms pyproj accepts.
+
+    Handles ``EPSG:NNNN``, ``urn:ogc:def:crs:EPSG::NNNN``, OpenGIS EPSG HTTP
+    URIs, and CRS84 aliases (``OGC:CRS84``). Other strings are returned stripped
+    unchanged so :meth:`CRS.parse` can still try pyproj / raise clearly.
+    """
+
+    text = value.strip()
+    if not text:
+        return text
+    upper = text.upper()
+    if upper.startswith("EPSG:"):
+        code = text.split(":", 1)[1].split("/")[0].strip()
+        return f"EPSG:{code}" if code else text
+    uri_match = _OGC_EPSG_URI_RE.search(text)
+    if uri_match:
+        return f"EPSG:{uri_match.group(1)}"
+    urn_match = _URN_EPSG_RE.search(upper.replace(" ", ""))
+    if urn_match:
+        return f"EPSG:{urn_match.group(1)}"
+    if "CRS84" in upper or upper.endswith(":84") or "CRS:84" in upper:
+        return "OGC:CRS84"
+    return text
 
 
 @lru_cache(maxsize=256)
@@ -108,8 +142,9 @@ class CRS(str):
             stripped = value.strip()
             if not stripped:
                 raise ValidationError(_invalid_crs_message(value))
+            candidate = canonicalize_crs_input(stripped)
             try:
-                return cls._from_pyproj(PyprojCRS.from_user_input(stripped))
+                return cls._from_pyproj(PyprojCRS.from_user_input(candidate))
             except CRSError as exc:
                 raise ValidationError(
                     _invalid_crs_message(stripped, cause=exc)
@@ -231,6 +266,20 @@ class Format(str, Enum):
     GEOTIFF = "image/tiff"
     PNG = "image/png"
     JPEG = "image/jpeg"
+
+    @classmethod
+    def coerce(cls, value: Any) -> Format:
+        """Normalise a format input to a :class:`Format` member.
+
+        Raises :class:`ValueError` for unknown MIME strings (callers wrap with
+        protocol-specific messages) and for non-string / non-``Format`` values.
+        """
+
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, str):
+            return cls(value)
+        raise ValueError(f"Invalid format value: {value!r}")
 
 
 BBoxTuple = tuple[float, float, float, float]
