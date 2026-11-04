@@ -26,11 +26,11 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 
 Before a large fetch, {py:func}`~tilearray.plan_array` returns a read-only {py:class}`~tilearray.ArrayPlan` (request count, planned bbox, concurrency ceiling, cache warm/cold, honest unknowns). {py:func}`~tilearray.recommend_grid_shape` is the pure AOI helper for resolution × chunk sizing. After planning or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters without inventing wall time or cost.
 
-**`crs=` today:** one argument interprets the bbox. Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. For WCS / WMS / XYZ / slippy WMTS it also labels the mosaic (`attrs["crs"]`). For **WMTS with TileMatrixSet metadata**, the mosaic CRS / planned extent follow the matrix SupportedCRS (query CRS may differ). No client-side raster warp. A separate public `bbox_crs=` for every protocol remains **target** — see {doc}`../design-principles`.
+**`crs=` today:** one argument interprets the bbox. Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. For WCS / WMS / XYZ / slippy WMTS it also labels the mosaic (`attrs["crs"]`). For **WMTS with TileMatrixSet metadata**, the mosaic CRS / planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). No client-side raster warp. A separate public `bbox_crs=` for every protocol remains **target** — see {doc}`../design-principles`. Full parameter list (chunk/grid, cache, `band_policy="preserve"`, soft-fail, progress): {py:func}`~tilearray.create_array` docstring.
 
-Multi-tile mosaics attach a default tqdm-style progress bar through `on_progress` during compute. Opt out with `show_progress=False` or `TILEARRAY_PROGRESS=0`; pass a custom `on_progress=` to replace the bar. Details: {doc}`../how-it-works` · {doc}`../troubleshooting`.
+Multi-tile mosaics attach a default tqdm-style progress bar through `on_progress` during compute. Opt out with `show_progress=False` or `TILEARRAY_PROGRESS=0`; pass a custom `on_progress=` to replace the bar. Soft-fail (`on_tile_error=` / `soft_fail=True`) is plan-time only — default stays hard-fail + abort. Details: {doc}`../how-it-works` · {doc}`../troubleshooting`.
 
-`**service_options` on `create_array` / `load_array` is one bag with three key families (**fetch** politeness, **planner** geometry, **identity** / protocol). Concurrency name map: {doc}`../how-it-works`.
+`**service_options` on `create_array` / `load_array` is one bag with three key families (**fetch** politeness, **planner** geometry, **identity** / protocol). Soft-fail / progress / `band_policy` / `cache_dir` are **named** parameters, not bag keys. Concurrency name map: {doc}`../how-it-works`.
 
 ## Configs
 
