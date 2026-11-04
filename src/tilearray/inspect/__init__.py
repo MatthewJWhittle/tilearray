@@ -107,7 +107,11 @@ def inspect_capabilities(
     headers: Mapping[str, str] | None = None,
     params: Mapping[str, Any] | None = None,
 ) -> EndpointInspection:
-    """Parse a GetCapabilities body (or reject HTML / malformed XML) offline."""
+    """Parse a GetCapabilities body you already have (tests / saved XML).
+
+    Everyday callers should use :func:`inspect_endpoint` with a URL instead.
+    Rejects HTML login pages and malformed XML with :exc:`~tilearray.ParseError`.
+    """
 
     resolved_type = (
         service_type

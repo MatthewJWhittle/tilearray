@@ -75,12 +75,10 @@ config = inspection.build_config(zoom=16)
 
 There is nothing to discover via GetCapabilities. Check `{z}/{x}/{y}` order against the host (some use `{z}/{y}/{x}` — see {doc}`example-sources`).
 
-## Offline / fixtures
-
-{py:func}`~tilearray.inspect_capabilities` parses a GetCapabilities body you already have (tests, saved XML). HTML login pages and malformed XML raise {py:exc}`~tilearray.ParseError` with a short next step.
+Everyday use is {py:func}`~tilearray.inspect_endpoint` with a URL. Offline / fixture parsing exists as {py:func}`~tilearray.inspect_capabilities` for tests or saved GetCapabilities XML — not the main entry point.
 
 ## Related
 
 - {doc}`quickstart` — known public hosts
 - {doc}`troubleshooting` — wrong CoverageId / format / URL symptoms
-- {doc}`api/index` — `inspect_endpoint` / `EndpointInspection`
+- {doc}`api/index` — `inspect_endpoint` (URL) / `inspect_capabilities` (offline body) / `EndpointInspection`

@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - Broader plain-reader docs pass: drop agent/process slogans and checklist voice from user-facing pages; demote maintainer freeze / writing-principles / building-docs pages off the published Sphinx site (kept in-repo for CONTRIBUTING / AGENTS); rename worked-examples guide; trim roadmap and duplicated CRS digressions
+- Inspect how-to / API index: everyday entry is `inspect_endpoint(url)`; `inspect_capabilities` is offline / fixture body parsing only (no longer a peer “Offline / fixtures” how-to section)
 - CRS / georef after native WMTS: mosaic `attrs["crs"]` follows TileMatrixSet SupportedCRS when caps metadata is present (query `crs=` may differ); README links the WMTS guide + inspect how-to; decode blurb matches default `band_policy="preserve"`; `create_array` docstring gains a full Parameters section plus an explicit CRS contract (WCS/WMS/XYZ/slippy vs native WMTS)
 - how-it-works / troubleshooting / OSM guide: clipped WCS placement, band/dtype/palette contract, and coverage-pad vs soft-fail distinction (#94, #95)
 - how-it-works / troubleshooting / API: plan-before-fetch helpers, cache lifecycle (`{sha}.tile` + `.meta`, warm vs cold, when to clear), and fetch summary for diagnosing host pressure (#61)

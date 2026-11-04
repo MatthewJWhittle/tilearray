@@ -80,7 +80,7 @@ Custom hosts: `from_url` alone (no preset unpack). `WCSConfig.build_service()` v
    MatrixSetSummary
 ```
 
-From an unknown WMS / WMTS / WCS URL, inspect returns a capability summary and can build a validated config. How-to: {doc}`../inspect-endpoint`. Does not invent a second `create_array` path or silently guess layer / coverage / matrix / CRS / format.
+URL entry point: {py:func}`~tilearray.inspect_endpoint`. {py:func}`~tilearray.inspect_capabilities` parses a GetCapabilities body you already have (tests / saved XML). How-to: {doc}`../inspect-endpoint`. Does not invent a second `create_array` path or silently guess layer / coverage / matrix / CRS / format.
 
 ## Fetch presets
 
