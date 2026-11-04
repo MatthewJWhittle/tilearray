@@ -14,7 +14,7 @@ The API may change.
 2. {doc}`quickstart` — copy-paste recipes against public hosts
 3. {doc}`inspect-endpoint` — unknown WMS/WMTS/WCS URL → valid config
 4. {doc}`how-it-works` — what happens for a large AOI (plan, fetch, lazy mosaic)
-5. {doc}`multi-aoi-ml-patches` — many sample bboxes / ML chips (loop, not megamosaic)
+5. {doc}`multi-aoi-ml-patches` — many sample bboxes / ML chips (one mosaic per bbox)
 6. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar, WMTS)
 7. {doc}`example-sources` — public endpoints and presets
 8. {doc}`troubleshooting` — when fetches fail or shapes look wrong

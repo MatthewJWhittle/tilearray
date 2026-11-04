@@ -18,4 +18,4 @@ problem-shaped-examples
 | {doc}`gibs-bluemarble` | NASA GIBS XYZ · mid-Atlantic | RGB Blue Marble |
 | {doc}`ea-lidar` | EA Lidar WCS · OSGB window | Elevation map + histogram |
 | {doc}`wmts` | GIBS WMTS + Kartverket topo · Oslo | Web Mercator + EPSG:25833 mosaics |
-| {doc}`problem-shaped-examples` | Problem classes · GIBS / EA / offline CRS | Jobs from the field, honestly scoped |
+| {doc}`problem-shaped-examples` | Common jobs · GIBS / EA / offline CRS | Georef, WCS edges, CRS mistakes, polite fetch |

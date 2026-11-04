@@ -1,6 +1,6 @@
-# Problem-shaped examples
+# Worked examples by job
 
-Public WMTS / WCS / WMS threads keep asking the same *jobs*. These examples are organized by **problem class** so you can drive whether tilearray helps — not as a one-to-one replay of every forum post.
+These examples group common geo-data jobs (georeferenced mosaic, WCS edges, CRS mistakes, polite multi-tile fetch) so you can try them against public hosts.
 
 Prefer the interactive notebook `notebooks/community_worked_examples.ipynb` in this repository (`uv sync --dev` then Jupyter). Published host recipes with figures: {doc}`osm-london`, {doc}`gibs-bluemarble`, {doc}`ea-lidar`, {doc}`wmts`.
 
@@ -26,11 +26,11 @@ Stay polite: modest bboxes, fetch presets where they exist, no bulk OSM scrape. 
 
 ## 4. Polite multi-tile fetch
 
-**Job:** larger mosaics without stampeding the host; visible progress; loud failure by default; opt-in soft-fill.
+**Job:** larger mosaics without overwhelming the host; visible progress; loud failure by default; opt-in soft-fill.
 
 **Works today** via fetch presets, default progress, and `soft_fail=True` / `on_tile_error=` — see {doc}`../how-it-works`. Multi-AOI / ML sample loops: per-bbox `create_array` → `compute_with_policy` with a shared `cache_dir` — {doc}`../multi-aoi-ml-patches`. Fetch gates are process-local; do not multiply them with multi-process Dask workers.
 
-## Honesty rule
+## Scope
 
-A community post that *inspired* an example is not automatic proof that tilearray “fixes” that post. Treat notebook runs and these guides as evidence you can inspect, then file remaining gaps as issues.
+These recipes show what works on the named hosts today. Gaps and host quirks still belong as issues once you have a failing run to cite.
 

@@ -18,7 +18,7 @@ tilearray is a **data-access library**, not a raster-processing or GIS analysis 
 6. **Transparent behaviour** — a request has understandable contracts: area requested vs area returned; query CRS vs service/request CRS vs output CRS; native pixel size; tile snapping; dtype/bands/nodata; provenance.
 7. **GDAL-free by default, pragmatic dependencies** — supported paths must not require GDAL or a large GIS stack; do not pretend every dependency is pure Python, and do not forbid optional integrations later.
 8. **Responsible remote access** — respect rate/size limits, provider terms, authentication and secrets; avoid request storms when parallelising. Host ceilings live in presets and compose onto configs (`from_url` + `fetch_presets`); do not grow `for_*` host methods on protocol configs. Fetch concurrency gates are **process-local** — document multi-process / distributed limits honestly rather than promising a global host ceiling the library does not enforce.
-9. **Evidence-led scope** — ground work in real community problems via driveable worked examples ([#97](https://github.com/MatthewJWhittle/tilearray/issues/97)), not a unit-test-per-thread harness. Resist unproven protocols, a provider catalogue, complex orchestration, and broad GIS functionality.
+9. **Evidence-led scope** — ground work in real host jobs via worked examples, not a unit-test-per-scenario harness. Resist unproven protocols, a provider catalogue, complex orchestration, and broad GIS functionality.
 
 ---
 

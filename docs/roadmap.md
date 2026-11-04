@@ -6,7 +6,7 @@ tilearray turns remote tile services into Dask-backed xarray arrays for **geo da
 
 ```text
   0.1.x (shipped)          0.2.x (shipped)          next                         1.0
-  open alpha proof    →    trustworthy core    →    scale + hosts          →    stable contract
+  open alpha          →    core path solid     →    scale + hosts          →    stable contract
 ```
 
 Tracking: [GitHub milestones](https://github.com/MatthewJWhittle/tilearray/milestones) and [open issues](https://github.com/MatthewJWhittle/tilearray/issues).
@@ -20,13 +20,13 @@ Tracking: [GitHub milestones](https://github.com/MatthewJWhittle/tilearray/miles
 | **WMTS** | Medium (REST/KVP + caps-driven native matrices; GIBS + Kartverket guide) | **1.0.0** |
 | **WMS** | Thin (GetMap + quickstart recipe) | Teaching path **1.3.0** |
 
-New host presets and deeper WMTS/WMS productization are the next theme after the trustworthy core — not a catalogue chase.
+New host presets and deeper WMTS/WMS guides are the next theme after the shipped core — not a catalogue chase.
 
 ## Direction
 
-**Scale & hosts** — big AOI on more real hosts without a second API: USGS 3DEP WCS preset, NASA GIBS as first-class XYZ and/or native WMTS + visual guide, EA VOM WMS guide, keyed XYZ pattern (env/`params`; no secrets in repo), larger-machine “don’t stampede” guidance, and stronger WMS/WMTS contract coverage.
+**Scale & hosts** — big AOI on more real hosts without a second API: USGS 3DEP WCS preset, NASA GIBS as first-class XYZ and/or native WMTS + visual guide, EA VOM WMS guide, keyed XYZ pattern (env/`params`; no secrets in repo), guidance for scaling compute without raising host concurrency past the ceiling, and stronger WMS/WMTS contract coverage.
 
-**Stable contract (1.0)** — freeze the public API users already rely on; graduate from Alpha; harden tests and supported Python matrix; deeper API reference. Maintainer gate: {doc}`api-freeze-checklist` (inventory on `main`, pending open-PR surface, SemVer draft, graduation boxes — do not cut 1.0 early).
+**Stable contract (1.0)** — freeze the public API users already rely on; graduate from Alpha; harden tests and supported Python matrix; deeper API reference. Maintainer checklist: {doc}`api-freeze-checklist` (inventory on `main`, SemVer draft — do not cut 1.0 early).
 
 Product boundaries and CRS vocabulary: {doc}`design-principles`.
 

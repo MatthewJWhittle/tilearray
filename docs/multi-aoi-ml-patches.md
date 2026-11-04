@@ -90,7 +90,7 @@ Do **not**:
 
 - Raise the shared ceiling because you have “20 jobs”
 - Set `FetchPolicy(max_concurrent=1)` (or a raised-then-shared override) to “be polite” on one call — that serialises siblings. Prefer a lower `max_concurrent_requests=` on that `create_array` (call-local) or `call_max_concurrent` — see the name map in {doc}`how-it-works`
-- Union every sample into one megabbox “for convenience”
+- Union every sample into one huge bbox “for convenience”
 
 ---
 
@@ -102,9 +102,9 @@ A **list of lazy mosaics** is already a set of ordinary Dask graphs. You can:
 2. Compute / save as patches become ready (sequential loop above, or a small concurrent batch)
 3. Keep IO vs CPU balance in *your* scheduler — tilearray does not ship a multi-AOI job runner
 
-Overlapping computes stay under the shared gate automatically. Future multi-machine work must still respect host politeness (no stampede); that is separate from this recipe.
+Overlapping computes stay under the shared gate automatically. Multi-machine runs must still keep each worker under the host’s concurrency ceiling; that coordination is outside this recipe.
 
-There is **no** `map_aois` helper today. Prefer this loop until a documented friction needs a thin sugar API (design note first).
+There is **no** `map_aois` helper today. Prefer this loop unless a documented friction needs a thin sugar API.
 
 ---
 
@@ -134,7 +134,6 @@ Symptom table: {doc}`troubleshooting`.
 
 ## Related
 
-- {doc}`how-it-works` — plan → polite fetch → lazy mosaic; concurrency name map
+- {doc}`how-it-works` — plan → polite fetch → lazy mosaic; concurrency name map and scaling without overwhelming the host
 - {doc}`troubleshooting` — hung compute, politeness mix-ups, CRS handoff
 - {doc}`guides/index` — live-host visual guides (single AOI)
-- Roadmap scale themes (AOI preflight / distributed don’t-stampede) stay separate; this page is the near-term multi-site recipe only
