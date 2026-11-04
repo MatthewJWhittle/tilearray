@@ -18,6 +18,7 @@ from ..service.wcs import WCSParser
 from ..service.wms import WMSParser
 from ..service.wmts import WMTSParser
 from ..types import ServiceTypeEnum
+from ..matrix_resolution import MatrixLevelSummary
 from ._models import EndpointInspection, MatrixSetSummary, ResourceSummary
 from ._parse import (
     _coerce_service_type,
@@ -38,6 +39,7 @@ from ._resolve import (
 
 __all__ = [
     "EndpointInspection",
+    "MatrixLevelSummary",
     "MatrixSetSummary",
     "ResourceSummary",
     "inspect_capabilities",

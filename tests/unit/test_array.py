@@ -716,8 +716,8 @@ def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
 ) -> None:
     """Design contract (#98): WCS/WMS mosaic attrs CRS matches the query CRS.
 
-    Prefer ``bbox_crs=``; ``crs=`` alone still labels WCS/WMS mosaics. Pixel
-    values are not client-warped onto another CRS; GeoTIFF tags must not replace
+    ``bbox_crs=`` is the query CRS and labels WCS/WMS mosaics. Pixel values
+    are not client-warped onto another CRS; GeoTIFF tags must not replace
     ``attrs["crs"]``. Fixed-grid XYZ/WMTS label with the native grid CRS.
     """
 

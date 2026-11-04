@@ -26,6 +26,11 @@ from .inspect import (
     inspect_capabilities,
     inspect_endpoint,
 )
+from .matrix_resolution import (
+    MatrixChoice,
+    MatrixLevelSummary,
+    choose_matrix_for_resolution,
+)
 from .plan import (
     ArrayPlan,
     FetchSummary,
@@ -74,6 +79,9 @@ __all__ = [
     "load_array",
     "plan_array",
     "recommend_grid_shape",
+    "choose_matrix_for_resolution",
+    "MatrixChoice",
+    "MatrixLevelSummary",
     "fetch_summary",
     "ArrayPlan",
     "FetchSummary",
