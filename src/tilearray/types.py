@@ -2,52 +2,227 @@
 Generic type definitions and models for tile-based geospatial data processing.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, Union
+from functools import lru_cache
+from typing import Any, ClassVar
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, GetCoreSchemaHandler, model_validator
+from pydantic_core import CoreSchema, core_schema
+from pyproj import CRS as PyprojCRS
 from pyproj import Transformer
+from pyproj.exceptions import CRSError
 
 from .errors import ValidationError
 
 
-class CRS(str, Enum):
-    """Common Coordinate Reference Systems."""
+@lru_cache(maxsize=256)
+def _pyproj_crs(authority: str) -> PyprojCRS:
+    return PyprojCRS.from_user_input(authority)
 
-    EPSG_4326 = "EPSG:4326"
-    EPSG_3857 = "EPSG:3857"
-    EPSG_32633 = "EPSG:32633"
-    EPSG_27700 = "EPSG:27700"
+
+def _authority_string(pj: PyprojCRS) -> str:
+    """Prefer ``EPSG:NNNN`` (or other authority) over a raw WKT dump."""
+
+    auth = pj.to_authority()
+    if auth is not None:
+        return f"{auth[0]}:{auth[1]}"
+    # Fall back to a compact PROJ string when no authority is registered.
+    try:
+        return pj.to_string()
+    except CRSError:
+        return pj.to_wkt()
+
+
+def _suggest_crs_fix(raw: str) -> str | None:
+    """Best-effort typo hint for common CRS authority mistakes."""
+
+    stripped = raw.strip()
+    if not stripped:
+        return None
+    if ":" in stripped:
+        prefix, rest = stripped.split(":", 1)
+        if prefix.upper() == "EPGS" and rest.strip():
+            return f"EPSG:{rest.strip()}"
+    upper = stripped.upper()
+    if upper.startswith("EPGS"):
+        return "EPSG:" + stripped[4:].lstrip(":").strip()
+    return None
+
+
+def _invalid_crs_message(raw: Any, *, cause: BaseException | None = None) -> str:
+    text = str(raw).strip() if raw is not None else ""
+    suggestion = _suggest_crs_fix(text) if text else None
+    detail = str(cause).strip() if cause is not None else ""
+    parts = [f"Invalid CRS {raw!r}."]
+    if suggestion is not None:
+        parts.append(f"Did you mean {suggestion!r}?")
+    parts.append(
+        "Use an EPSG authority code (for example 'EPSG:4326' or 4326), "
+        "another pyproj-recognised CRS string, or a CRS / pyproj.CRS instance."
+    )
+    if detail and suggestion is None:
+        parts.append(f"pyproj: {detail}")
+    return " ".join(parts)
+
+
+class CRS(str):
+    """Validated coordinate reference system as an authority string.
+
+    Presets such as :attr:`EPSG_4326` remain available for common codes.
+    Arbitrary projected or geographic CRS values accepted by pyproj
+    (``EPSG:25833``, integers, ``pyproj.CRS``, …) are normalised to an
+    authority string like ``EPSG:25833``. Invalid identifiers raise
+    :class:`~tilearray.errors.ValidationError` early.
+    """
+
+    EPSG_4326: ClassVar[CRS]
+    EPSG_3857: ClassVar[CRS]
+    EPSG_32633: ClassVar[CRS]
+    EPSG_27700: ClassVar[CRS]
+
+    def __new__(cls, value: Any) -> CRS:
+        if isinstance(value, cls):
+            return value
+        return cls.parse(value)
 
     @classmethod
-    def from_string(cls, crs: str) -> "CRS":
-        """Create CRS from string."""
-        if crs.startswith("EPSG:"):
-            return cls(crs)
-        raise ValidationError(
-            f"Invalid CRS format: {crs}. Expected string, integer, or CRS enum"
-        )
+    def parse(cls, value: Any) -> CRS:
+        """Normalise a CRS input to a validated authority string."""
+
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, PyprojCRS):
+            return cls._from_pyproj(value)
+        if isinstance(value, bool):
+            # bool is a subclass of int — reject before int handling.
+            raise ValidationError(_invalid_crs_message(value))
+        if isinstance(value, int):
+            try:
+                return cls._from_pyproj(PyprojCRS.from_epsg(value))
+            except CRSError as exc:
+                raise ValidationError(_invalid_crs_message(value, cause=exc)) from exc
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                raise ValidationError(_invalid_crs_message(value))
+            try:
+                return cls._from_pyproj(PyprojCRS.from_user_input(stripped))
+            except CRSError as exc:
+                raise ValidationError(
+                    _invalid_crs_message(stripped, cause=exc)
+                ) from exc
+        raise ValidationError(_invalid_crs_message(value))
 
     @classmethod
-    def from_integer(cls, crs: int) -> "CRS":
-        """Create CRS from integer."""
-        return cls(f"EPSG:{crs}")
+    def _from_pyproj(cls, pj: PyprojCRS) -> CRS:
+        authority = _authority_string(pj)
+        # Re-parse via authority so cached pyproj lookups share one key.
+        _pyproj_crs(authority)
+        return str.__new__(cls, authority)
 
     @classmethod
-    def from_epsg(cls, crs: Union[str, int]) -> "CRS":
+    def from_string(cls, crs: str) -> CRS:
+        """Create CRS from an authority string such as ``EPSG:4326``."""
+
+        if not isinstance(crs, str):
+            raise ValidationError(_invalid_crs_message(crs))
+        stripped = crs.strip()
+        if ":" not in stripped:
+            raise ValidationError(
+                f"Invalid CRS format: {crs}. Expected an authority string "
+                "such as 'EPSG:4326', an integer EPSG code, or a CRS instance."
+            )
+        return cls.parse(stripped)
+
+    @classmethod
+    def from_integer(cls, crs: int) -> CRS:
+        """Create CRS from an integer EPSG code."""
+
+        if isinstance(crs, bool) or not isinstance(crs, int):
+            raise ValidationError(_invalid_crs_message(crs))
+        return cls.parse(crs)
+
+    @classmethod
+    def from_epsg(cls, crs: str | int) -> CRS:
         """
-        Create CRS from EPSG code.
+        Create CRS from an EPSG code.
 
         Args:
-            crs: EPSG code as string or integer
-             - string: "EPSG:4326"
-             - integer: 4326
+            crs: EPSG code as string (``EPSG:4326``) or integer (``4326``)
 
         Returns:
-            CRS enum
+            Validated CRS authority string
         """
-        return cls.from_string(crs) if isinstance(crs, str) else cls.from_integer(crs)
+
+        if isinstance(crs, str):
+            return cls.from_string(crs) if ":" in crs.strip() else cls.parse(crs)
+        return cls.from_integer(crs)
+
+    @property
+    def value(self) -> str:
+        """Authority string (compat with the former enum ``.value``)."""
+
+        return str(self)
+
+    def to_pyproj(self) -> PyprojCRS:
+        """Return the cached :class:`pyproj.CRS` for this authority string."""
+
+        return _pyproj_crs(str(self))
+
+    @property
+    def is_geographic(self) -> bool:
+        """True when this CRS is geographic (angular axes)."""
+
+        return self.to_pyproj().is_geographic
+
+    @property
+    def is_projected(self) -> bool:
+        """True when this CRS is projected (typically linear axes)."""
+
+        return self.to_pyproj().is_projected
+
+    @property
+    def north_axis_first(self) -> bool:
+        """True when the first CRS axis is north/south (WMS 1.3 axis order)."""
+
+        axes = self.to_pyproj().axis_info
+        if not axes:
+            return False
+        return axes[0].direction.lower() in {"north", "south"}
+
+    def default_subset_axes(self) -> tuple[str, str]:
+        """Default WCS 2 subset axis labels when DescribeCoverage is silent."""
+
+        if self == CRS.EPSG_27700:
+            return ("E", "N")
+        if self == CRS.EPSG_3857:
+            return ("x", "y")
+        if self.is_geographic:
+            return ("Long", "Lat")
+        return ("E", "N")
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source_type: Any, _handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        def validate(value: Any) -> CRS:
+            return cls.parse(value)
+
+        return core_schema.no_info_plain_validator_function(
+            validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                str, info_arg=False, return_schema=core_schema.str_schema()
+            ),
+        )
+
+
+CRS.EPSG_4326 = CRS.parse("EPSG:4326")
+CRS.EPSG_3857 = CRS.parse("EPSG:3857")
+CRS.EPSG_32633 = CRS.parse("EPSG:32633")
+CRS.EPSG_27700 = CRS.parse("EPSG:27700")
 
 
 class Format(str, Enum):
@@ -71,7 +246,7 @@ class BoundingBox(BaseModel):
     crs: CRS = Field(default=CRS.EPSG_4326, description="Coordinate Reference System")
 
     @model_validator(mode="after")
-    def validate_coordinates(self) -> "BoundingBox":
+    def validate_coordinates(self) -> BoundingBox:
         """Validate that min coordinates are less than max coordinates."""
         if self.min_x >= self.max_x:
             raise ValueError("min_x must be less than max_x")
@@ -83,26 +258,19 @@ class BoundingBox(BaseModel):
     def from_tuple(
         cls,
         bbox: BBoxTuple,
-        crs: Union[CRS, str, int] = CRS.EPSG_4326,
-    ) -> "BoundingBox":
+        crs: CRS | str | int = CRS.EPSG_4326,
+    ) -> BoundingBox:
         """Create BoundingBox from tuple."""
 
-        if isinstance(crs, CRS):
-            target_crs = crs
-        elif isinstance(crs, str):
-            crs_upper = crs.upper()
-            if crs_upper.startswith("EPSG:"):
-                target_crs = CRS.from_string(crs_upper)
-            else:
-                target_crs = CRS.from_integer(int(crs))
-        else:
-            target_crs = CRS.from_integer(crs)
-
         return cls(
-            min_x=bbox[0], min_y=bbox[1], max_x=bbox[2], max_y=bbox[3], crs=target_crs
+            min_x=bbox[0],
+            min_y=bbox[1],
+            max_x=bbox[2],
+            max_y=bbox[3],
+            crs=CRS.parse(crs),
         )
 
-    def intersects(self, other: "BoundingBox") -> bool:
+    def intersects(self, other: BoundingBox) -> bool:
         """Check if this bounding box intersects with another."""
         return (
             self.min_x < other.max_x
@@ -111,19 +279,22 @@ class BoundingBox(BaseModel):
             and self.max_y > other.min_y
         )
 
-    def to_crs(self, crs: CRS) -> "BoundingBox":
+    def to_crs(self, crs: CRS) -> BoundingBox:
         """Transform the bounding box to a new CRS."""
-        transformer = Transformer.from_crs(self.crs.value, crs.value, always_xy=True)
+        target = CRS.parse(crs)
+        transformer = Transformer.from_crs(
+            self.crs.to_pyproj(), target.to_pyproj(), always_xy=True
+        )
         xmin, ymin = transformer.transform(self.min_x, self.min_y)
         xmax, ymax = transformer.transform(self.max_x, self.max_y)
-        return BoundingBox(min_x=xmin, min_y=ymin, max_x=xmax, max_y=ymax, crs=crs)
+        return BoundingBox(min_x=xmin, min_y=ymin, max_x=xmax, max_y=ymax, crs=target)
 
 
 class SpatialExtent(BaseModel):
     """Spatial extent information."""
 
     bbox: BoundingBox
-    dimensions: Optional[dict[str, Any]] = Field(
+    dimensions: dict[str, Any] | None = Field(
         None, description="Optional dimension details"
     )
 
@@ -131,11 +302,11 @@ class SpatialExtent(BaseModel):
 class TemporalExtent(BaseModel):
     """Temporal extent information."""
 
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
 
     @model_validator(mode="after")
-    def validate_temporal_order(self) -> "TemporalExtent":
+    def validate_temporal_order(self) -> TemporalExtent:
         """Validate that end_time is after start_time."""
         if self.end_time and self.start_time and self.end_time < self.start_time:
             raise ValueError("end_time must be after start_time")
@@ -146,21 +317,21 @@ class CoverageDescription(BaseModel):
     """Coverage description from WCS GetCapabilities."""
 
     identifier: str = Field(..., description="Coverage identifier")
-    title: Optional[str] = None
-    abstract: Optional[str] = None
+    title: str | None = None
+    abstract: str | None = None
     keywords: list[str] = Field(default_factory=list)
     supported_crs: list[CRS] = Field(default_factory=list)
     supported_formats: list[Format] = Field(default_factory=list)
-    spatial_extent: Optional[SpatialExtent] = None
-    temporal_extent: Optional[TemporalExtent] = None
-    native_crs: Optional[CRS] = Field(
+    spatial_extent: SpatialExtent | None = None
+    temporal_extent: TemporalExtent | None = None
+    native_crs: CRS | None = Field(
         None, description="Native CRS from DescribeCoverage envelope srsName"
     )
     axis_labels: dict[str, tuple[str, str]] = Field(
         default_factory=dict,
         description="Subsetting axis labels keyed by normalized CRS (e.g. EPSG:3857)",
     )
-    native_format: Optional[Format] = Field(
+    native_format: Format | None = Field(
         None, description="Preferred output format from DescribeCoverage nativeFormat"
     )
 
@@ -169,10 +340,10 @@ class ServiceCapabilities(BaseModel):
     """WCS Service Capabilities."""
 
     service_title: str
-    service_abstract: Optional[str] = None
+    service_abstract: str | None = None
     service_keywords: list[str] = Field(default_factory=list)
-    service_provider: Optional[str] = None
-    service_contact: Optional[str] = None
+    service_provider: str | None = None
+    service_contact: str | None = None
     service_url: str
     version: str = Field(default="2.0.1")
     supported_versions: list[str] = Field(default_factory=lambda: ["2.0.1", "2.0.0"])
@@ -189,14 +360,14 @@ class TileRequest(BaseModel):
 
     url: str
     params: dict[str, Any]
-    headers: Optional[dict[str, str]] = None
+    headers: dict[str, str] | None = None
     timeout: int = 30
     retries: int = 3
-    output_format: Optional[Format] = None
-    crs: Optional[CRS] = None
-    bbox: Optional[BoundingBox] = None
-    width: Optional[int] = None
-    height: Optional[int] = None
+    output_format: Format | None = None
+    crs: CRS | None = None
+    bbox: BoundingBox | None = None
+    width: int | None = None
+    height: int | None = None
 
 
 class TileResponse(BaseModel):
@@ -208,7 +379,7 @@ class TileResponse(BaseModel):
     headers: dict[str, str]
     url: str
     success: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class WCSResponse(BaseModel):
@@ -217,13 +388,13 @@ class WCSResponse(BaseModel):
     success: bool = Field(
         ..., description="True if the request was successful, False otherwise"
     )
-    data: Optional[Any] = Field(
+    data: Any | None = Field(
         None, description="The response data (e.g., image bytes, NetCDF data)"
     )
-    error_message: Optional[str] = Field(
+    error_message: str | None = Field(
         None, description="Error message if the request failed"
     )
-    status_code: Optional[int] = Field(
+    status_code: int | None = Field(
         None, description="HTTP status code of the response"
     )
 

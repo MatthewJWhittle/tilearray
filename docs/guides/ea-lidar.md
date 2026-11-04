@@ -29,10 +29,11 @@ config = WCSConfig.from_url(
     **ea_dsp_fetch_defaults(),
 )
 
-# ~256 m OSGB window
+# ~256 m OSGB window (British National Grid — not Web Mercator)
 bbox = (431900.0, 382700.0, 432156.0, 382956.0)
 
-da = create_array(config, bbox, CRS.EPSG_27700)
+# Presets or any pyproj-valid EPSG string work the same way
+da = create_array(config, bbox, CRS.EPSG_27700)  # or "EPSG:27700"
 elevation = compute_with_policy(da)  # match Dask workers to fetch ceiling
 print(elevation.shape, float(elevation.mean()))
 ```

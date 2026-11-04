@@ -58,6 +58,10 @@ def test_format_wms_bbox_projected_v130() -> None:
     bbox = BoundingBox(min_x=0, min_y=0, max_x=100, max_y=100, crs=CRS.EPSG_3857)
     assert format_wms_bbox(bbox, CRS.EPSG_3857, "1.3.0") == "0.0,0.0,100.0,100.0"
 
+    projected = CRS.parse("EPSG:28992")
+    bbox_rd = BoundingBox(min_x=100, min_y=200, max_x=300, max_y=400, crs=projected)
+    assert format_wms_bbox(bbox_rd, projected, "1.3.0") == "100.0,200.0,300.0,400.0"
+
 
 def test_wms_service_build_tile_request() -> None:
     service = WMSService(

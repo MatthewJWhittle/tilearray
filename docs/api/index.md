@@ -19,7 +19,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 
 `create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_with_policy` over plain `.compute()` so Dask workers match the fetch ceiling. {py:func}`~tilearray.load_array` is eager sugar (`create_array(..., compute=True)` by default) — useful for tiny windows, not a second primary habit. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
 
-**`crs=` today:** one argument interprets the bbox and labels the mosaic (`attrs["crs"]`). There is no client-side raster warp onto another CRS. Separate query / service / output CRS roles are **target** design — see {doc}`../design-principles`.
+**`crs=` today:** one argument interprets the bbox and labels the mosaic (`attrs["crs"]`). Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. There is no client-side raster warp onto another CRS. Separate query / service / output CRS roles are **target** design — see {doc}`../design-principles`.
 
 Multi-tile mosaics attach a default tqdm-style progress bar through `on_progress` during compute. Opt out with `show_progress=False` or `TILEARRAY_PROGRESS=0`; pass a custom `on_progress=` to replace the bar. Details: {doc}`../how-it-works` · {doc}`../troubleshooting`.
 
