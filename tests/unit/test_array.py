@@ -14,6 +14,7 @@ from PIL import Image
 from pytest import MonkeyPatch
 
 import tilearray.array as array_module
+import tilearray._planning as planning_module
 import tilearray.decode as decode_module
 from tilearray.array import (
     ArrayRequest,
@@ -177,6 +178,37 @@ def test_array_request_rejects_invalid_origin() -> None:
         )
 
 
+def test_array_request_rejects_nonpositive_sizes() -> None:
+    bbox = BoundingBox(
+        min_x=0.0, min_y=0.0, max_x=10.0, max_y=10.0, crs=CRS.EPSG_4326
+    )
+    with pytest.raises(ValidationError, match="chunk_size"):
+        ArrayRequest(
+            service_url="http://example.com/wcs",
+            bbox=bbox,
+            target_crs=CRS.EPSG_4326,
+            chunk_size=(0, 8),
+            grid_shape=(1, 1),
+        )
+    with pytest.raises(ValidationError, match="grid_shape"):
+        ArrayRequest(
+            service_url="http://example.com/wcs",
+            bbox=bbox,
+            target_crs=CRS.EPSG_4326,
+            chunk_size=(8, 8),
+            grid_shape=(1, 0),
+        )
+    with pytest.raises(ValidationError, match="resolution"):
+        ArrayRequest(
+            service_url="http://example.com/wcs",
+            bbox=bbox,
+            target_crs=CRS.EPSG_4326,
+            chunk_size=(8, 8),
+            grid_shape=(1, 1),
+            resolution=(-1.0, 1.0),
+        )
+
+
 def test_create_array_with_custom_decoder(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -200,7 +232,7 @@ def test_create_array_with_custom_decoder(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -230,11 +262,11 @@ def test_create_array_without_decoder_raises(monkeypatch: MonkeyPatch) -> None:
     def fake_service_factory(*args: Any, **kwargs: Any) -> DummyService:
         return DummyService()
 
-    monkeypatch.setattr(array_module, "get_service", fake_service_factory)
+    monkeypatch.setattr(planning_module, "get_service", fake_service_factory)
     monkeypatch.setattr(decode_module, "_DECODER_REGISTRY", {})
     # Built-in formats can still be reconstructed via build_format_decoder;
     # this test covers the hard miss when neither registry nor builder helps.
-    monkeypatch.setattr(array_module, "build_format_decoder", lambda *a, **k: None)
+    monkeypatch.setattr(planning_module, "build_format_decoder", lambda *a, **k: None)
 
     with pytest.raises(ConfigurationError):
         array_module.create_array(
@@ -326,7 +358,7 @@ def test_create_array_infers_decoder_from_service(
         return np.ones((height, width), dtype=np.float32)
 
     decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     result = array_module.create_array(
@@ -391,7 +423,7 @@ def test_builtin_png_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     result = array_module.create_array(
@@ -483,7 +515,7 @@ def test_create_array_multi_tile_rgb_jpeg_mosaic(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     bbox = BoundingBox(min_x=-5, min_y=50, max_x=0, max_y=55, crs=CRS.EPSG_4326)
@@ -593,7 +625,7 @@ def test_create_array_y_coords_north_at_row_zero(
         value = float((request.bbox.min_y + request.bbox.max_y) / 2.0)
         return np.full((height, width), value, dtype=np.float32)
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
     decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 
@@ -640,7 +672,7 @@ def test_create_array_single_tile_pixel_center_coords(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -708,7 +740,7 @@ def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -764,7 +796,7 @@ def test_create_array_accepts_provider_crs_string(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -812,7 +844,7 @@ def test_geotiff_elevation_attrs_crs_transform_nodata(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -889,7 +921,7 @@ def test_rgb_jpeg_attrs_preserve_bands_no_nodata(
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
 
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: JPEGService())
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: JPEGService())
     monkeypatch.setattr(
         array_module,
         "fetch_tile",
@@ -966,7 +998,7 @@ def test_rgba_png_attrs_four_bands_no_nodata(
         "//8/AxJgYGBg+I8BADCBA/5Yy7d/AAAAAElFTkSuQmCC"
     )
 
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: PNGService())
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: PNGService())
     monkeypatch.setattr(
         array_module,
         "fetch_tile",
@@ -1149,7 +1181,7 @@ def test_create_array_resamples_native_resolution_wcs_tile(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     result = array_module.create_array(
@@ -1193,7 +1225,7 @@ def test_create_array_on_progress_callback(monkeypatch: MonkeyPatch) -> None:
     ) -> None:
         progress_events.append((done, total))
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -1236,7 +1268,7 @@ def test_load_array_raises_when_tile_fetch_fails_after_retries(
             error_message="HTTP 403: Forbidden",
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -1274,7 +1306,7 @@ def test_create_array_downsamples_oversized_tiles(monkeypatch: MonkeyPatch) -> N
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
 
     def decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -1406,7 +1438,7 @@ def test_create_array_compute_exceeds_cpu_count_inflight(
         width = request.width or 1
         return np.ones((height, width), dtype=np.float32)
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
     decode_module.register_tile_decoder(Format.GEOTIFF, decoder)
 

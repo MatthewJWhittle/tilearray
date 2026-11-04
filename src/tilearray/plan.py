@@ -4,9 +4,9 @@ Read-only preflight for large mosaics: inspect the planned grid and
 concurrency ceiling before ``create_array`` / ``compute_with_policy``.
 Does not invent wall-clock time, provider cost, or a second compute path.
 
-Shared policy / grid / cache helpers live in :mod:`tilearray._planning`.
-``ArrayRequest`` and band probing still come from :mod:`tilearray.array`
-(create / load path).
+Shared request / policy / grid / cache helpers live in
+:mod:`tilearray._planning` — this module imports nothing private from
+:mod:`tilearray.array`.
 """
 
 from __future__ import annotations
@@ -22,17 +22,15 @@ from ._planning import (
     FETCH_POLICY_ATTR,
     PROGRESS_REF_ATTR,
     TILE_ERRORS_ATTR,
+    ArrayRequest,
     cache_key,
     fetch_policy_from_summary,
     fetch_policy_summary,
     organize_tiles,
+    probe_tile_band_count,
     recommend_grid_shape,
+    resolve_decoder,
     resolve_fetch_policy,
-)
-from .array import (
-    ArrayRequest,
-    _probe_tile_band_count,
-    _resolve_decoder,
 )
 from .decode import default_band_count_for_format
 from .errors import ValidationError
@@ -297,8 +295,8 @@ def plan_array(
         effective_format, band_policy=band_policy
     )
     if probe_bands:
-        decoder = _resolve_decoder(request, service, None)
-        bands = _probe_tile_band_count(
+        decoder = resolve_decoder(request, service, None)
+        bands = probe_tile_band_count(
             tile_requests[0],
             request.cache_path,
             decoder,

@@ -1,12 +1,13 @@
 """Shared planning helpers for :mod:`tilearray.array` and :mod:`tilearray.plan`.
 
-Owns attr-key constants, fetch-policy snapshots, tile-grid organisation,
-cache keys, and :func:`recommend_grid_shape` so ``plan_array`` does not reach
-into private ``array`` symbols for those pieces.
+Owns :class:`ArrayRequest`, decoder resolution, band probing, attr-key
+constants, fetch-policy snapshots, tile-grid organisation, cache keys, and
+:func:`recommend_grid_shape` so ``plan_array`` does not reach into private
+``array`` symbols.
 
-``ArrayRequest``, decoder resolution, and band probing still live on
-:mod:`tilearray.array` (they sit on the create / load path). Prefer importing
-shared helpers from this module rather than adding new ``array`` privates.
+Band probing needs the create-path tile loader. That is a documented cycle:
+:func:`probe_tile_band_count` imports :func:`tilearray.array._load_tile_array`
+lazily inside the function body so module import order stays acyclic.
 """
 
 from __future__ import annotations
@@ -15,13 +16,38 @@ import hashlib
 import json
 import math
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
-from .errors import ValidationError
+import numpy as np
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .decode import (
+    DEFAULT_BAND_POLICIES,
+    BandPolicy,
+    TileDecoder,
+    band_count_from_array,
+    build_format_decoder,
+    default_band_count_for_format,
+)
+from .decode import (
+    decoder_for_format as _decoder_for_format,
+)
+from .error_messages import missing_decoder_message
+from .errors import ConfigurationError, ValidationError
 from .fetch import FetchPolicy
+from .service import get_service
+from .service.base import BaseService
 from .service.config import ServiceConfig as ServiceConfigModel
 from .tiles import snap_bbox_outward
-from .types import CRS, BBoxTuple, BoundingBox, TileRequest
+from .types import (
+    CRS,
+    BBoxTuple,
+    BoundingBox,
+    Format,
+    ServiceTypeEnum,
+    TileRequest,
+)
 
 # Public mosaic attrs keys (also used by plan / fetch_summary).
 FETCH_POLICY_ATTR = "tilearray_fetch_policy"
@@ -301,18 +327,365 @@ def recommend_grid_shape(
     return rows, cols
 
 
+def _positive_size_pair(value: tuple[int, int], *, label: str) -> tuple[int, int]:
+    if len(value) != 2:
+        raise ValidationError(f"{label} must be a pair of positive integers")
+    a, b = int(value[0]), int(value[1])
+    if a <= 0 or b <= 0:
+        raise ValidationError(f"{label} must contain positive integers")
+    return a, b
+
+
+class ArrayRequest(BaseModel):
+    """Validated mosaic request shared by :func:`create_array` and :func:`plan_array`."""
+
+    service_config: ServiceConfigModel | None = None
+    service_url: str
+    bbox: BoundingBox
+    target_crs: CRS
+    chunk_size: tuple[int, int]
+    grid_shape: tuple[int, int]
+    resolution: tuple[float, float] | None = None
+    output_format: Format | None = None
+    cache_dir: Path | None = None
+    service_options: dict[str, Any] = Field(default_factory=dict)
+    requested_bbox: BoundingBox | None = None
+    bbox_snap_delta: dict[str, float] | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @field_validator("chunk_size")
+    @classmethod
+    def _validate_chunk_size_field(cls, value: tuple[int, int]) -> tuple[int, int]:
+        # Stored as (height, width) after from_inputs / validate_chunk_size.
+        return _positive_size_pair(value, label="chunk_size")
+
+    @field_validator("grid_shape")
+    @classmethod
+    def _validate_grid_shape_field(cls, value: tuple[int, int]) -> tuple[int, int]:
+        return _positive_size_pair(value, label="grid_shape")
+
+    @field_validator("resolution")
+    @classmethod
+    def _validate_resolution_field(
+        cls, value: tuple[float, float] | None
+    ) -> tuple[float, float] | None:
+        if value is None:
+            return None
+        if len(value) != 2:
+            raise ValidationError("resolution must be a pair of positive numbers")
+        res_x, res_y = float(value[0]), float(value[1])
+        if res_x <= 0 or res_y <= 0:
+            raise ValidationError("resolution values must be positive")
+        return res_x, res_y
+
+    @property
+    def chunk_height(self) -> int:
+        return self.chunk_size[0]
+
+    @property
+    def chunk_width(self) -> int:
+        return self.chunk_size[1]
+
+    @property
+    def chunk_pixels(self) -> tuple[int, int]:
+        return self.chunk_width, self.chunk_height
+
+    @property
+    def cache_path(self) -> Path | None:
+        return self.cache_dir
+
+    @property
+    def service_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
+        if self.service_config is not None:
+            return kwargs
+        kwargs.update(self.service_options)
+        kwargs.setdefault("crs", self.target_crs)
+        if self.output_format is not None:
+            kwargs.setdefault("output_format", self.output_format)
+        return kwargs
+
+    @classmethod
+    def from_inputs(
+        cls,
+        *,
+        service_url: str,
+        service_config: ServiceConfigModel | None,
+        bbox_input: BoundingBox | BBoxTuple,
+        crs_input: CRS | str | int,
+        chunk_size_input: tuple[int, int] | None,
+        grid_shape_input: tuple[int, int] | None,
+        output_format_input: Format | None,
+        cache_dir_input: str | Path | None,
+        service_options_input: dict[str, Any],
+    ) -> ArrayRequest:
+        target_crs = CRS.parse(crs_input)
+        normalized_bbox = normalize_bbox(bbox_input, target_crs)
+
+        defaults = service_config.array_defaults() if service_config else {}
+
+        chunk_candidate = chunk_size_input or defaults.get("chunk_size") or (256, 256)
+        chunk_height, chunk_width = validate_chunk_size(chunk_candidate)
+
+        user_options = dict(service_options_input)
+        user_resolution = user_options.pop("resolution", None)
+        resolution = user_resolution or defaults.get("resolution")
+
+        requested_bbox = normalized_bbox
+        bbox_snap_delta: dict[str, float] | None = None
+        if resolution is not None:
+            res_x, res_y = resolution
+            if res_x <= 0 or res_y <= 0:
+                raise ValidationError("resolution values must be positive")
+            origin = coerce_array_origin(user_options.get("origin"))
+            snapped_bbox = snap_bbox_outward(normalized_bbox, resolution, origin)
+            bbox_snap_delta = {
+                "min_x": snapped_bbox.min_x - normalized_bbox.min_x,
+                "min_y": snapped_bbox.min_y - normalized_bbox.min_y,
+                "max_x": snapped_bbox.max_x - normalized_bbox.max_x,
+                "max_y": snapped_bbox.max_y - normalized_bbox.max_y,
+            }
+            if any(abs(delta) > 0.0 for delta in bbox_snap_delta.values()):
+                normalized_bbox = snapped_bbox
+            else:
+                bbox_snap_delta = None
+
+        fallback_grid = defaults.get("grid_shape")
+        grid = resolve_grid_shape(grid_shape_input, fallback_grid)
+        if (
+            grid_shape_input is None
+            and fallback_grid is None
+            and resolution is not None
+        ):
+            origin = coerce_array_origin(user_options.get("origin"))
+            grid = recommend_grid_shape(
+                normalized_bbox,
+                chunk_size=(chunk_width, chunk_height),
+                resolution=resolution,
+                origin=origin,
+            )
+
+        cache_candidate = cache_dir_input or defaults.get("cache_dir")
+        cache_path = (
+            Path(cache_candidate).expanduser().resolve() if cache_candidate else None
+        )
+
+        effective_format = output_format_input
+        if (
+            effective_format is None
+            and service_config
+            and service_config.output_format is not None
+        ):
+            effective_format = service_config.output_format
+
+        return cls(
+            service_config=service_config,
+            service_url=service_url,
+            bbox=normalized_bbox,
+            target_crs=target_crs,
+            chunk_size=(chunk_height, chunk_width),
+            grid_shape=grid,
+            resolution=resolution,
+            output_format=effective_format,
+            cache_dir=cache_path,
+            service_options=user_options,
+            requested_bbox=requested_bbox,
+            bbox_snap_delta=bbox_snap_delta,
+        )
+
+    def build_service(self, service_type: ServiceTypeEnum | None) -> BaseService:
+        if self.service_config is not None:
+            return self.service_config.build_service()
+        return get_service(
+            self.service_url, service_type=service_type, **self.service_kwargs
+        )
+
+    def effective_format(self, service: BaseService) -> Format | None:
+        if self.output_format is not None:
+            return self.output_format
+        service_format = getattr(service, "output_format", None)
+        if isinstance(service_format, Format):
+            return service_format
+        if isinstance(service_format, str):
+            try:
+                return Format(service_format)
+            except ValueError:
+                return None
+        return None
+
+    def tile_options(self) -> dict[str, Any]:
+        options: dict[str, Any] = {}
+        if self.service_config is not None:
+            options.update(self.service_config.tile_kwargs())
+        options.update(self.service_options)
+        options.setdefault("crs", self.target_crs)
+        if self.output_format is not None:
+            options.setdefault("output_format", self.output_format)
+        options["grid_shape"] = self.grid_shape
+        if self.resolution is not None:
+            options.setdefault("resolution", self.resolution)
+        return options
+
+    def plan_tile_requests(
+        self, service: BaseService
+    ) -> tuple[list[TileRequest], dict[str, Any]]:
+        tile_options = self.tile_options()
+        tile_requests_iter = service.generate_tile_requests(
+            self.bbox,
+            self.chunk_pixels,
+            **dict(tile_options),
+        )
+        tile_requests = list(tile_requests_iter)
+
+        inferred_grid = getattr(service, "inferred_grid_shape", None)
+        if (
+            inferred_grid is not None
+            and self.grid_shape == (1, 1)
+            and len(tile_requests) > 1
+        ):
+            self.grid_shape = inferred_grid
+
+        # Native WMTS grids: mosaic extent/CRS follow the planned tile matrix,
+        # not the caller's query bbox / crs= label (#93).
+        inferred_bbox = getattr(service, "inferred_mosaic_bbox", None)
+        if isinstance(inferred_bbox, BoundingBox):
+            if self.requested_bbox is None:
+                self.requested_bbox = self.bbox
+            self.bbox = inferred_bbox
+            self.target_crs = inferred_bbox.crs
+
+        return tile_requests, tile_options
+
+    def array_attrs(
+        self,
+        service: BaseService,
+        tile_options: dict[str, Any],
+        effective_format: Format | None,
+    ) -> dict[str, Any]:
+        attrs: dict[str, Any] = {
+            "crs": self.target_crs.value,
+            "service_url": self.service_url,
+            "service_type": service.service_type.value,
+        }
+        if effective_format is not None:
+            attrs["output_format"] = effective_format.value
+        coverage_id = tile_options.get("coverage_id") or getattr(
+            service, "coverage_id", None
+        )
+        if coverage_id:
+            attrs["coverage_id"] = coverage_id
+        if self.bbox_snap_delta is not None:
+            attrs["bbox_snap_delta"] = dict(self.bbox_snap_delta)
+        if self.requested_bbox is not None and (
+            self.bbox_snap_delta is not None
+            or self.requested_bbox.crs != self.bbox.crs
+            or self.requested_bbox.min_x != self.bbox.min_x
+            or self.requested_bbox.min_y != self.bbox.min_y
+            or self.requested_bbox.max_x != self.bbox.max_x
+            or self.requested_bbox.max_y != self.bbox.max_y
+        ):
+            attrs["bbox_requested"] = {
+                "min_x": self.requested_bbox.min_x,
+                "min_y": self.requested_bbox.min_y,
+                "max_x": self.requested_bbox.max_x,
+                "max_y": self.requested_bbox.max_y,
+                "crs": self.requested_bbox.crs.value,
+            }
+        return attrs
+
+
+def resolve_decoder(
+    request: ArrayRequest,
+    service: BaseService,
+    explicit: TileDecoder | None,
+    *,
+    band_policy: BandPolicy | None = None,
+    expand_palette: bool = False,
+) -> TileDecoder:
+    if explicit is not None:
+        return explicit
+
+    fmt = request.effective_format(service)
+    if fmt is not None:
+        default_policy = DEFAULT_BAND_POLICIES.get(fmt, "preserve")
+        effective_policy = band_policy or default_policy
+        # Rebuild when the caller opts into a non-default band/palette policy;
+        # otherwise prefer the process registry (tests and custom installs).
+        needs_custom = expand_palette or (
+            band_policy is not None and band_policy != default_policy
+        )
+        if needs_custom:
+            built = build_format_decoder(
+                fmt,
+                band_policy=effective_policy,
+                expand_palette=expand_palette,
+            )
+            if built is not None:
+                return built
+        decoder = _decoder_for_format(fmt)
+        if decoder is not None:
+            return decoder
+        built = build_format_decoder(
+            fmt,
+            band_policy=effective_policy,
+            expand_palette=expand_palette,
+        )
+        if built is not None:
+            return built
+
+    raise ConfigurationError(missing_decoder_message(fmt))
+
+
+def probe_tile_band_count(
+    sample_request: TileRequest,
+    cache_dir: Path | None,
+    decoder: TileDecoder,
+    dtype: np.dtype[Any],
+    fetch_policy: FetchPolicy | None,
+    effective_format: Format | None,
+    *,
+    band_policy: BandPolicy | None = None,
+) -> int:
+    """Determine band count before building the Dask graph."""
+
+    fixed = default_band_count_for_format(effective_format, band_policy=band_policy)
+    if fixed is not None:
+        return fixed
+
+    # Circular: probe needs the create-path loader; array imports ArrayRequest here.
+    from .array import _load_tile_array  # noqa: PLC0415 — documented cycle
+
+    sample = _load_tile_array(
+        sample_request,
+        cache_dir,
+        decoder,
+        dtype,
+        fetch_policy,
+    )
+    return band_count_from_array(sample)
+
+
+# Historical underscore aliases for array.py / tests.
+_resolve_decoder = resolve_decoder
+_probe_tile_band_count = probe_tile_band_count
+
+
 __all__ = [
     "FETCH_POLICY_ATTR",
     "PROGRESS_REF_ATTR",
     "RECOMMENDED_NUM_WORKERS_ATTR",
     "TILE_ERRORS_ATTR",
+    "ArrayRequest",
     "cache_key",
     "coerce_array_origin",
     "fetch_policy_from_summary",
     "fetch_policy_summary",
     "normalize_bbox",
     "organize_tiles",
+    "probe_tile_band_count",
     "recommend_grid_shape",
+    "resolve_decoder",
     "resolve_fetch_policy",
     "resolve_grid_shape",
     "validate_chunk_size",

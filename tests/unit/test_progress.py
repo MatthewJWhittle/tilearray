@@ -10,6 +10,7 @@ import pytest
 from pytest import MonkeyPatch
 
 import tilearray.array as array_module
+import tilearray._planning as planning_module
 import tilearray.decode as decode_module
 import tilearray.progress as progress_module
 from tilearray.fetch import FetchProgress
@@ -267,7 +268,7 @@ def test_create_array_default_progress_multi_tile(
         del request, response
         progress_events.append((done, total))
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
     monkeypatch.setattr(
         progress_module,
@@ -384,7 +385,7 @@ def test_create_array_show_progress_false_skips_default(
             error_message=None,
         )
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
     monkeypatch.setattr(array_module, "fetch_tile", fake_fetch_tile)
     monkeypatch.setattr(
         progress_module, "make_tile_progress_callback", tracking_factory

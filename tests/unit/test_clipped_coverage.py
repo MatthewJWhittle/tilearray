@@ -11,6 +11,7 @@ import tifffile
 from _pytest.monkeypatch import MonkeyPatch
 
 import tilearray.array as array_module
+import tilearray._planning as planning_module
 from tilearray.decode import (
     GeoTransform,
     decoder_for_format,
@@ -224,7 +225,7 @@ def test_create_array_clipped_wcs_keeps_shape_and_values(
                 )
             ]
 
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: ClippedWCS())
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: ClippedWCS())
     monkeypatch.setattr(
         array_module,
         "fetch_tile",
@@ -310,7 +311,7 @@ def test_adjacent_clipped_tiles_seam(
         "http://example.com/wcs?tile=right": right_bytes,
     }
 
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: TwoTileWCS())
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: TwoTileWCS())
     monkeypatch.setattr(
         array_module,
         "fetch_tile",

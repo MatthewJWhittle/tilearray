@@ -10,6 +10,7 @@ import pytest
 import xarray as xr
 
 import tilearray.array as array_module
+import tilearray._planning as planning_module
 import tilearray.plan as plan_module
 from tilearray import (
     CRS,
@@ -22,7 +23,7 @@ from tilearray import (
     plan_array,
     recommend_grid_shape,
 )
-from tilearray.array import ArrayRequest, _cache_key
+from tilearray._planning import ArrayRequest, cache_key as _cache_key
 from tilearray.errors import ValidationError
 from tilearray.fetch import FetchPolicy, FetchProgress, TileFetcher
 from tilearray.service.base import BaseService, TileGeometry
@@ -119,7 +120,7 @@ def test_plan_array_large_aoi_respects_chunk_cap(
     def fake_get_service(*args: Any, **kwargs: Any) -> _SizedWCS:
         return service
 
-    monkeypatch.setattr(array_module, "get_service", fake_get_service)
+    monkeypatch.setattr(planning_module, "get_service", fake_get_service)
 
     bbox = BoundingBox(
         min_x=0.0, min_y=0.0, max_x=2000.0, max_y=1500.0, crs=CRS.EPSG_27700
@@ -156,7 +157,7 @@ def test_plan_array_large_aoi_respects_chunk_cap(
 def test_plan_array_edge_leftover_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _SizedWCS(max_pixels=100 * 100)
 
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: service)
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: service)
 
     bbox = BoundingBox(
         min_x=0.0, min_y=0.0, max_x=250.0, max_y=180.0, crs=CRS.EPSG_27700
@@ -204,7 +205,7 @@ def test_plan_array_jpeg_bands_unknown_without_probe(
                 height=tile.height,
             )
 
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: JpegService())
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: JpegService())
 
     plan = plan_array(
         "http://example.com/wms",
@@ -226,7 +227,7 @@ def test_plan_array_cache_warm_cold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     service = _SizedWCS(max_pixels=256 * 256)
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: service)
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: service)
 
     bbox = BoundingBox(
         min_x=0.0, min_y=0.0, max_x=512.0, max_y=256.0, crs=CRS.EPSG_27700
@@ -349,13 +350,13 @@ def test_fetch_summary_honest_unknowns_without_progress() -> None:
 
 def test_plan_array_does_not_fetch_pixels(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _SizedWCS(max_pixels=256 * 256)
-    monkeypatch.setattr(array_module, "get_service", lambda *a, **k: service)
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: service)
 
     def boom(*args: Any, **kwargs: Any) -> TileResponse:
         raise AssertionError("plan_array must not fetch mosaic tiles by default")
 
     monkeypatch.setattr(array_module, "fetch_tile", boom)
-    monkeypatch.setattr(plan_module, "_probe_tile_band_count", boom)
+    monkeypatch.setattr(plan_module, "probe_tile_band_count", boom)
 
     plan_array(
         "http://example.com/wcs",

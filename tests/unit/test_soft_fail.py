@@ -117,7 +117,7 @@ def _patch_grid(
     fetch_side_effect: Any | None = None,
 ) -> list[dict[str, Any]]:
     service_cls = _grid_service(rows, cols, tile_retries=tile_retries)
-    monkeypatch.setattr("tilearray.array.get_service", lambda *a, **k: service_cls())
+    monkeypatch.setattr("tilearray._planning.get_service", lambda *a, **k: service_cls())
 
     calls: list[dict[str, Any]] = []
 
@@ -556,10 +556,10 @@ def test_probe_ignores_soft_fail_handler(
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
 
     monkeypatch.setattr(
-        "tilearray.array.get_service", lambda *a, **k: ProbeFailService()
+        "tilearray._planning.get_service", lambda *a, **k: ProbeFailService()
     )
     monkeypatch.setattr(
-        "tilearray.array.default_band_count_for_format",
+        "tilearray._planning.default_band_count_for_format",
         lambda fmt, band_policy=None: None,
     )
 
