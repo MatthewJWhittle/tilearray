@@ -70,6 +70,7 @@ class ServiceConfig(BaseModel):
         if a <= 0 or b <= 0:
             raise ValidationError("size fields must contain positive integers")
         return a, b
+
     cache_dir: str | Path | None = Field(
         None, description="Optional cache directory for fetched tiles"
     )
