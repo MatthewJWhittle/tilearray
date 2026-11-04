@@ -47,6 +47,10 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 | Plot looks flipped | Expecting south-up rows | Arrays are **north-up** (row 0 = north); do not flip for display |
 | Missing `nodata` on RGB | Imagery path omits elevation nodata | Expected for JPEG/PNG; elevation GeoTIFF sets `nodata`/`_FillValue` to NaN |
 | Colour mosaic ≠ analysis values | Rendered imagery vs numerical coverage | XYZ/WMS are often pictures; WCS elevation carries numbers — see {doc}`design-principles` |
+| Multiband GeoTIFF became 1 band | Older default reduced to first band | Default is now `preserve`; pass `band_policy="first_band"` only when you want a single band |
+| Palette PNG is grayscale indices | Mode `P` kept as indices by default | Pass `expand_palette=True` for RGB, or use a truecolor source |
+| Edge tile smaller / ValidationError on shape | WCS clipped the coverage | Georeferenced GeoTIFF responses are placed+padded with NaN; missing tags or a resolution/CRS mismatch still fail — see {doc}`how-it-works` |
+| Edge NaNs look like soft-fail | Coverage pad vs fetch soft-fail | Outside-coverage pads do not increment `tilearray_tile_errors`; soft-fail only records exhausted tile fetches |
 | Need rasterio/rioxarray write | Optional downstream | Use the rioxarray recipe in {doc}`how-it-works` § Downstream use (`write_crs` / `write_transform` / `write_nodata` from attrs) |
 
 ## Environment Agency WCS
@@ -60,7 +64,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 ## OpenStreetMap XYZ
 
 - Stay on `XYZConfig.from_url(OSM_TILE_TEMPLATE, …, **osm_fetch_defaults())` (identifiable User-Agent, max 2 in-flight, ~2 req/s).
-- Palette PNGs often decode as **single-band grayscale**, not RGB. A small London window at z16 is about `(1024, 512)`, not `(256, 256)`.
+- Palette PNGs often decode as **single-band palette indices**, not RGB (pass `expand_palette=True` for RGB). A small London window at z16 is about `(1024, 512)`, not `(256, 256)`.
 - Attribute © OpenStreetMap contributors when displaying imagery.
 
 ## NASA GIBS XYZ

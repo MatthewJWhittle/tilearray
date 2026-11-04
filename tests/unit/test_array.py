@@ -232,6 +232,9 @@ def test_create_array_without_decoder_raises(monkeypatch: MonkeyPatch) -> None:
 
     monkeypatch.setattr(array_module, "get_service", fake_service_factory)
     monkeypatch.setattr(decode_module, "_DECODER_REGISTRY", {})
+    # Built-in formats can still be reconstructed via build_format_decoder;
+    # this test covers the hard miss when neither registry nor builder helps.
+    monkeypatch.setattr(array_module, "build_format_decoder", lambda *a, **k: None)
 
     with pytest.raises(ConfigurationError):
         array_module.create_array(
@@ -831,7 +834,7 @@ def test_geotiff_elevation_attrs_crs_transform_nodata(
     assert result.dims == ("y", "x")
     assert result.shape == (4, 8)
     assert result.attrs["crs"] == CRS.EPSG_27700.value
-    assert result.attrs["band_policy"] == "first_band"
+    assert result.attrs["band_policy"] == "preserve"
     assert result.attrs["transform_source"] == "mosaic_bbox"
     assert math.isnan(result.attrs["nodata"])
     assert math.isnan(result.attrs["_FillValue"])

@@ -84,7 +84,9 @@ def test_decode_tile_bytes_preserves_jpeg_rgb_bands() -> None:
 
 @pytest.mark.unit
 def test_default_band_count_for_format() -> None:
-    assert default_band_count_for_format(Format.GEOTIFF) == 1
+    # GeoTIFF defaults to preserve → probe sample tile for band count.
+    assert default_band_count_for_format(Format.GEOTIFF) is None
+    assert default_band_count_for_format(Format.GEOTIFF, band_policy="first_band") == 1
     assert default_band_count_for_format(Format.JPEG) is None
     assert default_band_count_for_format(Format.PNG) is None
 

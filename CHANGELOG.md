@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Clipped / partial WCS GeoTIFF responses are placed on the requested tile grid using `ModelPixelScale` / `ModelTiepoint` (and optional GeoKey EPSG), with NaN padding for uncovered cells — never stretched or silently shifted. Mismatched resolution, CRS, rotation, or missing georef fails with a clear `ValidationError`. Coverage pads are distinct from soft-fail tile fills (#95)
+- Raster fidelity: GeoTIFF default `band_policy` is now `preserve` (multiband coverages keep all bands; pass `band_policy="first_band"` to reduce explicitly). Palette PNGs stay as indices unless `expand_palette=True`. Imagery decode keeps native dtype until the `create_array(..., dtype=)` cast; GeoTIFF still promotes to float32 for NaN nodata. Mosaic attrs record `band_policy`, `palette_mode`, and `dtype_policy` (#94)
+
 ### Changed
 
 - `CRS` accepts any pyproj-valid projected/geographic CRS (EPSG authority strings, integers, `pyproj.CRS`), not only the four former enum members. Presets (`CRS.EPSG_4326`, `3857`, `32633`, `27700`) remain. Invalid codes (including typos like `EPGS:28992`) raise an actionable `ValidationError`. WMS 1.3 bbox axis order and WCS default subset axis labels follow geographic vs projected axes via pyproj (#92)
 
 ### Documentation
 
+- how-it-works / troubleshooting / OSM guide: clipped WCS placement, band/dtype/palette contract, and coverage-pad vs soft-fail distinction (#94, #95)
 - Codify design principles: canonical `docs/design-principles.md` (ethos, CRS roles, access vs processing, imagery vs numerical coverages), root `AGENTS.md`, audited `guidelines.md` (Sphinx / Python 3.9+, API design checklist), and cross-links from CONTRIBUTING / README / how-it-works / API / troubleshooting. Labels current single-`crs=` behaviour vs target `bbox_crs` / native-grid output; no version bump (#98)
 - Document arbitrary CRS inputs on `create_array` / API / troubleshooting; EA Lidar guide notes British National Grid as a non-Mercator example (#92)
 
