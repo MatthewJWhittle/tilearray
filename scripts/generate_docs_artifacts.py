@@ -97,11 +97,12 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
     elapsed = time.perf_counter() - start
 
     # OSM raster tiles are often palette PNGs → single-band after decode today.
+    # Coords / extent are native EPSG:3857 (query crs= was lon/lat only).
     fig, ax = plt.subplots(figsize=(5.5, 5.5))
     arr.plot.imshow(ax=ax, cmap="gray", add_colorbar=False)
     ax.set_title("OpenStreetMap XYZ — central London")
-    ax.set_xlabel("longitude")
-    ax.set_ylabel("latitude")
+    ax.set_xlabel("easting (EPSG:3857)")
+    ax.set_ylabel("northing (EPSG:3857)")
     ax.set_aspect("equal")
     fig.text(
         0.5,
@@ -119,8 +120,16 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
     stats = {
         "host": "openstreetmap",
         "service": "XYZ",
-        "bbox": list(OSM_LONDON_BBOX),
-        "crs": "EPSG:4326",
+        "bbox_query": list(OSM_LONDON_BBOX),
+        "crs_query": "EPSG:4326",
+        "crs_mosaic": da.attrs.get("crs"),
+        "transform": list(da.attrs.get("transform", ())),
+        "extent_m": [
+            float(arr.x.min()),
+            float(arr.y.min()),
+            float(arr.x.max()),
+            float(arr.y.max()),
+        ],
         "zoom": OSM_ZOOM,
         "shape": list(arr.shape),
         "dims": list(arr.dims),
@@ -128,7 +137,10 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
         "mean": float(np.nanmean(arr.values)),
         "figure": png.name,
         "attribution": "© OpenStreetMap contributors",
-        "note": "OSM PNGs are often palette mode; decoded mosaic is single-band today",
+        "note": (
+            "OSM PNGs are often palette mode; decoded mosaic is single-band today. "
+            "Query crs= is lon/lat; mosaic attrs are native EPSG:3857."
+        ),
     }
     _write_json(out_dir / "osm-london.json", stats)
     print(f"  wrote {png.name} shape={arr.shape} in {elapsed:.1f}s")
@@ -169,8 +181,8 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
     else:
         arr.plot.imshow(ax=ax, add_colorbar=False)
     ax.set_title("NASA GIBS Blue Marble — mid-Atlantic glance")
-    ax.set_xlabel("longitude")
-    ax.set_ylabel("latitude")
+    ax.set_xlabel("easting (EPSG:3857)")
+    ax.set_ylabel("northing (EPSG:3857)")
     ax.set_aspect("equal")
     fig.text(
         0.5,
@@ -188,8 +200,16 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
     stats = {
         "host": "nasa-gibs",
         "service": "XYZ",
-        "bbox": list(GIBS_BBOX),
-        "crs": "EPSG:4326",
+        "bbox_query": list(GIBS_BBOX),
+        "crs_query": "EPSG:4326",
+        "crs_mosaic": da.attrs.get("crs"),
+        "transform": list(da.attrs.get("transform", ())),
+        "extent_m": [
+            float(arr.x.min()),
+            float(arr.y.min()),
+            float(arr.x.max()),
+            float(arr.y.max()),
+        ],
         "zoom": GIBS_ZOOM,
         "shape": list(arr.shape),
         "dims": list(arr.dims),
@@ -197,6 +217,7 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
         "mean": float(np.nanmean(arr.values)),
         "figure": png.name,
         "template_note": "GIBS path is {z}/{y}/{x} (row before col)",
+        "note": "Query crs= is lon/lat; mosaic attrs are native EPSG:3857.",
     }
     _write_json(out_dir / "gibs-bluemarble.json", stats)
     print(f"  wrote {png.name} shape={arr.shape} in {elapsed:.1f}s")

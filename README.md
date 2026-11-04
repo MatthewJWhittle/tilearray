@@ -1,6 +1,12 @@
 # <img src="https://matthewjwhittle.github.io/tilearray/_static/logo/tilearray-mark-128.png" alt="" width="36" height="36"> tilearray
 
-tilearray turns remote tile services into **Dask**-backed **xarray** arrays — one `create_array` call for WCS, WMS, WMTS, or XYZ. Shared fetch and decode keep mosaics polite to servers and analysis-ready on a laptop or a larger machine. It is a **data-access** library (plan → fetch → assemble), not a GIS processing suite — see [design principles](https://matthewjwhittle.github.io/tilearray/design-principles.html).
+tilearray turns remote tile services into **Dask**-backed **xarray** arrays — one `create_array` call for WCS, WMS, WMTS, or XYZ.
+
+**Why.** Pulling a large AOI from OGC or XYZ tiles usually means hand-rolling capabilities parsing, tile planning, polite concurrent HTTP, decode, and mosaic georef. That glue (OWSLib + Pillow + Affine maths, or a GDAL/VRT path) is brittle — wrong CRS labels, stretched transforms, and host 403s are common. tilearray owns **plan → fetch → decode → assemble** so you get an analysis-ready array without a custom client per protocol.
+
+**Who.** Geo data engineers who need remote tiles into xarray/Dask for plotting, analysis, or ML chips — on a laptop or a larger machine — with host-aware concurrency.
+
+**Fit.** Data **access**, not GIS processing. Use [rioxarray](https://corteva.github.io/rioxarray/) / GDAL / rasterio for local rasters, warping, and analysis; use tilearray when the source is still a tile service. Non-goals: map SDKs, STAC/COG cube builders, silent client-side warp, provider catalogues — see [design principles](https://matthewjwhittle.github.io/tilearray/design-principles.html).
 
 [![Tests](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/test.yml)
 [![Docs](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml)
@@ -8,7 +14,7 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays — 
 
 > **Alpha.** The API may change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one `create_array` entry point.
 
-**Docs:** [matthewjwhittle.github.io/tilearray](https://matthewjwhittle.github.io/tilearray/) — [install](https://matthewjwhittle.github.io/tilearray/install.html), [how it works](https://matthewjwhittle.github.io/tilearray/how-it-works.html), [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html), [usage guides](https://matthewjwhittle.github.io/tilearray/guides/index.html), [example sources](https://matthewjwhittle.github.io/tilearray/example-sources.html), [troubleshooting](https://matthewjwhittle.github.io/tilearray/troubleshooting.html), [design principles](https://matthewjwhittle.github.io/tilearray/design-principles.html), and [API](https://matthewjwhittle.github.io/tilearray/api/index.html).
+**Docs:** [matthewjwhittle.github.io/tilearray](https://matthewjwhittle.github.io/tilearray/) — [install](https://matthewjwhittle.github.io/tilearray/install.html), [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html) (five-minute first run), [how it works](https://matthewjwhittle.github.io/tilearray/how-it-works.html), [usage guides](https://matthewjwhittle.github.io/tilearray/guides/index.html), [example sources](https://matthewjwhittle.github.io/tilearray/example-sources.html), [troubleshooting](https://matthewjwhittle.github.io/tilearray/troubleshooting.html), [design principles](https://matthewjwhittle.github.io/tilearray/design-principles.html), and [API](https://matthewjwhittle.github.io/tilearray/api/index.html).
 
 ## Install
 
@@ -30,7 +36,7 @@ From a clone: `uv sync --dev`. Contributors: `make docs` (HTML), `make docs-arti
 
 Prefer **`compute_with_policy`** over plain `.compute()` so Dask workers match the fetch ceiling (attrs are read automatically).
 
-### XYZ — OpenStreetMap
+### First run — OpenStreetMap XYZ
 
 ```python
 from tilearray import XYZConfig, compute_with_policy, create_array
@@ -40,17 +46,18 @@ from tilearray.types import CRS
 config = XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 da = create_array(
     config,
-    bbox=(-0.005, 51.495, 0.005, 51.505),  # small window near central London
+    bbox=(-0.005, 51.495, 0.005, 51.505),  # query lon/lat
     crs=CRS.EPSG_4326,
 )
 arr = compute_with_policy(da)
-# Palette PNGs decode as single-band; this window is about (1024, 512)
-print(arr.shape, da.attrs["service_type"])
+print(arr.shape, da.attrs["crs"], da.attrs["transform"])
+# Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — crs= is query only
+arr.plot.imshow(cmap="gray", add_colorbar=False)
 ```
 
-Include © OpenStreetMap contributors when displaying map imagery.
+Palette PNGs decode as single-band. Include © OpenStreetMap contributors when displaying map imagery. Full plotted walkthrough: [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html) / [OSM guide](https://matthewjwhittle.github.io/tilearray/guides/osm-london.html).
 
-### WCS — Environment Agency Lidar
+### Also — WCS (Environment Agency Lidar)
 
 ```python
 from tilearray import WCSConfig, compute_with_policy, create_array
@@ -70,10 +77,10 @@ config = WCSConfig.from_url(
 bbox = (431900.0, 382700.0, 432700.0, 383500.0)  # British National Grid
 da = create_array(config, bbox, CRS.EPSG_27700)
 elevation = compute_with_policy(da)
-print(elevation.shape, float(elevation.mean()))
+print(elevation.shape, float(elevation.mean()), elevation.attrs["crs"])
 ```
 
-EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (GIBS + Kartverket native grids — mosaic CRS follows the TileMatrixSet, not necessarily your query `crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → choose ids → `build_config`.
+EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10**. WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (GIBS + Kartverket — mosaic CRS follows the TileMatrixSet, not necessarily your query `crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → choose ids → `build_config`.
 
 ## Development
 

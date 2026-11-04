@@ -36,22 +36,30 @@
       ]
     },
     "gibs": {
-      "bbox": [
+      "bbox_query": [
         -40.0,
         20.0,
         -10.0,
         45.0
       ],
-      "crs": "EPSG:4326",
+      "crs_mosaic": "EPSG:3857",
+      "crs_query": "EPSG:4326",
       "dims": [
         "y",
         "x",
         "band"
       ],
-      "elapsed_s": 0.6,
+      "elapsed_s": 0.639,
+      "extent_m": [
+        -4999593.14607681,
+        9783.939620502293,
+        -9783.939620502293,
+        10008970.23177412
+      ],
       "figure": "gibs-bluemarble.png",
       "host": "nasa-gibs",
       "mean": 26.63834571838379,
+      "note": "Query crs= is lon/lat; mosaic attrs are native EPSG:3857.",
       "service": "XYZ",
       "shape": [
         512,
@@ -59,6 +67,14 @@
         3
       ],
       "template_note": "GIBS path is {z}/{y}/{x} (row before col)",
+      "transform": [
+        19567.879241005125,
+        0.0,
+        -5009377.085697312,
+        0.0,
+        -19567.87924100512,
+        10018754.171394622
+      ],
       "zoom": 3
     },
     "kartverket": {
@@ -91,26 +107,41 @@
     },
     "osm": {
       "attribution": "\u00a9 OpenStreetMap contributors",
-      "bbox": [
+      "bbox_query": [
         -0.005,
         51.495,
         0.005,
         51.505
       ],
-      "crs": "EPSG:4326",
+      "crs_mosaic": "EPSG:3857",
+      "crs_query": "EPSG:4326",
       "dims": [
         "y",
         "x"
       ],
-      "elapsed_s": 3.532,
+      "elapsed_s": 3.531,
+      "extent_m": [
+        -610.3018977139727,
+        6708726.292861916,
+        610.3018977139727,
+        6711169.889109908
+      ],
       "figure": "osm-london.png",
       "host": "openstreetmap",
-      "mean": 186.34127807617188,
-      "note": "OSM PNGs are often palette mode; decoded mosaic is single-band today",
+      "mean": 186.28684997558594,
+      "note": "OSM PNGs are often palette mode; decoded mosaic is single-band today. Query crs= is lon/lat; mosaic attrs are native EPSG:3857.",
       "service": "XYZ",
       "shape": [
         1024,
         512
+      ],
+      "transform": [
+        2.3886571339098737,
+        0.0,
+        -611.4962262809277,
+        0.0,
+        -2.3886571339116927,
+        6711171.083438475
       ],
       "zoom": 16
     }

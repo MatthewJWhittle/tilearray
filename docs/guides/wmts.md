@@ -32,18 +32,18 @@ config = WMTSConfig.from_url(
     },
 )
 
-bbox = (-40.0, 20.0, -10.0, 45.0)  # mid-Atlantic glance
+bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
 da = create_array(config, bbox, CRS.EPSG_4326)
 arr = compute_with_policy(da)
-print(arr.shape, arr.dims, da.attrs["crs"])
+print(arr.shape, arr.dims, da.attrs["crs"])  # mosaic CRS is EPSG:3857
 ```
 
 ```{image} ../_static/guides/gibs-bluemarble.png
-:alt: NASA GIBS Blue Marble RGB mosaic over a mid-Atlantic bbox
+:alt: NASA GIBS Blue Marble RGB mosaic over a mid-Atlantic bbox (Web Mercator axes)
 :width: 520px
 ```
 
-Imagery: NASA GIBS / BlueMarble_NextGeneration. The XYZ guide {doc}`gibs-bluemarble` uses the same host via an `{z}/{y}/{x}` template — this path uses {py:class}`~tilearray.WMTSConfig` instead.
+Imagery: NASA GIBS / BlueMarble_NextGeneration. Slippy / GoogleMapsCompatible mosaics are labelled **EPSG:3857** over the tile union — `crs=` is query-only. The XYZ guide {doc}`gibs-bluemarble` uses the same host via an `{z}/{y}/{x}` template — this path uses {py:class}`~tilearray.WMTSConfig` instead.
 
 ## Projected — Kartverket topo (EPSG:25833)
 

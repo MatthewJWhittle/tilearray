@@ -22,4 +22,4 @@ cd tilearray
 uv sync --dev
 ```
 
-Next: {doc}`quickstart` (install → mosaic on a documented public host) or {doc}`how-it-works`.
+Next: {doc}`quickstart` (five-minute OSM first run with plot + CRS) or {doc}`how-it-works`.

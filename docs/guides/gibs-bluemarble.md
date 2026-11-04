@@ -2,6 +2,8 @@
 
 Load a small mid-Atlantic window from NASA GIBS as JPEG RGB tiles. Uses `XYZConfig.from_url` with a template where the path is `{z}/{y}/{x}` (row before column) — not the OSM `{z}/{x}/{y}` order.
 
+Query the AOI in lon/lat; the mosaic is labelled **EPSG:3857** (native Web Mercator tile union), same contract as other XYZ / slippy sources.
+
 ## Code
 
 ```python
@@ -26,16 +28,17 @@ config = XYZConfig.from_url(
     },
 )
 
-bbox = (-40.0, 20.0, -10.0, 45.0)
+bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
 da = create_array(config, bbox, CRS.EPSG_4326)
 arr = compute_with_policy(da)
 print(arr.shape, arr.dims)  # expect (y, x, band) for RGB JPEG
+print(da.attrs["crs"], da.attrs["transform"])  # EPSG:3857 mosaic
 ```
 
 ## Result
 
 ```{image} ../_static/guides/gibs-bluemarble.png
-:alt: NASA GIBS Blue Marble RGB mosaic over a mid-Atlantic bbox
+:alt: NASA GIBS Blue Marble RGB mosaic over a mid-Atlantic bbox (Web Mercator axes)
 :width: 520px
 ```
 
