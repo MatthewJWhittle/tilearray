@@ -43,7 +43,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 |---------|--------------|------------|
 | “Wrong” CRS vs GeoTIFF tags | Mosaic CRS is the **`create_array(..., crs=)`** you passed, not tags inside tiles | Pass the CRS you planned with; see {doc}`how-it-works` georef contract |
 | `Invalid CRS` / `Did you mean 'EPSG:…'` | Typo or unknown authority (e.g. `EPGS:28992`) | Use a pyproj-valid EPSG string/integer or preset (`CRS.EPSG_27700`); provider codes such as `EPSG:25833` are fine |
-| Expected native-grid CRS ≠ query CRS | Alpha still uses one `crs=` for bbox + mosaic label; separate `bbox_crs` / output CRS is **target design** | Read {doc}`design-principles` spatial contract — do not assume a silent local warp |
+| Expected native-grid CRS ≠ query CRS | Most paths still use one `crs=` for bbox + mosaic label. **WMTS with TileMatrixSet metadata** labels the mosaic with the matrix SupportedCRS and tile-aligned extent (query bbox may differ). Separate public `bbox_crs=` remains **target design** | Load GetCapabilities or pass `matrix=`; see {doc}`design-principles` — do not assume a silent local warp |
 | Plot looks flipped | Expecting south-up rows | Arrays are **north-up** (row 0 = north); do not flip for display |
 | Missing `nodata` on RGB | Imagery path omits elevation nodata | Expected for JPEG/PNG; elevation GeoTIFF sets `nodata`/`_FillValue` to NaN |
 | Colour mosaic ≠ analysis values | Rendered imagery vs numerical coverage | XYZ/WMS are often pictures; WCS elevation carries numbers — see {doc}`design-principles` |

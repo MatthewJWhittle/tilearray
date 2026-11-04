@@ -15,12 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `CRS` accepts any pyproj-valid projected/geographic CRS (EPSG authority strings, integers, `pyproj.CRS`), not only the four former enum members. Presets (`CRS.EPSG_4326`, `3857`, `32633`, `27700`) remain. Invalid codes (including typos like `EPGS:28992`) raise an actionable `ValidationError`. WMS 1.3 bbox axis order and WCS default subset axis labels follow geographic vs projected axes via pyproj (#92)
+- WMTS planning uses the service TileMatrixSet native CRS and ScaleDenominator units (projected metres vs geographic degrees), including non-numeric TileMatrix ids and layer TileMatrixSetLimits. Query bboxes may be in another CRS; the mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Unknown or incomplete matrices raise `ValidationError` instead of guessing Web Mercator (#93)
 
 ### Documentation
 
 - how-it-works / troubleshooting / OSM guide: clipped WCS placement, band/dtype/palette contract, and coverage-pad vs soft-fail distinction (#94, #95)
 - Codify design principles: canonical `docs/design-principles.md` (ethos, CRS roles, access vs processing, imagery vs numerical coverages), root `AGENTS.md`, audited `guidelines.md` (Sphinx / Python 3.9+, API design checklist), and cross-links from CONTRIBUTING / README / how-it-works / API / troubleshooting. Labels current single-`crs=` behaviour vs target `bbox_crs` / native-grid output; no version bump (#98)
 - Document arbitrary CRS inputs on `create_array` / API / troubleshooting; EA Lidar guide notes British National Grid as a non-Mercator example (#92)
+- WMTS quickstart / how-it-works / troubleshooting note native TileMatrixSet grids (load GetCapabilities or pass `matrix=`) (#93)
 
 ## [0.2.0] - 2026-11-03
 

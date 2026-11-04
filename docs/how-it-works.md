@@ -27,7 +27,7 @@ WCS, WMS, WMTS, and XYZ share one request-and-decode path. Host **presets** in `
 :width: 720px
 ```
 
-Adapters turn your bbox + chunk/grid settings into an ordered list of tile requests (XYZ/WMTS grids, WCS coverage subsets). A larger AOI means more requests — not a different client API.
+Adapters turn your bbox + chunk/grid settings into an ordered list of tile requests (XYZ/WMTS grids, WCS coverage subsets). A larger AOI means more requests — not a different client API. When WMTS GetCapabilities (or an explicit `matrix=`) supplies a TileMatrixSet, planning uses that set’s SupportedCRS and ScaleDenominator in CRS units; the mosaic extent and `attrs["crs"]` follow the native tile grid rather than a guessed Web Mercator layout.
 
 ---
 

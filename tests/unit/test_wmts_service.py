@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from io import BytesIO
 from pathlib import Path
 
@@ -14,10 +15,11 @@ from PIL import Image
 from pytest import MonkeyPatch
 
 from tilearray.array import create_array
+from tilearray.errors import ValidationError
 from tilearray.fetch import TileFetcher
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WMTSConfig
-from tilearray.service.wmts import WMTSParser, WMTSService
+from tilearray.service.wmts import WMTSParser, WMTSService, WMTSTileMatrix
 from tilearray.service.xyz import _tile_bounds
 from tilearray.types import (
     CRS,
@@ -330,3 +332,342 @@ def _single_tile_bbox(zoom: int, tile_x: int, tile_y: int) -> BoundingBox:
         max_y=outer.max_y - margin_y,
         crs=CRS.EPSG_4326,
     )
+
+
+# ---------------------------------------------------------------------------
+# Native TileMatrix planning (#93)
+# Independent expectations use the OGC ScaleDenominator formula:
+#   pixel_size = ScaleDenominator * 0.00028 / metres_per_unit(CRS)
+# with metres_per_degree = semi_major * π / 180 for geographic CRS.
+# ---------------------------------------------------------------------------
+
+_WGS84_SEMI_MAJOR_M = 6378137.0
+_METRES_PER_DEGREE = _WGS84_SEMI_MAJOR_M * math.pi / 180.0
+_OGC_PIXEL_M = 0.00028
+
+# Fixture ScaleDenominator for CRS84 level "5" (see WMTS_CAPABILITIES_XML).
+_CRS84_SCALE = 8735660.375448
+# Independently: 8735660.375448 * 0.00028 / (6378137 * π/180) ≈ 0.02197265625°
+_CRS84_PIXEL = _CRS84_SCALE * _OGC_PIXEL_M / _METRES_PER_DEGREE
+_CRS84_TILE_SPAN = 256 * _CRS84_PIXEL  # ≈ 5.625°
+
+# Synthetic EPSG:25833 matrix: exactly 100 m / pixel.
+_UTM33_PIXEL_M = 100.0
+_UTM33_SCALE = _UTM33_PIXEL_M / _OGC_PIXEL_M
+_UTM33_TILE_SPAN = 256 * _UTM33_PIXEL_M  # 25600 m
+_UTM33_TOP_LEFT_X = 250_000.0
+_UTM33_TOP_LEFT_Y = 6_700_000.0
+
+WMTS_EPSG25833_CAPABILITIES_XML = f"""<?xml version='1.0' encoding='UTF-8'?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0"
+              xmlns:ows="http://www.opengis.net/ows/1.1">
+  <Contents>
+    <Layer>
+      <ows:Identifier>npi_layer</ows:Identifier>
+      <TileMatrixSetLink>
+        <TileMatrixSet>EPSG:25833</TileMatrixSet>
+        <TileMatrixSetLimits>
+          <TileMatrixLimits>
+            <TileMatrix>utm33_2</TileMatrix>
+            <MinTileRow>0</MinTileRow>
+            <MaxTileRow>20</MaxTileRow>
+            <MinTileCol>0</MinTileCol>
+            <MaxTileCol>20</MaxTileCol>
+          </TileMatrixLimits>
+        </TileMatrixSetLimits>
+      </TileMatrixSetLink>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>EPSG:25833</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::25833</ows:SupportedCRS>
+      <TileMatrix>
+        <ows:Identifier>utm33_2</ows:Identifier>
+        <ScaleDenominator>{_UTM33_SCALE}</ScaleDenominator>
+        <TopLeftCorner>{_UTM33_TOP_LEFT_X} {_UTM33_TOP_LEFT_Y}</TopLeftCorner>
+        <TileWidth>256</TileWidth>
+        <TileHeight>256</TileHeight>
+        <MatrixWidth>64</MatrixWidth>
+        <MatrixHeight>64</MatrixHeight>
+      </TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>"""
+
+WMTS_EPSG4326_AXIS_ORDER_XML = """<?xml version='1.0' encoding='UTF-8'?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0"
+              xmlns:ows="http://www.opengis.net/ows/1.1">
+  <Contents>
+    <Layer>
+      <ows:Identifier>axis_layer</ows:Identifier>
+      <TileMatrixSetLink><TileMatrixSet>EPSG:4326</TileMatrixSet></TileMatrixSetLink>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>EPSG:4326</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::4326</ows:SupportedCRS>
+      <TileMatrix>
+        <ows:Identifier>0</ows:Identifier>
+        <ScaleDenominator>279541132.0143589</ScaleDenominator>
+        <TopLeftCorner>90 -180</TopLeftCorner>
+        <TileWidth>256</TileWidth>
+        <TileHeight>256</TileHeight>
+        <MatrixWidth>2</MatrixWidth>
+        <MatrixHeight>1</MatrixHeight>
+      </TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>"""
+
+
+def test_wmts_parser_reads_crs84_supported_crs() -> None:
+    caps = WMTSParser().parse_get_capabilities(WMTS_CAPABILITIES_XML)
+    tms = caps.tile_matrix_sets["EPSG4326"]
+    assert tms.supported_crs == CRS.parse("OGC:CRS84")
+    matrix = tms.matrices["5"]
+    assert matrix.top_left_x == pytest.approx(-180.0)
+    assert matrix.top_left_y == pytest.approx(90.0)
+
+
+def test_wmts_parser_swaps_epsg4326_top_left_axis_order() -> None:
+    caps = WMTSParser().parse_get_capabilities(WMTS_EPSG4326_AXIS_ORDER_XML)
+    matrix = caps.tile_matrix_sets["EPSG:4326"].matrices["0"]
+    # Capabilities TopLeftCorner is lat/lon (90, -180); stored always_xy.
+    assert matrix.top_left_x == pytest.approx(-180.0)
+    assert matrix.top_left_y == pytest.approx(90.0)
+
+
+def test_wmts_plan_crs84_matrix_tile_bounds() -> None:
+    """CRS84 matrix uses degree units — not ScaleDenominator*0.00028 raw."""
+
+    service = WMTSService(
+        WMTS_URL,
+        layer="example_layer",
+        tile_matrix_set="EPSG4326",
+        tile_matrix=5,
+    )
+    service.apply_capabilities(
+        WMTSParser().parse_get_capabilities(WMTS_CAPABILITIES_XML)
+    )
+
+    # Interior of tile (col=0, row=0); independent span ≈ 5.625°.
+    bbox = BoundingBox(
+        min_x=-179.0,
+        min_y=85.0,
+        max_x=-175.0,
+        max_y=89.0,
+        crs=CRS.EPSG_4326,
+    )
+    tiles = list(service.plan_tiles(bbox, (256, 256)))
+
+    assert len(tiles) == 1
+    tile = tiles[0]
+    assert tile.tile_x == 0
+    assert tile.tile_y == 0
+    assert tile.crs == CRS.parse("OGC:CRS84")
+    assert tile.bbox.min_x == pytest.approx(-180.0)
+    assert tile.bbox.max_y == pytest.approx(90.0)
+    assert tile.bbox.max_x == pytest.approx(-180.0 + _CRS84_TILE_SPAN)
+    assert tile.bbox.min_y == pytest.approx(90.0 - _CRS84_TILE_SPAN)
+    assert service.inferred_mosaic_bbox is not None
+    assert service.inferred_mosaic_bbox.crs == CRS.parse("OGC:CRS84")
+
+
+def test_wmts_plan_epsg25833_matrix_tile_bounds() -> None:
+    service = WMTSService(
+        WMTS_URL,
+        layer="npi_layer",
+        tile_matrix_set="EPSG:25833",
+        tile_matrix="utm33_2",
+        crs=CRS.parse("EPSG:25833"),
+    )
+    service.apply_capabilities(
+        WMTSParser().parse_get_capabilities(WMTS_EPSG25833_CAPABILITIES_XML)
+    )
+
+    # Independently: tile col=2,row=1 covers
+    # x [301200, 326800], y [6648800, 6674400]
+    expected_min_x = _UTM33_TOP_LEFT_X + 2 * _UTM33_TILE_SPAN
+    expected_max_x = _UTM33_TOP_LEFT_X + 3 * _UTM33_TILE_SPAN
+    expected_max_y = _UTM33_TOP_LEFT_Y - 1 * _UTM33_TILE_SPAN
+    expected_min_y = _UTM33_TOP_LEFT_Y - 2 * _UTM33_TILE_SPAN
+
+    bbox = BoundingBox(
+        min_x=expected_min_x + 100.0,
+        min_y=expected_min_y + 100.0,
+        max_x=expected_max_x - 100.0,
+        max_y=expected_max_y - 100.0,
+        crs=CRS.parse("EPSG:25833"),
+    )
+    tiles = list(service.plan_tiles(bbox, (256, 256)))
+
+    assert len(tiles) == 1
+    tile = tiles[0]
+    assert tile.tile_x == 2
+    assert tile.tile_y == 1
+    assert tile.tile_matrix_id == "utm33_2"
+    assert tile.crs == CRS.parse("EPSG:25833")
+    assert tile.bbox.min_x == pytest.approx(expected_min_x)
+    assert tile.bbox.max_x == pytest.approx(expected_max_x)
+    assert tile.bbox.min_y == pytest.approx(expected_min_y)
+    assert tile.bbox.max_y == pytest.approx(expected_max_y)
+
+
+def test_wmts_plan_transforms_query_bbox_crs_to_matrix_crs() -> None:
+    """Caller bbox in EPSG:4326 selects EPSG:25833 tiles; output stays native."""
+
+    service = WMTSService(
+        WMTS_URL,
+        layer="npi_layer",
+        tile_matrix_set="EPSG:25833",
+        tile_matrix="utm33_2",
+    )
+    service.apply_capabilities(
+        WMTSParser().parse_get_capabilities(WMTS_EPSG25833_CAPABILITIES_XML)
+    )
+
+    # Approx lon/lat near easting 301200+ / northing 6674400- (UTM 33N).
+    bbox = BoundingBox(
+        min_x=10.55,
+        min_y=60.05,
+        max_x=10.75,
+        max_y=60.20,
+        crs=CRS.EPSG_4326,
+    )
+    tiles = list(service.plan_tiles(bbox, (256, 256)))
+
+    assert tiles
+    assert all(tile.crs == CRS.parse("EPSG:25833") for tile in tiles)
+    assert service.inferred_mosaic_bbox is not None
+    assert service.inferred_mosaic_bbox.crs == CRS.parse("EPSG:25833")
+
+
+def test_wmts_unknown_matrix_raises_without_web_mercator_fallback() -> None:
+    service = WMTSService(
+        WMTS_URL,
+        layer="example_layer",
+        tile_matrix_set="EPSG4326",
+        tile_matrix=99,
+    )
+    service.apply_capabilities(
+        WMTSParser().parse_get_capabilities(WMTS_CAPABILITIES_XML)
+    )
+
+    bbox = BoundingBox(min_x=-1.0, min_y=50.0, max_x=1.0, max_y=52.0, crs=CRS.EPSG_4326)
+    with pytest.raises(ValidationError, match="TileMatrix '99' was not found"):
+        list(service.plan_tiles(bbox, (256, 256)))
+
+
+def test_wmts_projected_tms_without_capabilities_raises() -> None:
+    service = WMTSService(
+        WMTS_URL,
+        layer="npi_layer",
+        tile_matrix_set="EPSG:25833",
+        tile_matrix="utm33_2",
+        crs=CRS.parse("EPSG:25833"),
+    )
+    bbox = BoundingBox(
+        min_x=300_000.0,
+        min_y=6_650_000.0,
+        max_x=310_000.0,
+        max_y=6_660_000.0,
+        crs=CRS.parse("EPSG:25833"),
+    )
+    with pytest.raises(ValidationError, match="native matrix metadata"):
+        list(service.plan_tiles(bbox, (256, 256)))
+
+
+def test_wmts_matrix_override_plans_without_capabilities() -> None:
+    matrix = WMTSTileMatrix(
+        identifier="utm33_2",
+        scale_denominator=_UTM33_SCALE,
+        top_left_x=_UTM33_TOP_LEFT_X,
+        top_left_y=_UTM33_TOP_LEFT_Y,
+        matrix_width=64,
+        matrix_height=64,
+        tile_width=256,
+        tile_height=256,
+    )
+    service = WMTSService(
+        WMTS_URL,
+        layer="npi_layer",
+        tile_matrix_set="EPSG:25833",
+        tile_matrix="utm33_2",
+        crs=CRS.parse("EPSG:25833"),
+    )
+    expected_min_x = _UTM33_TOP_LEFT_X + 2 * _UTM33_TILE_SPAN
+    expected_max_y = _UTM33_TOP_LEFT_Y - 1 * _UTM33_TILE_SPAN
+    bbox = BoundingBox(
+        min_x=expected_min_x + 10.0,
+        min_y=expected_max_y - _UTM33_TILE_SPAN + 10.0,
+        max_x=expected_min_x + 100.0,
+        max_y=expected_max_y - 10.0,
+        crs=CRS.parse("EPSG:25833"),
+    )
+    tiles = list(
+        service.plan_tiles(
+            bbox,
+            (256, 256),
+            matrix=matrix,
+            matrix_crs=CRS.parse("EPSG:25833"),
+        )
+    )
+    assert len(tiles) == 1
+    assert tiles[0].tile_x == 2
+    assert tiles[0].tile_y == 1
+
+
+def test_create_array_wmts_native_matrix_labels_output_crs(
+    png_tile_bytes: bytes,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
+
+    matrix = WMTSTileMatrix(
+        identifier="utm33_2",
+        scale_denominator=_UTM33_SCALE,
+        top_left_x=_UTM33_TOP_LEFT_X,
+        top_left_y=_UTM33_TOP_LEFT_Y,
+        matrix_width=64,
+        matrix_height=64,
+        tile_width=256,
+        tile_height=256,
+    )
+    expected_min_x = _UTM33_TOP_LEFT_X + 2 * _UTM33_TILE_SPAN
+    expected_max_x = _UTM33_TOP_LEFT_X + 3 * _UTM33_TILE_SPAN
+    expected_max_y = _UTM33_TOP_LEFT_Y - 1 * _UTM33_TILE_SPAN
+    expected_min_y = _UTM33_TOP_LEFT_Y - 2 * _UTM33_TILE_SPAN
+
+    bbox = BoundingBox(
+        min_x=expected_min_x + 50.0,
+        min_y=expected_min_y + 50.0,
+        max_x=expected_max_x - 50.0,
+        max_y=expected_max_y - 50.0,
+        crs=CRS.parse("EPSG:25833"),
+    )
+    config = WMTSConfig.from_url(
+        WMTS_URL,
+        layer="npi_layer",
+        tile_matrix_set="EPSG:25833",
+        tile_matrix="utm33_2",
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+        crs=CRS.parse("EPSG:25833"),
+    )
+
+    result = create_array(
+        config,
+        bbox,
+        CRS.parse("EPSG:25833"),
+        compute=True,
+        matrix=matrix,
+        matrix_crs=CRS.parse("EPSG:25833"),
+        show_progress=False,
+    )
+
+    assert result.attrs["crs"] == "EPSG:25833"
+    assert result.shape == (256, 256)
+    # Pixel centres from native mosaic extent (tile-aligned), not the query inset.
+    assert float(result.x.min()) == pytest.approx(expected_min_x + _UTM33_PIXEL_M / 2.0)
+    assert float(result.x.max()) == pytest.approx(expected_max_x - _UTM33_PIXEL_M / 2.0)
+    assert float(result.y.max()) == pytest.approx(expected_max_y - _UTM33_PIXEL_M / 2.0)
+    assert float(result.y.min()) == pytest.approx(expected_min_y + _UTM33_PIXEL_M / 2.0)
+    assert "bbox_requested" in result.attrs

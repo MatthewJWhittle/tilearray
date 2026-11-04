@@ -40,6 +40,10 @@ class TileGeometry(BaseModel):
     tile_x: int | None = Field(default=None, description="XYZ tile column index")
     tile_y: int | None = Field(default=None, description="XYZ tile row index")
     zoom: int | None = Field(default=None, description="XYZ zoom level")
+    tile_matrix_id: str | None = Field(
+        default=None,
+        description="WMTS TileMatrix identifier when non-numeric or distinct from zoom",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
