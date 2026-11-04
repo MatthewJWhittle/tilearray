@@ -38,3 +38,7 @@ uv run python scripts/soak_large_aoi_presets.py --host ea --profile large
 ```
 
 Do not wire large profiles into always-on PR jobs. User-facing fetch behaviour: {doc}`how-it-works`.
+
+## API freeze / Alpha graduation
+
+Before a stable-contract cut, walk {doc}`api-freeze-checklist` (current `__all__`, pending open-PR surface, SemVer draft, graduation boxes). Do not remove the Alpha badge from that checklist alone.

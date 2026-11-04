@@ -29,7 +29,8 @@ make docs-artifacts  # regenerate committed figures (network for live guides)
 3. Use the **API design checklist** in [guidelines.md](guidelines.md) (§9) together with [docs/design-principles.md](docs/design-principles.md).
 4. Docs-only work: follow [docs writing principles](docs/docs-writing-principles.md), then [Building the docs](docs/building-docs.md). Run `make docs`.
 5. User-visible behaviour → update docs and `CHANGELOG.md` `[Unreleased]` in the same PR. Do not bump the package version unless a release is intended.
+6. Before a **stable-contract / 1.0** cut (or when expanding `__all__` toward freeze): [docs/api-freeze-checklist.md](docs/api-freeze-checklist.md).
 
 ## Project conventions
 
-Engineering standards (layout, tests, packaging, PR checklist) live in [guidelines.md](guidelines.md). Product ethos lives in [docs/design-principles.md](docs/design-principles.md). User-facing prose filter: [docs/docs-writing-principles.md](docs/docs-writing-principles.md). Keep those roles separate so rules do not drift.
+Engineering standards (layout, tests, packaging, PR checklist) live in [guidelines.md](guidelines.md). Product ethos lives in [docs/design-principles.md](docs/design-principles.md). User-facing prose filter: [docs/docs-writing-principles.md](docs/docs-writing-principles.md). Public vs provisional surface and Alpha graduation: [docs/api-freeze-checklist.md](docs/api-freeze-checklist.md). Keep those roles separate so rules do not drift.

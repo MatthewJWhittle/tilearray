@@ -26,7 +26,7 @@ New host presets and deeper WMTS/WMS productization are the next theme after the
 
 **Scale & hosts** — big AOI on more real hosts without a second API: USGS 3DEP WCS preset, NASA GIBS as first-class XYZ and/or native WMTS + visual guide, EA VOM WMS guide, keyed XYZ pattern (env/`params`; no secrets in repo), larger-machine “don’t stampede” guidance, and stronger WMS/WMTS contract coverage.
 
-**Stable contract (1.0)** — freeze the public API users already rely on; graduate from Alpha; harden tests and supported Python matrix; deeper API reference.
+**Stable contract (1.0)** — freeze the public API users already rely on; graduate from Alpha; harden tests and supported Python matrix; deeper API reference. Maintainer gate: {doc}`api-freeze-checklist` (inventory on `main`, pending open-PR surface, SemVer draft, graduation boxes — do not cut 1.0 early).
 
 Product boundaries and CRS vocabulary: {doc}`design-principles`.
 
@@ -48,3 +48,4 @@ Product boundaries and CRS vocabulary: {doc}`design-principles`.
 - {doc}`how-it-works` — plan → polite fetch → mosaic
 - {doc}`example-sources` — public endpoints and presets
 - {doc}`building-docs` — maintainer notes for Sphinx and figures
+- {doc}`api-freeze-checklist` — public vs provisional surface and 1.0 graduation gate
