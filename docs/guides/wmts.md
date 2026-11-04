@@ -98,11 +98,12 @@ What to notice:
 | Other Kartverket matrices (`utm32n`, `utm35n`, `webmercator`) | Same adapter; not separately cassette-locked here |
 | Arbitrary WMTS hosts / exotic matrix axis quirks | Supported when GetCapabilities supplies SupportedCRS, ScaleDenominator, TopLeftCorner; verify against the host before relying on it |
 
-Discovery helpers that list layers/matrices from an unknown URL (when available) still leave **you** to choose identifiers — tilearray will not silently pick a layer or CRS among many. Wrong ids raise {py:exc}`~tilearray.ValidationError`.
+{doc}`../inspect-endpoint` lists layers/matrices from an unknown URL, but still leaves **you** to choose identifiers — tilearray will not silently pick a layer or CRS among many. Wrong ids raise {py:exc}`~tilearray.ValidationError`.
 
 ## Related
 
 - {doc}`../example-sources` — Kartverket + GIBS endpoints
 - {doc}`../quickstart` — short WMTS recipe
+- {doc}`../inspect-endpoint` — discover layers / matrices before hard-coding
 - {doc}`../how-it-works` — native-grid CRS / snapped extent
 - {doc}`gibs-bluemarble` — same GIBS imagery via XYZ

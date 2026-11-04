@@ -774,31 +774,116 @@ def create_array(
     """
     Create an xarray ``DataArray`` backed by Dask from a remote service.
 
-    When ``compute=True``, tile fetches run on Dask's threaded scheduler with
-    ``num_workers=compute_thread_pool_size(fetch_policy)`` (override via
-    ``compute_num_workers``) so AIMD can use the full fetch concurrency ceiling.
+    Builds a lazy mosaic by default (``compute=False``). Prefer
+    :func:`compute_with_policy` over plain ``.compute()`` so Dask workers match
+    the fetch ceiling. Fetch-policy metadata is stored on ``DataArray.attrs``
+    for that path. With ``compute=True``, tile fetches run on Dask's threaded
+    scheduler with ``num_workers=compute_thread_pool_size(fetch_policy)``
+    (override via ``compute_num_workers``).
 
-    For lazy arrays (``compute=False``), prefer :func:`compute_with_policy` over
-    plain ``.compute()`` so Dask worker count matches the fetch ceiling. Fetch
-    policy metadata is stored on ``DataArray.attrs`` for that path.
+    CRS contract (current alpha)
+    ----------------------------
+    ``crs`` is a **single** public argument that interprets the bbox for
+    planning. There is **no** client-side raster warp onto another CRS.
 
-    Multi-tile mosaics show a tqdm-style tile progress bar by default during
-    compute (via ``on_progress`` / :class:`~tilearray.fetch.FetchProgress`).
-    Pass ``show_progress=False``, set ``TILEARRAY_PROGRESS=0``, or use a
-    non-TTY / non-Jupyter display for quiet CI and scripts. A custom
-    ``on_progress=`` replaces the default bar.
+    * **WCS / WMS / XYZ / slippy WMTS** — ``attrs["crs"]`` is that same caller
+      ``crs``. Mosaic georef comes from the planned bbox + shape
+      (``transform_source="mosaic_bbox"``); per-tile GeoTIFF tags never
+      silently replace mosaic CRS.
+    * **WMTS with TileMatrixSet metadata** — pixels stay on the native matrix
+      grid; ``attrs["crs"]`` and the planned extent follow the matrix
+      SupportedCRS (query bbox / ``crs`` may differ; ``bbox_requested`` records
+      the caller's window). Auto-loads GetCapabilities for non-slippy matrices
+      (or pass ``matrix=`` via ``**service_options``).
 
-    Tile failures stay loud by default (``NetworkError`` + sibling abort after
-    retries). Opt in to visible soft-fill with ``on_tile_error=`` (e.g.
-    :func:`~tilearray.soft_fail_exhausted_tiles`) or ``soft_fail=True``. Soft
-    decisions are bound at plan time into each delayed tile load.
+    A separate public ``bbox_crs=`` for every protocol remains **target**
+    design — do not treat the full three-role API as shipped.
 
-    Raster fidelity: ``band_policy`` defaults to ``preserve`` (keep all bands;
-    pass ``\"first_band\"`` to reduce explicitly). Palette PNGs stay as index
-    arrays unless ``expand_palette=True``. GeoTIFF decode promotes to float32
-    so nodata can be NaN; imagery decode keeps native dtype until the
+    Raster fidelity: ``band_policy`` defaults to ``\"preserve\"`` (keep all
+    bands; pass ``\"first_band\"`` to reduce explicitly). Palette PNGs stay as
+    index arrays unless ``expand_palette=True``. GeoTIFF decode promotes to
+    float32 so nodata can be NaN; imagery decode keeps native dtype until the
     ``dtype=`` cast. Clipped WCS GeoTIFF responses are placed by their tags
     onto the requested grid and padded with NaN — never stretched.
+
+    Parameters
+    ----------
+    service_url:
+        Service **config** (``WCSConfig`` / ``WMSConfig`` / ``WMTSConfig`` /
+        ``XYZConfig``) or, where supported, a base URL string. Prefer a typed
+        config (often ``from_url`` + ``fetch_presets``) over a bare string.
+    bbox:
+        Area of interest as ``(minx, miny, maxx, maxy)`` or a
+        :class:`~tilearray.types.BoundingBox`, in the units of ``crs``.
+    crs:
+        Query CRS for the bbox (preset, EPSG string/int, or ``pyproj.CRS``).
+        Also labels the mosaic for WCS / WMS / XYZ / slippy WMTS — see CRS
+        contract above for native WMTS.
+    service_type:
+        Optional protocol override when ``service_url`` is a bare string.
+        Must match the config when a config is passed.
+    chunk_size:
+        Tile / chunk height × width in pixels. Often taken from the config
+        (e.g. 256×256 XYZ/WMTS; WCS coverage chunks).
+    grid_shape:
+        Mosaic layout as ``(rows, cols)`` of chunks. XYZ/WMTS may infer this
+        from the planned tile coverage when left at the default single cell.
+    output_format:
+        Preferred decode format (``Format.PNG`` / ``JPEG`` / ``GEOTIFF``, …).
+        Defaults come from the config / service when omitted.
+    cache_dir:
+        Optional on-disk tile cache (``{sha}.tile`` + ``.meta``). Warm hits
+        skip HTTP; clear after decode/credential changes.
+    compute:
+        If ``True``, materialise immediately on the threaded scheduler.
+        Default ``False`` (lazy). For lazy arrays use
+        :func:`compute_with_policy`.
+    compute_num_workers:
+        Override Dask thread workers when ``compute=True``. Default sizes
+        from the fetch-policy ceiling.
+    dtype:
+        Array dtype after decode (default ``float32``). Imagery keeps native
+        dtype until this cast; GeoTIFF elevation promotes for NaN nodata.
+    band_policy:
+        ``\"preserve\"`` (default for PNG/JPEG/GeoTIFF) keeps all bands;
+        ``\"first_band\"`` reduces explicitly. ``None`` uses the format
+        default from :data:`~tilearray.decode.DEFAULT_BAND_POLICIES`.
+    expand_palette:
+        If ``True``, expand palette-mode PNG to RGB. Default keeps indices.
+    tile_decoder:
+        Optional custom tile→array callable (plan-time bind).
+    on_progress:
+        Progress callback ``(done, total, request, response)``. Replaces the
+        default tqdm-style bar when provided.
+    show_progress:
+        Default ``None`` auto-shows a bar for multi-tile computes on TTY /
+        Jupyter. Pass ``False`` (or set ``TILEARRAY_PROGRESS=0``) for quiet
+        CI; ``True`` forces a bar.
+    on_tile_error:
+        Plan-time tile error handler (e.g.
+        :func:`~tilearray.soft_fail_exhausted_tiles`). Bound into each
+        delayed load before the graph is built.
+    soft_fail:
+        Convenience switch for the library soft-fill preset. Default remains
+        hard-fail + sibling abort after retries. Prefer an explicit
+        ``on_tile_error=`` when you need a custom policy.
+    soft_fill_value:
+        Fill value for soft-failed tiles (default NaN).
+    soft_fail_max_fraction:
+        Abort if soft-filled tiles would exceed this fraction of the mosaic
+        (default ``0.1``). ``None`` disables the fraction cap.
+    **service_options:
+        Protocol / planner / fetch knobs (``resolution``,
+        ``max_concurrent_requests``, ``headers``, ``params``, WMTS
+        ``matrix=``, …). Same three-family bag as documented in how-it-works;
+        soft-fail and progress stay as named parameters above.
+
+    Returns
+    -------
+    xarray.DataArray
+        North-up mosaic with ``y``/``x`` pixel-centre coords and attrs
+        (``crs``, ``transform``, ``band_policy``, fetch/error summaries, …).
+        Lazy Dask-backed unless ``compute=True``.
     """
 
     target_crs = _coerce_crs(crs)

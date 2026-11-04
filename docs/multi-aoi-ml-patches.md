@@ -112,13 +112,13 @@ There is **no** `map_aois` helper today. Prefer this loop until a documented fri
 
 | Expectation | Contract today |
 |-------------|----------------|
-| **CRS** | Mosaic `attrs["crs"]` is the `create_array(..., crs=)` you passed — not a silent retag from per-tile tags |
+| **CRS** | `crs=` interprets each patch bbox. For WCS / WMS / XYZ / slippy WMTS, `attrs["crs"]` is that same value. For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS (query CRS may differ). Per-tile GeoTIFF tags never silently retag the mosaic |
 | **Extent / snap** | Returned mosaic covers the planned / snapped grid for that bbox; it need not equal the input box pixel-for-pixel on fixed WMTS/XYZ grids |
 | **Coords** | `y`/`x` are **pixel centres** consistent with `attrs["transform"]` (`transform_source="mosaic_bbox"`, north-up) |
 | **Shape** | Known at plan time from chunk/grid (or inferred WMTS/XYZ tile coverage); distant patches do **not** share one pixel grid unless you align them yourself |
 | **Provenance** | `attrs["service_type"]`, fetch-policy summary, optional coverage/layer identity — use these when writing training metadata |
 
-Alpha still uses one `crs=` for bbox + mosaic label. Separate query vs output CRS is **target** design — {doc}`design-principles`. Do not assume client-side warp to an arbitrary patch size.
+One public `crs=` still interprets the bbox; native-WMTS output CRS is already shipped. A separate `bbox_crs=` for every protocol remains **target** — {doc}`design-principles`. Do not assume client-side warp to an arbitrary patch size.
 
 ---
 

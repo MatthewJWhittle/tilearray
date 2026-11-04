@@ -42,7 +42,9 @@ Keep these concepts separate in types, docs, and tests:
 
 ### Current alpha behaviour (honest contract)
 
-Today `create_array(..., crs=)` is a **single** CRS argument used both to interpret the bbox and to label the mosaic (`attrs["crs"]`). That argument accepts any pyproj-valid CRS (presets or EPSG strings such as `EPSG:25833`), not a fixed four-value enum. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS — but the three-role vocabulary above is the **target** design. Do not treat separate `bbox_crs` / output CRS as already shipped.
+Today `create_array(..., crs=)` is a **single** public CRS argument that interprets the bbox. It accepts any pyproj-valid CRS (presets or EPSG strings such as `EPSG:25833`), not a fixed four-value enum. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS.
+
+**Labelling today:** for WCS / WMS / XYZ / slippy WMTS, `attrs["crs"]` is that same caller `crs=`. For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS and a tile-aligned extent (query bbox may differ). A separate public `bbox_crs=` for every protocol remains **target** design — do not treat the full three-role API as already shipped, but do not document native-WMTS output CRS as unshipped either.
 
 Prefer a clean documented contract over preserving an ambiguous `crs` forever; any migration will be explicit during alpha.
 

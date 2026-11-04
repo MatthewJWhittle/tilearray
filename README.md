@@ -73,7 +73,7 @@ elevation = compute_with_policy(da)
 print(elevation.shape, float(elevation.mean()))
 ```
 
-EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS is supported via `WMTSConfig`; a published host guide is not available yet.
+EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10** (AIMD ceiling). More hosts, WMS recipes, and polite-use notes live in the [docs](https://matthewjwhittle.github.io/tilearray/). WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (GIBS + Kartverket native grids — mosaic CRS follows the TileMatrixSet, not necessarily your query `crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → choose ids → `build_config`.
 
 ## Development
 

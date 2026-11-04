@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Honest CRS / georef copy after native WMTS: mosaic `attrs["crs"]` follows TileMatrixSet SupportedCRS when caps metadata is present (query `crs=` may differ); README links the WMTS guide + inspect how-to; decode blurb matches default `band_policy="preserve"`; `create_array` docstring gains a full Parameters section plus an explicit CRS contract (WCS/WMS/XYZ/slippy vs native WMTS); multi-AOI / API / how-it-works / freeze-checklist copy no longer claims mosaic CRS always equals caller `crs=`
 - how-it-works / troubleshooting / OSM guide: clipped WCS placement, band/dtype/palette contract, and coverage-pad vs soft-fail distinction (#94, #95)
 - how-it-works / troubleshooting / API: plan-before-fetch recipe, cache lifecycle (`{sha}.tile` + `.meta`, warm vs cold, when to clear), and fetch summary for diagnosing host pressure (#61)
 - Multi-AOI / ML sample patches how-to: per-bbox `create_array` → `compute_with_policy` → save/release loop; warn against union megamosaic; shared host-gate vs overlapping computes; snapping/provenance, cache reuse, soft-fail vs nodata; Dask list-friendly without an orchestration API. Linked from Start-here, quickstart, how-it-works, troubleshooting. Offline unit coverage for noncontiguous WMTS loops, union-tile inflation, shared ceiling under concurrent mosaics, and cache warm hits (#87)

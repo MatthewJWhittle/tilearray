@@ -133,7 +133,7 @@ Same public API on a larger box: `create_array` → `compute_with_policy`. Bigge
 :width: 700px
 ```
 
-Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into `float32` arrays. JPEG/PNG keep bands `(y, x, band)` when present; GeoTIFF elevation uses the first band (pixels via `tifffile`, no GDAL/`zarr` pin cage).
+Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS). JPEG/PNG keep bands `(y, x, band)` when present; GeoTIFF keeps all bands by default (`band_policy="preserve"`; pass `"first_band"` to reduce). Elevation GeoTIFF pixels go through `tifffile` (no GDAL/`zarr` pin cage) and promote to float32 so nodata can be NaN.
 
 ---
 
@@ -146,7 +146,7 @@ Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS) into 
 
 Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xarray.DataArray` with coordinates and attrs (`crs`, mosaic `transform`, `band_policy`, optional elevation `nodata`, service/fetch summaries, …). Shape is known when the graph is built; tile bytes load when something computes.
 
-**Georef contract (current alpha):** mosaic CRS is always the `create_array(..., crs=)` you passed — never silently replaced by per-tile GeoTIFF tags. `attrs["transform"]` is a north-up Affine `(a,b,c,d,e,f)` from the planned mosaic bbox + shape (`transform_source="mosaic_bbox"`). `y`/`x` are **pixel centers** consistent with that Affine (row 0 = north). Elevation GeoTIFF decode maps `GDAL_NODATA`/sentinels → NaN in pixels and sets `nodata`/`_FillValue` to NaN; RGB/RGBA imagery omits nodata and keeps `(y, x, band)`.
+**Georef contract (current alpha):** `attrs["transform"]` is a north-up Affine `(a,b,c,d,e,f)` from the **planned** mosaic bbox + shape (`transform_source="mosaic_bbox"`). `y`/`x` are **pixel centers** consistent with that Affine (row 0 = north). Per-tile GeoTIFF tags never silently replace mosaic CRS. For most paths (WCS / WMS / XYZ / slippy WMTS), `attrs["crs"]` is the `create_array(..., crs=)` you passed. For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS and a tile-aligned extent — the query bbox may be in another CRS (see §1 and {doc}`guides/wmts`). Elevation GeoTIFF decode maps `GDAL_NODATA`/sentinels → NaN in pixels and sets `nodata`/`_FillValue` to NaN; RGB/RGBA imagery omits nodata and keeps `(y, x, band)`.
 
 **Clipped WCS responses:** when a GeoTIFF comes back smaller than the requested tile (common at coverage edges), tilearray reads `ModelPixelScale` / `ModelTiepoint` and places those pixels on the requested grid, padding the rest with NaN. Matching resolution and integer offsets are required; mismatched CRS/resolution/rotation fails loudly instead of stretching. That pad is **coverage nodata**, not soft-fail fill of a failed fetch.
 
@@ -162,7 +162,7 @@ Product vocabulary (canonical: {doc}`design-principles`) separates three ideas:
 | **Service / request CRS** | CRS used when talking to the provider |
 | **Output / array CRS** | Actual CRS of returned pixels + transform |
 
-**Today:** one `crs=` argument both interprets the bbox and labels the mosaic. Any pyproj-valid CRS works (presets such as `CRS.EPSG_27700`, or strings like `"EPSG:25833"` / `"EPSG:28992"`); invalid identifiers raise {py:exc}`~tilearray.ValidationError` before planning. tilearray does **not** run a client-side raster warp onto a different CRS; pixels stay on the planned mosaic grid. **Target design:** callers may use a convenient `bbox_crs` while fixed grids (WMTS/XYZ) return native-grid pixels in their true output CRS (with reported snapped extent). Server-side WMS/WCS CRS changes, if exposed, stay explicit and must match returned metadata. Do not treat separate CRS roles as already shipped — see {doc}`design-principles`.
+**Today:** one `crs=` argument interprets the bbox for planning. Any pyproj-valid CRS works (presets such as `CRS.EPSG_27700`, or strings like `"EPSG:25833"` / `"EPSG:28992"`); invalid identifiers raise {py:exc}`~tilearray.ValidationError` before planning. That same argument still labels the mosaic for WCS / WMS / XYZ / slippy WMTS. **Already shipped for metadata-backed WMTS:** pixels stay on the native TileMatrixSet grid; `attrs["crs"]` and the planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). tilearray does **not** run a client-side raster warp — Kartverket-style lon/lat query → EPSG:25833 mosaic is planning + native-grid assemble, not a local reprojection of pixels. **Still target:** a separate public `bbox_crs=` for every protocol, and treating XYZ the same way as native WMTS. Server-side WMS/WCS CRS changes, if exposed, stay explicit and must match returned metadata — see {doc}`design-principles`. Parameter reference: {py:func}`~tilearray.create_array`.
 
 **Imagery vs numerical coverages:** XYZ/WMS (and many WMTS) paths are often *rendered* tiles (JPEG/PNG, sometimes palette indices unless `expand_palette=True`). WCS elevation is a *numerical* coverage (GeoTIFF, nodata → NaN). Do not assume colour mosaics imply analysis-grade values, or elevation nodata rules for imagery.
 
