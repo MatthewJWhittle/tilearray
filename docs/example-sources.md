@@ -17,12 +17,21 @@ Public endpoints and thin fetch presets for testing host quirks — **not** a pr
 - The CoverageId comes from GetCapabilities (often `UUID__LayerName`) — never assume the URL path slug is the id.
 - Preset AIMD: start 8, ceiling **10**, floor 4, ×0.75 pressure, sustained-403 circuit breaker. For county-scale cold mosaics, keep `max_concurrent_requests` ≤ **10**.
 
-## NASA GIBS Blue Marble (XYZ)
+## NASA GIBS Blue Marble (XYZ or WMTS)
 
-- Template: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`
+- XYZ template: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`
 - Path is `{z}/{y}/{x}` (row before col), not OSM `{z}/{x}/{y}`.
-- Use `XYZConfig.from_url` with that template. JPEG colour mosaics keep RGB bands `(y, x, band)`.
+- Use `XYZConfig.from_url` with that template, or {py:class}`~tilearray.WMTSConfig` with TileMatrixSet `GoogleMapsCompatible_Level8` and the REST `{TileMatrix}/{TileRow}/{TileCol}` template — see {doc}`guides/wmts`.
+- JPEG colour mosaics keep RGB bands `(y, x, band)`.
 - Public; coordinate if you exceed roughly 1M tiles / 24h. Layer is hardcoded in the path — another GIBS product needs its own template from GetCapabilities.
+
+## Kartverket topo (WMTS, EPSG:25833)
+
+- KVP endpoint: `https://cache.kartverket.no/v1/service`
+- GetCapabilities: `https://cache.kartverket.no/v1/wmts/1.0.0/WMTSCapabilities.xml`
+- Layer `topo`, TileMatrixSet `utm33n` (SupportedCRS EPSG:25833); also `utm32n` / `utm35n` / `webmercator`.
+- Prefer `WMTSConfig.from_url(..., layer="topo", tile_matrix_set="utm33n", tile_matrix=8, style="default")`. Numeric `tile_matrix=8` matches capabilities id `08`.
+- Query bbox may be lon/lat; the mosaic is labelled EPSG:25833 with tile-aligned extent. Attribution: © Kartverket (CC BY 4.0). Stay polite — small windows, identifiable User-Agent. Guide: {doc}`guides/wmts`.
 
 ## USGS 3DEP elevation (WCS)
 

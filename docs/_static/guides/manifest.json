@@ -61,6 +61,34 @@
       "template_note": "GIBS path is {z}/{y}/{x} (row before col)",
       "zoom": 3
     },
+    "kartverket": {
+      "attribution": "\u00a9 Kartverket (CC BY 4.0)",
+      "bbox_query": [
+        10.6,
+        59.85,
+        10.8,
+        59.95
+      ],
+      "crs_mosaic": "EPSG:25833",
+      "crs_query": "EPSG:4326",
+      "dims": [
+        "y",
+        "x",
+        "band"
+      ],
+      "elapsed_s": 2.079,
+      "figure": "wmts-kartverket-oslo.png",
+      "host": "kartverket",
+      "layer": "topo",
+      "service": "WMTS",
+      "shape": [
+        256,
+        256,
+        4
+      ],
+      "tile_matrix": 8,
+      "tile_matrix_set": "utm33n"
+    },
     "osm": {
       "attribution": "\u00a9 OpenStreetMap contributors",
       "bbox": [

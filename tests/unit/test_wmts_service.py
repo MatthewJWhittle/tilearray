@@ -15,7 +15,7 @@ from PIL import Image
 from pytest import MonkeyPatch
 
 from tilearray.array import create_array
-from tilearray.errors import ValidationError
+from tilearray.errors import NetworkError, ValidationError
 from tilearray.fetch import TileFetcher
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WMTSConfig
@@ -556,7 +556,11 @@ def test_wmts_unknown_matrix_raises_without_web_mercator_fallback() -> None:
         list(service.plan_tiles(bbox, (256, 256)))
 
 
-def test_wmts_projected_tms_without_capabilities_raises() -> None:
+@respx.mock
+def test_wmts_projected_tms_autoload_capabilities_network_error() -> None:
+    """Non-slippy TMS auto-loads GetCapabilities; HTTP failure is NetworkError."""
+
+    respx.get(WMTS_URL).mock(side_effect=httpx.ConnectError("refused"))
     service = WMTSService(
         WMTS_URL,
         layer="npi_layer",
@@ -571,8 +575,88 @@ def test_wmts_projected_tms_without_capabilities_raises() -> None:
         max_y=6_660_000.0,
         crs=CRS.parse("EPSG:25833"),
     )
-    with pytest.raises(ValidationError, match="native matrix metadata"):
+    with pytest.raises(NetworkError, match="GetCapabilities"):
         list(service.plan_tiles(bbox, (256, 256)))
+
+
+@respx.mock
+def test_wmts_projected_tms_autoloads_get_capabilities() -> None:
+    """create_array-style planning loads caps for EPSG:25833 without a prior apply."""
+
+    respx.get(WMTS_URL).mock(
+        return_value=httpx.Response(200, text=WMTS_EPSG25833_CAPABILITIES_XML)
+    )
+    service = WMTSService(
+        WMTS_URL,
+        layer="npi_layer",
+        tile_matrix_set="EPSG:25833",
+        tile_matrix="utm33_2",
+        crs=CRS.parse("EPSG:25833"),
+    )
+    expected_min_x = _UTM33_TOP_LEFT_X + 2 * _UTM33_TILE_SPAN
+    expected_max_y = _UTM33_TOP_LEFT_Y - 1 * _UTM33_TILE_SPAN
+    bbox = BoundingBox(
+        min_x=expected_min_x + 10.0,
+        min_y=expected_max_y - _UTM33_TILE_SPAN + 10.0,
+        max_x=expected_min_x + 100.0,
+        max_y=expected_max_y - 10.0,
+        crs=CRS.parse("EPSG:25833"),
+    )
+    tiles = list(service.plan_tiles(bbox, (256, 256)))
+    assert len(tiles) == 1
+    assert tiles[0].tile_x == 2
+    assert tiles[0].tile_y == 1
+    assert tiles[0].crs == CRS.parse("EPSG:25833")
+
+
+def test_wmts_lookup_matches_zero_padded_matrix_ids() -> None:
+    """Kartverket-style TileMatrix ids ('08') match caller tile_matrix=8."""
+
+    xml = f"""<?xml version='1.0' encoding='UTF-8'?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0"
+              xmlns:ows="http://www.opengis.net/ows/1.1">
+  <Contents>
+    <Layer>
+      <ows:Identifier>topo</ows:Identifier>
+      <TileMatrixSetLink><TileMatrixSet>utm33n</TileMatrixSet></TileMatrixSetLink>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>utm33n</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::25833</ows:SupportedCRS>
+      <TileMatrix>
+        <ows:Identifier>08</ows:Identifier>
+        <ScaleDenominator>{_UTM33_SCALE}</ScaleDenominator>
+        <TopLeftCorner>{_UTM33_TOP_LEFT_X} {_UTM33_TOP_LEFT_Y}</TopLeftCorner>
+        <TileWidth>256</TileWidth>
+        <TileHeight>256</TileHeight>
+        <MatrixWidth>64</MatrixWidth>
+        <MatrixHeight>64</MatrixHeight>
+      </TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>"""
+    service = WMTSService(
+        WMTS_URL,
+        layer="topo",
+        tile_matrix_set="utm33n",
+        tile_matrix=8,
+        crs=CRS.parse("EPSG:25833"),
+    )
+    service.apply_capabilities(WMTSParser().parse_get_capabilities(xml))
+    expected_min_x = _UTM33_TOP_LEFT_X + 2 * _UTM33_TILE_SPAN
+    expected_max_y = _UTM33_TOP_LEFT_Y - 1 * _UTM33_TILE_SPAN
+    bbox = BoundingBox(
+        min_x=expected_min_x + 10.0,
+        min_y=expected_max_y - _UTM33_TILE_SPAN + 10.0,
+        max_x=expected_min_x + 100.0,
+        max_y=expected_max_y - 10.0,
+        crs=CRS.parse("EPSG:25833"),
+    )
+    tiles = list(service.plan_tiles(bbox, (256, 256)))
+    assert len(tiles) == 1
+    assert tiles[0].tile_matrix_id == "08"
+    request = service.build_tile_request(tiles[0], tile_matrix=8)
+    assert request.params["TileMatrix"] == "08"
 
 
 def test_wmts_matrix_override_plans_without_capabilities() -> None:

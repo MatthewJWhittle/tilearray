@@ -347,6 +347,20 @@ class WMTSService(BaseService):
             if isinstance(maybe_override, WMTSTileMatrix):
                 matrix_override = maybe_override
 
+        query_crs = options.get("crs", self.native_crs)
+        if not isinstance(query_crs, CRS):
+            query_crs = self.native_crs
+
+        # Native / non-slippy grids need TileMatrixSet metadata. Load
+        # GetCapabilities once so create_array(config, bbox, crs) works without a
+        # separate apply_capabilities() step (same habit as WCS DescribeCoverage).
+        if (
+            matrix_override is None
+            and self._capabilities is None
+            and not _allows_slippy_fallback(tms_id, query_crs)
+        ):
+            self.apply_capabilities()
+
         caps = self._capabilities
         has_caps = caps is not None or matrix_override is not None
 
@@ -369,9 +383,6 @@ class WMTSService(BaseService):
 
         # No capabilities: keep XYZ-style planning for common Web Mercator / CRS84
         # slippy hosts. Non-Mercator grids need TileMatrixSet metadata.
-        query_crs = options.get("crs", self.native_crs)
-        if not isinstance(query_crs, CRS):
-            query_crs = self.native_crs
         if _allows_slippy_fallback(tms_id, query_crs):
             tile_width = chunk_size[0]
             tile_height = chunk_size[1]
@@ -412,14 +423,17 @@ class WMTSService(BaseService):
 
         tile_col = _require_index(tile.tile_x, options.get("tile_col"))
         tile_row = _require_index(tile.tile_y, options.get("tile_row"))
-        matrix_level = _coerce_tile_matrix_id(
-            options.get(
-                "tile_matrix",
-                tile.tile_matrix_id
-                if tile.tile_matrix_id is not None
-                else (tile.zoom if tile.zoom is not None else self.tile_matrix),
+        # Prefer the identifier resolved during planning (e.g. Kartverket "08")
+        # over the caller's numeric tile_matrix=8 from config tile_kwargs.
+        if tile.tile_matrix_id is not None:
+            matrix_level = _coerce_tile_matrix_id(tile.tile_matrix_id)
+        else:
+            matrix_level = _coerce_tile_matrix_id(
+                options.get(
+                    "tile_matrix",
+                    tile.zoom if tile.zoom is not None else self.tile_matrix,
+                )
             )
-        )
 
         template = options.get("url_template") or self.url_template
         if template:
@@ -783,10 +797,14 @@ def _lookup_matrix(tms: WMTSTileMatrixSet, tile_matrix: str) -> WMTSTileMatrix |
         candidate = f"{prefix}:{tile_matrix}"
         if candidate in tms.matrices:
             return tms.matrices[candidate]
-    # Allow matching a trailing ":N" / numeric suffix when the caller passes an int.
+    # Allow matching a trailing ":N" / numeric suffix when the caller passes an int,
+    # and zero-padded ids such as Kartverket "08" when the caller passes 8 / "8".
     if tile_matrix.isdigit():
+        want = int(tile_matrix)
         for key, matrix in tms.matrices.items():
             if key == tile_matrix or key.endswith(f":{tile_matrix}"):
+                return matrix
+            if key.isdigit() and int(key) == want:
                 return matrix
     return None
 

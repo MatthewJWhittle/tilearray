@@ -2,7 +2,7 @@
 
 tilearray turns remote tile services into Dask-backed xarray arrays for **geo data engineers**: a large AOI becomes a polite fetch-and-assemble problem, with a clear memory / concurrency / lazy-vs-cache story and the **same API** from a laptop to a larger machine.
 
-**Today (0.2.x, Alpha):** one `create_array` entry point for WCS, WMS, WMTS, and XYZ; presets for OSM XYZ and EA DSP WCS; documented recipes for USGS 3DEP WCS, GIBS XYZ, EA VOM WMS, and keyed OS Maps XYZ. Prefer fewer, meaningful PyPI cuts over drip releases.
+**Today (0.2.x, Alpha):** one `create_array` entry point for WCS, WMS, WMTS, and XYZ; presets for OSM XYZ and EA DSP WCS; documented recipes for USGS 3DEP WCS, GIBS XYZ/WMTS, Kartverket WMTS (EPSG:25833), EA VOM WMS, and keyed OS Maps XYZ. Prefer fewer, meaningful PyPI cuts over drip releases.
 
 ```text
   0.1.x (shipped)          0.2.x (shipped)          next                         1.0
@@ -17,7 +17,7 @@ Tracking: [GitHub milestones](https://github.com/MatthewJWhittle/tilearray/miles
 |----------|-------|-----------------|
 | **WCS** | Deep (capabilities, planning, GeoTIFF, EA + USGS evidence) | **2.0.x only** — no WCS 1.x chase |
 | **XYZ** | Medium–deep (OSM preset, GIBS-as-XYZ guide) | OSM slippy Y; no TMS Y-flip |
-| **WMTS** | Medium–thin (REST/KVP + optional caps; no host guide yet) | **1.0.0** |
+| **WMTS** | Medium (REST/KVP + caps-driven native matrices; GIBS + Kartverket guide) | **1.0.0** |
 | **WMS** | Thin (GetMap + quickstart recipe) | Teaching path **1.3.0** |
 
 New host presets and deeper WMTS/WMS productization are the next theme after the trustworthy core — not a catalogue chase.

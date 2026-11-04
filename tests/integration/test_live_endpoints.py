@@ -8,7 +8,8 @@ import pytest
 import xarray as xr
 
 from tilearray import array as array_module
-from tilearray.service.config import WCSConfig
+from tilearray import compute_with_policy, create_array
+from tilearray.service.config import WCSConfig, WMTSConfig
 from tilearray.service.wcs import WCSService
 from tilearray.types import CRS, Format
 
@@ -105,3 +106,42 @@ class TestRealServiceIntegration:
         assert -1000 < mean_value < 1000
         # assert no missing values
         assert data.isnull().sum() == 0
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.net
+def test_live_kartverket_wmts_oslo_smoke() -> None:
+    """Tiny live smoke: Kartverket topo / utm33n → EPSG:25833 mosaic."""
+
+    config = WMTSConfig.from_url(
+        "https://cache.kartverket.no/v1/service",
+        layer="topo",
+        tile_matrix_set="utm33n",
+        tile_matrix=8,
+        style="default",
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+        max_concurrent_requests=2,
+        rate_limit_per_second=2.0,
+        headers={
+            "User-Agent": (
+                "tilearray-integration/0.2 "
+                "(+https://github.com/MatthewJWhittle/tilearray)"
+            ),
+        },
+    )
+    da = create_array(
+        config,
+        bbox=(10.6, 59.85, 10.8, 59.95),
+        crs=CRS.EPSG_4326,
+        show_progress=False,
+    )
+    arr = compute_with_policy(da)
+
+    assert isinstance(arr, xr.DataArray)
+    assert da.attrs["crs"] == "EPSG:25833"
+    assert arr.shape[0] >= 256
+    assert arr.shape[1] >= 256
+    assert float(arr.x.min()) < float(arr.x.max())
+    assert float(arr.y.min()) < float(arr.y.max())

@@ -44,7 +44,7 @@ from tilearray.fetch_presets import (  # noqa: E402
     ea_dsp_fetch_defaults,
     osm_fetch_defaults,
 )
-from tilearray.service import WCSConfig  # noqa: E402
+from tilearray.service import WCSConfig, WMTSConfig  # noqa: E402
 from tilearray.types import CRS, Format  # noqa: E402
 
 OUT_DIR = ROOT / "docs" / "_static" / "guides"
@@ -67,6 +67,11 @@ GIBS_ZOOM = 3
 EA_GUIDE_BBOX = (431900.0, 382700.0, 432156.0, 382956.0)
 EA_CHUNK = (64, 64)
 EA_RESOLUTION = (1.0, 1.0)
+
+# Kartverket topo WMTS — small Oslo-area window at matrix 8 (~one tile).
+KARTVERKET_WMTS_URL = "https://cache.kartverket.no/v1/service"
+KARTVERKET_BBOX = (10.6, 59.85, 10.8, 59.95)
+KARTVERKET_MATRIX = 8
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -280,11 +285,92 @@ def generate_ea(out_dir: Path) -> dict[str, Any]:
     return stats
 
 
+def generate_kartverket(out_dir: Path) -> dict[str, Any]:
+    print("Kartverket WMTS: fetching small Oslo topo window (utm33n)...")
+    config = WMTSConfig.from_url(
+        KARTVERKET_WMTS_URL,
+        layer="topo",
+        tile_matrix_set="utm33n",
+        tile_matrix=KARTVERKET_MATRIX,
+        style="default",
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+        max_concurrent_requests=2,
+        rate_limit_per_second=2.0,
+        headers={
+            "User-Agent": "tilearray-docs/0.2 (+https://github.com/MatthewJWhittle/tilearray/issues)",
+        },
+    )
+    start = time.perf_counter()
+    da = create_array(
+        config,
+        KARTVERKET_BBOX,
+        CRS.EPSG_4326,
+        show_progress=False,
+    )
+    arr = compute_with_policy(da)
+    elapsed = time.perf_counter() - start
+
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    if arr.ndim == 3 and "band" in arr.dims and arr.sizes["band"] >= 3:
+        rgb = np.clip(np.asarray(arr.values[..., :3]) / 255.0, 0, 1)
+        ax.imshow(
+            rgb,
+            extent=[
+                float(arr.x.min()),
+                float(arr.x.max()),
+                float(arr.y.min()),
+                float(arr.y.max()),
+            ],
+            origin="upper",
+        )
+    else:
+        arr.plot.imshow(ax=ax, cmap="gray", add_colorbar=False)
+    ax.set_title("Kartverket topo WMTS — Oslo glance (EPSG:25833)")
+    ax.set_xlabel("easting (EPSG:25833)")
+    ax.set_ylabel("northing (EPSG:25833)")
+    ax.set_aspect("equal")
+    fig.text(
+        0.5,
+        0.01,
+        "Map data © Kartverket (CC BY 4.0)",
+        ha="center",
+        fontsize=8,
+        style="italic",
+    )
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    png = out_dir / "wmts-kartverket-oslo.png"
+    fig.savefig(png, dpi=120)
+    plt.close(fig)
+
+    stats = {
+        "host": "kartverket",
+        "service": "WMTS",
+        "layer": "topo",
+        "tile_matrix_set": "utm33n",
+        "tile_matrix": KARTVERKET_MATRIX,
+        "bbox_query": list(KARTVERKET_BBOX),
+        "crs_query": "EPSG:4326",
+        "crs_mosaic": da.attrs.get("crs"),
+        "shape": list(arr.shape),
+        "dims": list(arr.dims),
+        "elapsed_s": round(elapsed, 3),
+        "figure": png.name,
+        "attribution": "© Kartverket (CC BY 4.0)",
+    }
+    _write_json(out_dir / "wmts-kartverket-oslo.json", stats)
+    print(
+        f"  wrote {png.name} shape={arr.shape} crs={da.attrs.get('crs')} "
+        f"in {elapsed:.1f}s"
+    )
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--only",
-        choices=("osm", "ea", "gibs", "all"),
+        choices=("osm", "ea", "gibs", "kartverket", "all"),
         default="all",
         help="Which artifact set to regenerate (default: all)",
     )
@@ -300,18 +386,29 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results: dict[str, Any] = {}
+    manifest_path = out_dir / "manifest.json"
+    if args.only != "all" and manifest_path.exists():
+        try:
+            previous = json.loads(manifest_path.read_text())
+            if isinstance(previous.get("artifacts"), dict):
+                results.update(previous["artifacts"])
+        except (json.JSONDecodeError, OSError):
+            pass
+
     if args.only in ("osm", "all"):
         results["osm"] = generate_osm(out_dir)
     if args.only in ("gibs", "all"):
         results["gibs"] = generate_gibs(out_dir)
     if args.only in ("ea", "all"):
         results["ea"] = generate_ea(out_dir)
+    if args.only in ("kartverket", "all"):
+        results["kartverket"] = generate_kartverket(out_dir)
 
     manifest = {
         "generated_by": "scripts/generate_docs_artifacts.py",
         "artifacts": results,
     }
-    _write_json(out_dir / "manifest.json", manifest)
+    _write_json(manifest_path, manifest)
     print(f"Done. Assets in {out_dir}")
     return 0
 
