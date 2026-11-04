@@ -1,3 +1,4 @@
+import math
 from io import BytesIO
 from pathlib import Path
 
@@ -23,6 +24,38 @@ from tilearray.types import (
     TileRequest,
     TileResponse,
 )
+
+# Independent Web Mercator maths (do not import production 3857 helpers for
+# expected values — avoids circular asserts against the same slippy bug).
+_INDEPENDENT_ORIGIN = math.pi * 6378137.0
+
+
+def _independent_tile_span_m(zoom: int) -> float:
+    return 2.0 * _INDEPENDENT_ORIGIN / (2**zoom)
+
+
+def _independent_tile_bounds_3857(
+    tile_x: int, tile_y: int, zoom: int
+) -> tuple[float, float, float, float]:
+    span = _independent_tile_span_m(zoom)
+    min_x = -_INDEPENDENT_ORIGIN + tile_x * span
+    max_x = min_x + span
+    max_y = _INDEPENDENT_ORIGIN - tile_y * span
+    min_y = max_y - span
+    return min_x, min_y, max_x, max_y
+
+
+def _independent_union_3857(
+    x_min: int, y_min: int, x_max: int, y_max: int, zoom: int
+) -> tuple[float, float, float, float]:
+    span = _independent_tile_span_m(zoom)
+    return (
+        -_INDEPENDENT_ORIGIN + x_min * span,
+        _INDEPENDENT_ORIGIN - (y_max + 1) * span,
+        -_INDEPENDENT_ORIGIN + (x_max + 1) * span,
+        _INDEPENDENT_ORIGIN - y_min * span,
+    )
+
 
 OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
@@ -290,3 +323,183 @@ def test_xyz_config_headers_reach_http_fetch(rgb_jpeg_tile_bytes: bytes) -> None
 
     assert response.success is True
     assert captured.get("user-agent") == "tilearray-peer-test/1.0"
+
+
+def test_xyz_plan_sets_inferred_mosaic_bbox_in_epsg_3857() -> None:
+    """Planner exposes tile-union extent in native Web Mercator (like WMTS)."""
+
+    service = XYZService(OSM_TEMPLATE, zoom=10)
+    # High-latitude inset so a lon/lat envelope affine would diverge hard.
+    bbox = BoundingBox(
+        min_x=10.0,
+        min_y=69.5,
+        max_x=10.4,
+        max_y=69.8,
+        crs=CRS.EPSG_4326,
+    )
+    tiles = list(service.plan_tiles(bbox, (256, 256), zoom=10))
+    assert tiles
+    assert service.inferred_mosaic_bbox is not None
+    assert service.inferred_mosaic_bbox.crs == CRS.EPSG_3857
+    assert all(tile.crs == CRS.EPSG_3857 for tile in tiles)
+
+    x_min = min(t.tile_x for t in tiles if t.tile_x is not None)
+    x_max = max(t.tile_x for t in tiles if t.tile_x is not None)
+    y_min = min(t.tile_y for t in tiles if t.tile_y is not None)
+    y_max = max(t.tile_y for t in tiles if t.tile_y is not None)
+    exp_min_x, exp_min_y, exp_max_x, exp_max_y = _independent_union_3857(
+        x_min, y_min, x_max, y_max, 10
+    )
+    mosaic = service.inferred_mosaic_bbox
+    assert mosaic.min_x == pytest.approx(exp_min_x)
+    assert mosaic.min_y == pytest.approx(exp_min_y)
+    assert mosaic.max_x == pytest.approx(exp_max_x)
+    assert mosaic.max_y == pytest.approx(exp_max_y)
+
+
+@pytest.mark.parametrize(
+    ("zoom", "tile_x", "tile_y"),
+    [
+        (8, 128, 128),  # equator
+        (12, 2048, 1361),  # London-ish
+        (6, 34, 15),  # high latitude (~70°N)
+        (10, 163, 395),  # San Francisco-ish
+    ],
+)
+def test_xyz_single_tile_mosaic_attrs_are_native_3857(
+    png_tile_bytes: bytes,
+    monkeypatch: MonkeyPatch,
+    zoom: int,
+    tile_x: int,
+    tile_y: int,
+) -> None:
+    """Query lon/lat selects tiles; mosaic CRS/transform/coords stay EPSG:3857."""
+
+    monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
+    bbox = _single_tile_bbox(zoom, tile_x, tile_y)
+    assert _tile_range_for_bbox(bbox, zoom) == (tile_x, tile_y, tile_x, tile_y)
+
+    result = create_array(
+        XYZConfig.from_url(
+            OSM_TEMPLATE,
+            zoom=zoom,
+            output_format=Format.PNG,
+            chunk_size=(256, 256),
+        ),
+        bbox,
+        CRS.EPSG_4326,
+        compute=True,
+        show_progress=False,
+    )
+
+    assert result.shape == (256, 256)
+    assert result.attrs["crs"] == CRS.EPSG_3857.value
+    assert result.attrs["bbox_requested"]["crs"] == CRS.EPSG_4326.value
+    assert result.attrs["bbox_requested"]["min_x"] == pytest.approx(bbox.min_x)
+    assert result.attrs["transform_source"] == "mosaic_bbox"
+
+    exp_min_x, exp_min_y, exp_max_x, exp_max_y = _independent_tile_bounds_3857(
+        tile_x, tile_y, zoom
+    )
+    a, _b, c, _d, e, f = result.attrs["transform"]
+    assert a == pytest.approx((exp_max_x - exp_min_x) / 256)
+    assert e == pytest.approx((exp_min_y - exp_max_y) / 256)  # north-up, e < 0
+    assert c == pytest.approx(exp_min_x)
+    assert f == pytest.approx(exp_max_y)
+    assert result.coords["x"].values[0] == pytest.approx(c + a * 0.5)
+    assert result.coords["y"].values[0] == pytest.approx(f + e * 0.5)
+
+
+def test_xyz_london_z16_affine_matches_tile_union_3857(
+    png_tile_bytes: bytes,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Docs London window: mosaic georef = tile-union metres, not query degrees."""
+
+    monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
+
+    zoom = 16
+    bbox = BoundingBox(
+        min_x=-0.005,
+        min_y=51.495,
+        max_x=0.005,
+        max_y=51.505,
+        crs=CRS.EPSG_4326,
+    )
+    x_min, y_min, x_max, y_max = _tile_range_for_bbox(bbox, zoom)
+    rows = y_max - y_min + 1
+    cols = x_max - x_min + 1
+    assert (rows, cols) == (4, 2)
+    height, width = rows * 256, cols * 256
+    assert (height, width) == (1024, 512)
+
+    result = create_array(
+        XYZConfig.from_url(
+            OSM_TEMPLATE,
+            zoom=zoom,
+            output_format=Format.PNG,
+            chunk_size=(256, 256),
+        ),
+        bbox,
+        CRS.EPSG_4326,
+        compute=True,
+        show_progress=False,
+    )
+
+    assert result.shape == (height, width)
+    assert result.attrs["crs"] == "EPSG:3857"
+    exp_min_x, exp_min_y, exp_max_x, exp_max_y = _independent_union_3857(
+        x_min, y_min, x_max, y_max, zoom
+    )
+    a, _b, c, _d, e, f = result.attrs["transform"]
+    assert a == pytest.approx((exp_max_x - exp_min_x) / width)
+    assert e == pytest.approx((exp_min_y - exp_max_y) / height)
+    assert c == pytest.approx(exp_min_x)
+    assert f == pytest.approx(exp_max_y)
+    # Pixel scale is metre-linear (≈2.39 m/px at z16), not degrees.
+    span = _independent_tile_span_m(zoom)
+    assert a == pytest.approx(span / 256)
+    assert abs(e) == pytest.approx(span / 256)
+
+
+def test_xyz_query_crs_3857_still_labels_native_grid(
+    png_tile_bytes: bytes,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Passing crs=EPSG:3857 still only interprets the bbox; output stays 3857."""
+
+    monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
+
+    zoom = 8
+    tile_x, tile_y = 128, 128
+    min_x, min_y, max_x, max_y = _independent_tile_bounds_3857(tile_x, tile_y, zoom)
+    # Inset in metres inside the tile.
+    margin = (max_x - min_x) * 0.25
+    bbox = BoundingBox(
+        min_x=min_x + margin,
+        min_y=min_y + margin,
+        max_x=max_x - margin,
+        max_y=max_y - margin,
+        crs=CRS.EPSG_3857,
+    )
+
+    result = create_array(
+        XYZConfig.from_url(
+            OSM_TEMPLATE,
+            zoom=zoom,
+            output_format=Format.PNG,
+            chunk_size=(256, 256),
+        ),
+        bbox,
+        CRS.EPSG_3857,
+        compute=True,
+        show_progress=False,
+    )
+
+    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.shape == (256, 256)
+    a, _b, c, _d, e, f = result.attrs["transform"]
+    assert c == pytest.approx(min_x)
+    assert f == pytest.approx(max_y)
+    assert a == pytest.approx((max_x - min_x) / 256)
+    assert e == pytest.approx((min_y - max_y) / 256)

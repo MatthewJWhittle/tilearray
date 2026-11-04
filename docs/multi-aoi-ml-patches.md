@@ -64,8 +64,9 @@ lazy = [
 
 for i, da in enumerate(lazy):
     arr = compute_with_policy(da)
-    # Predictable handoff: request crs=, mosaic Affine, pixel centres, service provenance
-    assert arr.attrs["crs"] == CRS.EPSG_4326.value
+    # Predictable handoff: slippy mosaics label native EPSG:3857 (query crs= still
+    # interprets the bbox); mosaic Affine, pixel centres, service provenance
+    assert arr.attrs["crs"] == CRS.EPSG_3857.value
     assert arr.attrs["transform_source"] == "mosaic_bbox"
     assert arr.attrs["service_type"] == "wmts"
     # Optional: arr.rio.write_crs / write_transform — see how-it-works
@@ -112,7 +113,7 @@ There is **no** `map_aois` helper today. Prefer this loop unless a documented fr
 
 | Expectation | Contract today |
 |-------------|----------------|
-| **CRS** | `crs=` interprets each patch bbox. For WCS / WMS / XYZ / slippy WMTS, `attrs["crs"]` is that same value. For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS (query CRS may differ). Per-tile GeoTIFF tags never silently retag the mosaic |
+| **CRS** | `crs=` interprets each patch bbox. For WCS / WMS, `attrs["crs"]` is that same value. For **XYZ / slippy WMTS**, the mosaic is labelled `EPSG:3857` with a tile-union extent (`bbox_requested` keeps the query window). For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS (query CRS may differ). Per-tile GeoTIFF tags never silently retag the mosaic |
 | **Extent / snap** | Returned mosaic covers the planned / snapped grid for that bbox; it need not equal the input box pixel-for-pixel on fixed WMTS/XYZ grids |
 | **Coords** | `y`/`x` are **pixel centres** consistent with `attrs["transform"]` (`transform_source="mosaic_bbox"`, north-up) |
 | **Shape** | Known at plan time from chunk/grid (or inferred WMTS/XYZ tile coverage); distant patches do **not** share one pixel grid unless you align them yourself |

@@ -57,9 +57,9 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 
 | Symptom | Likely cause | What to do |
 |---------|--------------|------------|
-| “Wrong” CRS vs GeoTIFF tags | Mosaic CRS comes from planning (`attrs["crs"]`), not tags inside tiles | For most paths that is the `crs=` you passed; for metadata-backed WMTS it is the matrix SupportedCRS — see {doc}`how-it-works` georef contract |
+| “Wrong” CRS vs GeoTIFF tags | Mosaic CRS comes from planning (`attrs["crs"]`), not tags inside tiles | For WCS / WMS that is the `crs=` you passed; for XYZ / slippy WMTS it is `EPSG:3857`; for metadata-backed WMTS it is the matrix SupportedCRS — see {doc}`how-it-works` georef contract |
 | `Invalid CRS` / `Did you mean 'EPSG:…'` | Typo or unknown authority (e.g. `EPGS:28992`) | Use a pyproj-valid EPSG string/integer or preset (`CRS.EPSG_27700`); provider codes such as `EPSG:25833` are fine |
-| Expected native-grid CRS ≠ query CRS | **WMTS with TileMatrixSet metadata** labels the mosaic with the matrix SupportedCRS and tile-aligned extent (query bbox may differ; `bbox_requested` keeps the caller's window). Other protocols still use one `crs=` for bbox + mosaic label | Non-slippy WMTS auto-loads GetCapabilities (or pass `matrix=`); see {doc}`guides/wmts` — planning transforms the query window; it does **not** warp downloaded pixels. CRS roles: {doc}`design-principles` |
+| Expected native-grid CRS ≠ query CRS | **XYZ / slippy WMTS** label mosaics `EPSG:3857` over the tile-union extent; **WMTS with TileMatrixSet metadata** labels with the matrix SupportedCRS. Query bbox may differ (`bbox_requested` keeps the caller's window). WCS / WMS still use one `crs=` for bbox + mosaic label | Fixed grids plan in native CRS without warping downloaded pixels — see {doc}`guides/wmts` / {doc}`design-principles` |
 | `TileMatrix '8' was not found` but caps list `08` | Host uses zero-padded matrix ids | Pass `tile_matrix=8` (matched automatically) or the exact caps id `"08"` |
 | Plot looks flipped | Expecting south-up rows | Arrays are **north-up** (row 0 = north); do not flip for display |
 | Missing `nodata` on RGB | Imagery path omits elevation nodata | Expected for JPEG/PNG; elevation GeoTIFF sets `nodata`/`_FillValue` to NaN |

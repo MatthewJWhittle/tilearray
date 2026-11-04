@@ -367,10 +367,14 @@ def create_array(
     ``crs`` is a **single** public argument that interprets the bbox for
     planning. There is **no** client-side raster warp onto another CRS.
 
-    * **WCS / WMS / XYZ / slippy WMTS** — ``attrs["crs"]`` is that same caller
-      ``crs``. Mosaic georef comes from the planned bbox + shape
+    * **WCS / WMS** — ``attrs["crs"]`` is that same caller ``crs``. Mosaic
+      georef comes from the planned bbox + shape
       (``transform_source="mosaic_bbox"``); per-tile GeoTIFF tags never
       silently replace mosaic CRS.
+    * **XYZ / slippy WMTS** — pixels stay on the Web Mercator grid;
+      ``attrs["crs"]`` is ``EPSG:3857`` and the planned extent is the
+      tile-union footprint (``crs`` interprets the query bbox only;
+      ``bbox_requested`` records the caller's window). No client-side warp.
     * **WMTS with TileMatrixSet metadata** — pixels stay on the native matrix
       grid; ``attrs["crs"]`` and the planned extent follow the matrix
       SupportedCRS (query bbox / ``crs`` may differ; ``bbox_requested`` records
@@ -398,8 +402,8 @@ def create_array(
         :class:`~tilearray.types.BoundingBox`, in the units of ``crs``.
     crs:
         Query CRS for the bbox (preset, EPSG string/int, or ``pyproj.CRS``).
-        Also labels the mosaic for WCS / WMS / XYZ / slippy WMTS — see CRS
-        contract above for native WMTS.
+        Also labels the mosaic for WCS / WMS. For XYZ / slippy WMTS and
+        metadata-backed WMTS, see the CRS contract above (native-grid label).
     service_type:
         Optional protocol override when ``service_url`` is a bare string.
         Must match the config when a config is passed.

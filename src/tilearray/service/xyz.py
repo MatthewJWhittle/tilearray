@@ -10,12 +10,16 @@ from ..errors import ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
 
+# Spherical Web Mercator half-world extent (π · WGS84 semi-major axis).
+_WEB_MERCATOR_ORIGIN = math.pi * 6378137.0
+
 
 @register_service(ServiceTypeEnum.XYZ)
 class XYZService(BaseService):
     """Client for XYZ / slippy-map tile endpoints."""
 
     inferred_grid_shape: tuple[int, int] | None = None
+    inferred_mosaic_bbox: BoundingBox | None = None
 
     def __init__(
         self,
@@ -36,6 +40,8 @@ class XYZService(BaseService):
         self.zoom = zoom
         self.tile_size = tile_size
         self.output_format = output_format or Format.PNG
+        # Default query CRS for bbox interpretation when callers omit crs=.
+        # Slippy pixels are always Web Mercator; mosaic labelling uses 3857.
         self.native_crs = crs or CRS.EPSG_4326
 
     @classmethod
@@ -51,6 +57,7 @@ class XYZService(BaseService):
         chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
+        self.inferred_mosaic_bbox = None
         zoom_value = options.get("zoom", self.zoom)
         tile_size_value = options.get("tile_size", self.tile_size)
         zoom = int(zoom_value) if isinstance(zoom_value, (int, str)) else self.zoom
@@ -59,9 +66,9 @@ class XYZService(BaseService):
             if isinstance(tile_size_value, (int, str))
             else self.tile_size
         )
-        target_crs = options.get("crs", self.native_crs)
-        if not isinstance(target_crs, CRS):
-            target_crs = self.native_crs
+        # crs= / options["crs"] is query CRS only (bbox already normalised by
+        # ArrayRequest); slippy mosaics are labelled EPSG:3857 via
+        # inferred_mosaic_bbox — do not label TileGeometry with the query CRS.
 
         working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
         x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
@@ -69,15 +76,18 @@ class XYZService(BaseService):
         rows = y_max - y_min + 1
         cols = x_max - x_min + 1
         self.inferred_grid_shape = (rows, cols)
+        self.inferred_mosaic_bbox = _tile_union_bounds_3857(
+            x_min, y_min, x_max, y_max, zoom
+        )
 
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
-                tile_bbox = _tile_bounds(tile_x, tile_y, zoom, target_crs)
+                tile_bbox = _tile_bounds_3857(tile_x, tile_y, zoom)
                 yield TileGeometry(
                     bbox=tile_bbox,
                     width=tile_size,
                     height=tile_size,
-                    crs=target_crs,
+                    crs=CRS.EPSG_3857,
                     tile_x=tile_x,
                     tile_y=tile_y,
                     zoom=zoom,
@@ -134,7 +144,51 @@ def _lat_to_tile_y(lat: float, zoom: int) -> int:
     )
 
 
+def _tile_span_3857(zoom: int) -> float:
+    """Axis-aligned Web Mercator tile width/height in metres at ``zoom``."""
+
+    return float(2.0 * _WEB_MERCATOR_ORIGIN / float(2**zoom))
+
+
+def _tile_bounds_3857(x: int, y: int, zoom: int) -> BoundingBox:
+    """Native EPSG:3857 footprint of one slippy tile (metre-linear grid)."""
+
+    span = _tile_span_3857(zoom)
+    min_x = -_WEB_MERCATOR_ORIGIN + x * span
+    max_x = min_x + span
+    max_y = _WEB_MERCATOR_ORIGIN - y * span
+    min_y = max_y - span
+    return BoundingBox(
+        min_x=min_x,
+        min_y=min_y,
+        max_x=max_x,
+        max_y=max_y,
+        crs=CRS.EPSG_3857,
+    )
+
+
+def _tile_union_bounds_3857(
+    x_min: int, y_min: int, x_max: int, y_max: int, zoom: int
+) -> BoundingBox:
+    """Tile-aligned mosaic extent in EPSG:3857 for an inclusive XYZ index range."""
+
+    span = _tile_span_3857(zoom)
+    return BoundingBox(
+        min_x=-_WEB_MERCATOR_ORIGIN + x_min * span,
+        min_y=_WEB_MERCATOR_ORIGIN - (y_max + 1) * span,
+        max_x=-_WEB_MERCATOR_ORIGIN + (x_max + 1) * span,
+        max_y=_WEB_MERCATOR_ORIGIN - y_min * span,
+        crs=CRS.EPSG_3857,
+    )
+
+
 def _tile_bounds(x: int, y: int, zoom: int, crs: CRS) -> BoundingBox:
+    """Geographic envelope of a slippy tile, optionally reprojected.
+
+    Prefer :func:`_tile_bounds_3857` for mosaic georef — corner lon/lat envelopes
+    are for tile-index helpers and tests, not for labelling Mercator pixels.
+    """
+
     scale = 2**zoom
     min_x = x / scale * 360.0 - 180.0
     max_x = (x + 1) / scale * 360.0 - 180.0
