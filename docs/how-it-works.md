@@ -88,18 +88,9 @@ Soft-fail knobs (`on_tile_error`, `soft_fail`, `soft_fill_value`, `soft_fail_max
 
 API surface: {doc}`api/index`. When a knob misbehaves: {doc}`troubleshooting`.
 
-### Concurrency names: what each one controls
+### Concurrency names (short)
 
-Similar names, different jobs. **Host ceiling ≠ call politeness ≠ Dask threads.**
-
-| Name | Where | Job |
-|------|-------|-----|
-| `max_concurrent_requests` | `*Config` field **and** `create_array` override via `**service_options` | Config / preset **host ceiling** input. On a preset config, a **lower** override is call-local only; a **raise** lifts the shared ceiling. |
-| `FetchPolicy.max_concurrent` | Policy / attrs `tilearray_fetch_policy` | **Shared process-gate** (part of the fetcher `cache_key`). |
-| `call_max_concurrent` | `FetchPolicy` + `FetchProgress` | **Per-call / per-session** in-flight cap; **not** in `cache_key`. |
-| `compute_with_policy(..., max_concurrent=)` | Compute helper | **Dask worker sizing only** (merges into attrs policy for `num_workers`). The HTTP gate was fixed at `create_array`. |
-
-Do **not** treat `FetchPolicy(max_concurrent=1)` as the polite-call setting — that shrinks the shared gate for sibling sessions. Prefer a lower `max_concurrent_requests=` override on `create_array` (or `call_max_concurrent` on the session) so the host ceiling stays intact.
+**Host ceiling ≠ call politeness ≠ Dask threads.** Preset / config `max_concurrent_requests` is the host ceiling; a lower override on `create_array` is call-local; `compute_with_policy(..., max_concurrent=)` sizes Dask workers only. Do not shrink `FetchPolicy.max_concurrent` to “be polite” — that lowers the shared process gate for sibling sessions. Full name map: {doc}`api/index`.
 
 Stay at or below preset ceilings on multi-tile cold mosaics. Soft-fill is plan-time opt-in; the default remains hard `NetworkError` + sibling abort after retries.
 

@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- First-run UX: homepage / README value prop (why vs hand-rolled OGC assemble, fit vs rioxarray/GDAL, non-goals); Start-here reorder (tutorial → inspect → how-it-works → guides → troubleshooting → API; multi-AOI demoted); five-minute OSM XYZ primary path with plot + CRS/transform/extent; other protocols under “Also”; thinned how-it-works concurrency name map (link API)
+- Quickstart / guides / README / artifact script: XYZ examples show query lon/lat `crs=` vs mosaic `EPSG:3857` (never describe slippy output as EPSG:4326); OSM/GIBS figure axes labelled in metres
 - Design principles / how-it-works / API / troubleshooting: XYZ and slippy WMTS mosaics are labelled native `EPSG:3857` (tile-union extent); `crs=` is query-only for those paths — no longer documented as “still target” vs metadata WMTS
 - Broader plain-reader docs pass: drop agent/process slogans and checklist voice from user-facing pages; demote maintainer freeze / writing-principles / building-docs pages off the published Sphinx site (kept in-repo for CONTRIBUTING / AGENTS); rename worked-examples guide; trim roadmap and duplicated CRS digressions
 - Inspect how-to / API index: everyday entry is `inspect_endpoint(url)`; `inspect_capabilities` is offline / fixture body parsing only (no longer a peer “Offline / fixtures” how-to section)

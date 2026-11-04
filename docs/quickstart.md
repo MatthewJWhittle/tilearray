@@ -1,8 +1,10 @@
 # Quick start
 
-These examples hit **live** public hosts. Prefer {py:func}`tilearray.compute_with_policy` so Dask workers match the fetch ceiling. For plotted walkthroughs, see {doc}`guides/index`. More endpoints: {doc}`example-sources`.
+Five minutes from install to a plotted, georeferenced mosaic. Prefer {py:func}`tilearray.compute_with_policy` so Dask workers match the fetch ceiling. Visual walkthroughs: {doc}`guides/index`. More endpoints: {doc}`example-sources`.
 
-## XYZ — OpenStreetMap
+## First run — OpenStreetMap XYZ
+
+Install ({doc}`install`), then fetch a tiny central-London window:
 
 ```python
 from tilearray import XYZConfig, compute_with_policy, create_array
@@ -11,19 +13,39 @@ from tilearray.types import CRS
 
 config = XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 
+# Query bbox in lon/lat
 da = create_array(
     config,
-    bbox=(-0.005, 51.495, 0.005, 51.505),  # small window near central London
+    bbox=(-0.005, 51.495, 0.005, 51.505),
     crs=CRS.EPSG_4326,
 )
 arr = compute_with_policy(da)
-# Palette PNGs → single-band; this window is about (1024, 512)
-print(arr.shape, da.attrs["service_type"])
+
+print(arr.shape)  # palette PNGs → single-band; ~ (1024, 512) for this window
+print(da.attrs["crs"], da.attrs["transform"])
+print(
+    float(arr.x.min()),
+    float(arr.y.min()),
+    float(arr.x.max()),
+    float(arr.y.max()),
+)  # mosaic extent in metres
+arr.plot.imshow(cmap="gray", add_colorbar=False)
 ```
 
-`osm_fetch_defaults()` sets an identifiable User-Agent and polite limits (max 2 in-flight, ~2 req/s). Include © OpenStreetMap contributors when displaying map imagery.
+`crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat. Pixels are not client-warped.
 
-## WCS — Environment Agency Lidar
+```{image} _static/guides/osm-london.png
+:alt: OpenStreetMap mosaic over a small central London bbox
+:width: 420px
+```
+
+Map data © OpenStreetMap contributors. `osm_fetch_defaults()` sets an identifiable User-Agent and polite limits (max 2 in-flight, ~2 req/s). Full guide: {doc}`guides/osm-london`.
+
+**Next:** discover layers on an unfamiliar URL ({doc}`inspect-endpoint`), understand plan → fetch → mosaic ({doc}`how-it-works`), or try other hosts below.
+
+## Also — other protocols
+
+### WCS — Environment Agency Lidar
 
 ```python
 from tilearray import WCSConfig, compute_with_policy, create_array
@@ -55,9 +77,9 @@ print(elevation.shape, float(elevation.mean()))
 print(elevation.attrs["crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
 ```
 
-The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. Mosaic attrs carry CRS / Affine `transform` / NaN `nodata` for a simple rioxarray handoff ({doc}`how-it-works`).
+The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["crs"]` matches the `crs=` you passed. Visual walkthrough: {doc}`guides/ea-lidar`.
 
-## WMS — Environment Agency Vegetation Object Model
+### WMS — Environment Agency Vegetation Object Model
 
 ```python
 from tilearray import WMSConfig, compute_with_policy, create_array
@@ -82,7 +104,7 @@ print(img.shape, da.attrs["service_type"])
 
 No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. See {doc}`example-sources` for layer quirks.
 
-## WMTS — Kartverket topo (EPSG:25833)
+### WMTS — Kartverket topo (EPSG:25833)
 
 ```python
 from tilearray import WMTSConfig, compute_with_policy, create_array
@@ -106,10 +128,10 @@ config = WMTSConfig.from_url(
 # Lon/lat AOI → native UTM33 mosaic (tile-aligned extent may expand)
 da = create_array(config, bbox=(10.6, 59.85, 10.8, 59.95), crs="EPSG:4326")
 arr = compute_with_policy(da)
-print(arr.shape, da.attrs["crs"])  # CRS is EPSG:25833
+print(arr.shape, da.attrs["crs"])  # mosaic CRS is EPSG:25833, not the query CRS
 ```
 
-Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough + simpler GIBS WMTS recipe: {doc}`guides/wmts`. To discover layer / TileMatrixSet / matrix ids on an unfamiliar host, use {doc}`inspect-endpoint`.
+Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough: {doc}`guides/wmts`. Unknown hosts: {doc}`inspect-endpoint`.
 
 Many noncontiguous sample boxes (ML chips): {doc}`multi-aoi-ml-patches` — one `create_array` per bbox, not one mosaic over the union of all boxes.
 
