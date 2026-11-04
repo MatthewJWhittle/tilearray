@@ -17,13 +17,13 @@ config = XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 da = create_array(
     config,
     bbox=(-0.005, 51.495, 0.005, 51.505),
-    crs=CRS.EPSG_4326,
+    bbox_crs=CRS.EPSG_4326,
     expand_palette=True,  # full-colour RGB; omit for single-band palette indices
 )
 arr = compute_with_policy(da)
 
 print(arr.shape)  # ~ (1024, 512, 3) for this window
-print(da.attrs["crs"], da.attrs["transform"])
+print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])
 print(
     float(arr.x.min()),
     float(arr.y.min()),
@@ -33,7 +33,7 @@ print(
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-`crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat. Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
+Prefer `bbox_crs=` for the **query** CRS (how you describe the bbox); legacy `crs=` alone still works. XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat (`attrs["bbox_crs"]` keeps the query). Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
 
 ```{image} _static/guides/osm-london.png
 :alt: OpenStreetMap mosaic over a small central London bbox
@@ -78,7 +78,7 @@ print(elevation.shape, float(elevation.mean()))
 print(elevation.attrs["crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
 ```
 
-The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["crs"]` matches the `crs=` you passed. Visual walkthrough: {doc}`guides/ea-lidar`.
+The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["crs"]` matches the query CRS (`bbox_crs=` / legacy `crs=`). Visual walkthrough: {doc}`guides/ea-lidar`.
 
 ### WMS — Environment Agency Vegetation Object Model
 

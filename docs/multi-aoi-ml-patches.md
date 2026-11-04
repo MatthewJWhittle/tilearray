@@ -113,13 +113,13 @@ There is **no** `map_aois` helper today. Prefer this loop unless a documented fr
 
 | Expectation | Contract today |
 |-------------|----------------|
-| **CRS** | `crs=` interprets each patch bbox. For WCS / WMS, `attrs["crs"]` is that same value. For **XYZ / slippy WMTS**, the mosaic is labelled `EPSG:3857` with a tile-union extent (`bbox_requested` keeps the query window). For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS (query CRS may differ). Per-tile GeoTIFF tags never silently retag the mosaic |
+| **CRS** | Prefer `bbox_crs=` (legacy `crs=` still works) to interpret each patch bbox. For WCS / WMS, `attrs["crs"]` matches that query. For **XYZ / slippy WMTS**, the mosaic is labelled `EPSG:3857` with a tile-union extent (`bbox_requested` keeps the query window). For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS (query CRS may differ). Per-tile GeoTIFF tags never silently retag the mosaic |
 | **Extent / snap** | Returned mosaic covers the planned / snapped grid for that bbox; it need not equal the input box pixel-for-pixel on fixed WMTS/XYZ grids |
 | **Coords** | `y`/`x` are **pixel centres** consistent with `attrs["transform"]` (`transform_source="mosaic_bbox"`, north-up) |
 | **Shape** | Known at plan time from chunk/grid (or inferred WMTS/XYZ tile coverage); distant patches do **not** share one pixel grid unless you align them yourself |
 | **Provenance** | `attrs["service_type"]`, fetch-policy summary, optional coverage/layer identity — use these when writing training metadata |
 
-Full CRS roles and planned `bbox_crs=`: {doc}`design-principles`. Do not assume client-side warp to an arbitrary patch size.
+Full CRS roles (`bbox_crs=` query vs output): {doc}`design-principles`. Do not assume client-side warp to an arbitrary patch size.
 
 ---
 

@@ -185,6 +185,7 @@ def test_array_request_rejects_nonpositive_sizes() -> None:
             service_url="http://example.com/wcs",
             bbox=bbox,
             target_crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             chunk_size=(0, 8),
             grid_shape=(1, 1),
         )
@@ -193,6 +194,7 @@ def test_array_request_rejects_nonpositive_sizes() -> None:
             service_url="http://example.com/wcs",
             bbox=bbox,
             target_crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             chunk_size=(8, 8),
             grid_shape=(1, 0),
         )
@@ -201,6 +203,7 @@ def test_array_request_rejects_nonpositive_sizes() -> None:
             service_url="http://example.com/wcs",
             bbox=bbox,
             target_crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             chunk_size=(8, 8),
             grid_shape=(1, 1),
             resolution=(-1.0, 1.0),
@@ -711,11 +714,11 @@ def test_create_array_single_tile_pixel_center_coords(
 def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """Design contract (#98): mosaic attrs CRS is the request crs=; no silent retag.
+    """Design contract (#98): WCS/WMS mosaic attrs CRS matches the query CRS.
 
-    Alpha uses one ``crs=`` for bbox interpretation and mosaic labelling. Pixel
+    Prefer ``bbox_crs=``; ``crs=`` alone still labels WCS/WMS mosaics. Pixel
     values are not client-warped onto another CRS; GeoTIFF tags must not replace
-    ``attrs["crs"]``. Separate ``bbox_crs`` / output CRS is target design only.
+    ``attrs["crs"]``. Fixed-grid XYZ/WMTS label with the native grid CRS.
     """
 
     bbox = BoundingBox(

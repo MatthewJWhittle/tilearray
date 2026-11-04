@@ -65,6 +65,7 @@ class ArrayPlan:
     planned_bbox: BoundingBox
     bbox_snap_delta: dict[str, float] | None
     crs: str
+    bbox_crs: str
     chunk_size: tuple[int, int]
     grid_shape: tuple[int, int]
     resolution: tuple[float, float] | None
@@ -94,7 +95,8 @@ class ArrayPlan:
                 f"  service: {self.service_type}"
                 + (f"  format: {self.output_format}" if self.output_format else "")
             ),
-            f"  crs: {self.crs}",
+            f"  bbox_crs (query): {self.bbox_crs}",
+            f"  crs (output): {self.crs}",
             (
                 "  requested bbox: "
                 f"({self.requested_bbox.min_x}, {self.requested_bbox.min_y}, "
@@ -221,8 +223,9 @@ class FetchSummary:
 def plan_array(
     service_url: str | ServiceConfigModel,
     bbox: BoundingBox | BBoxTuple,
-    crs: CRS | str | int,
+    crs: CRS | str | int | None = None,
     *,
+    bbox_crs: CRS | str | int | None = None,
     service_type: ServiceTypeEnum | None = None,
     chunk_size: tuple[int, int] | None = None,
     grid_shape: tuple[int, int] | None = None,
@@ -234,9 +237,10 @@ def plan_array(
 ) -> ArrayPlan:
     """Plan tile requests without building a mosaic or fetching pixels.
 
-    Mirrors the planning inputs of :func:`~tilearray.create_array`. Capabilities
-    / DescribeCoverage may still run for WCS (same as today). Mosaic tile bytes
-    are not fetched unless ``probe_bands=True`` (opt-in band discovery).
+    Mirrors the planning inputs of :func:`~tilearray.create_array` (including
+    ``bbox_crs=`` / legacy ``crs=``). Capabilities / DescribeCoverage may still
+    run for WCS (same as today). Mosaic tile bytes are not fetched unless
+    ``probe_bands=True`` (opt-in band discovery).
 
     Use this to inspect grid size, concurrency ceiling, and cache warmth before
     ``create_array`` → ``compute_with_policy``.
@@ -264,6 +268,7 @@ def plan_array(
         service_config=service_config,
         bbox_input=bbox,
         crs_input=crs,
+        bbox_crs_input=bbox_crs,
         chunk_size_input=chunk_size,
         grid_shape_input=grid_shape,
         output_format_input=output_format,
@@ -376,6 +381,7 @@ def plan_array(
         planned_bbox=request.bbox,
         bbox_snap_delta=request.bbox_snap_delta,
         crs=request.target_crs.value,
+        bbox_crs=request.bbox_crs.value,
         chunk_size=(chunk_width, chunk_height),
         grid_shape=request.grid_shape,
         resolution=request.resolution,

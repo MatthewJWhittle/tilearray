@@ -257,6 +257,41 @@ def normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
     return BoundingBox.from_tuple(bbox, crs)
 
 
+def resolve_query_crs(
+    crs: CRS | str | int | None = None,
+    *,
+    bbox_crs: CRS | str | int | None = None,
+) -> CRS:
+    """Resolve the caller query CRS from ``bbox_crs=`` and/or legacy ``crs=``.
+
+    ``bbox_crs`` is the unambiguous query CRS (how the AOI is described).
+    ``crs`` alone keeps today's alpha behaviour. Passing both with different
+    values fails — do not invent a dual meaning. Neither fails loudly.
+    """
+
+    if crs is None and bbox_crs is None:
+        raise ValidationError(
+            "Pass bbox_crs= (preferred) or crs= to interpret the bbox. "
+            "bbox_crs= is the unambiguous query CRS; crs= remains for alpha "
+            "compatibility with the same query behaviour."
+        )
+    if crs is not None and bbox_crs is not None:
+        parsed_crs = CRS.parse(crs)
+        parsed_bbox = CRS.parse(bbox_crs)
+        if parsed_crs != parsed_bbox:
+            raise ValidationError(
+                f"crs={parsed_crs.value!r} and bbox_crs={parsed_bbox.value!r} "
+                "disagree. Use bbox_crs= for the query CRS only; during alpha "
+                "crs= alone still works with today's query behaviour. Do not "
+                "pass both with different values."
+            )
+        return parsed_bbox
+    if bbox_crs is not None:
+        return CRS.parse(bbox_crs)
+    assert crs is not None
+    return CRS.parse(crs)
+
+
 def validate_grid_shape(grid: tuple[int, int]) -> tuple[int, int]:
     rows, cols = grid
     if rows <= 0 or cols <= 0:
@@ -343,6 +378,7 @@ class ArrayRequest(BaseModel):
     service_url: str
     bbox: BoundingBox
     target_crs: CRS
+    bbox_crs: CRS
     chunk_size: tuple[int, int]
     grid_shape: tuple[int, int]
     resolution: tuple[float, float] | None = None
@@ -413,15 +449,16 @@ class ArrayRequest(BaseModel):
         service_url: str,
         service_config: ServiceConfigModel | None,
         bbox_input: BoundingBox | BBoxTuple,
-        crs_input: CRS | str | int,
+        crs_input: CRS | str | int | None,
         chunk_size_input: tuple[int, int] | None,
         grid_shape_input: tuple[int, int] | None,
         output_format_input: Format | None,
         cache_dir_input: str | Path | None,
         service_options_input: dict[str, Any],
+        bbox_crs_input: CRS | str | int | None = None,
     ) -> ArrayRequest:
-        target_crs = CRS.parse(crs_input)
-        normalized_bbox = normalize_bbox(bbox_input, target_crs)
+        query_crs = resolve_query_crs(crs_input, bbox_crs=bbox_crs_input)
+        normalized_bbox = normalize_bbox(bbox_input, query_crs)
 
         defaults = service_config.array_defaults() if service_config else {}
 
@@ -483,7 +520,8 @@ class ArrayRequest(BaseModel):
             service_config=service_config,
             service_url=service_url,
             bbox=normalized_bbox,
-            target_crs=target_crs,
+            target_crs=query_crs,
+            bbox_crs=query_crs,
             chunk_size=(chunk_height, chunk_width),
             grid_shape=grid,
             resolution=resolution,
@@ -566,6 +604,7 @@ class ArrayRequest(BaseModel):
     ) -> dict[str, Any]:
         attrs: dict[str, Any] = {
             "crs": self.target_crs.value,
+            "bbox_crs": self.bbox_crs.value,
             "service_url": self.service_url,
             "service_type": service.service_type.value,
         }

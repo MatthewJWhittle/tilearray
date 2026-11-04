@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Public `bbox_crs=` on `create_array` / `plan_array` / `load_array` for the unambiguous **query** CRS. Legacy `crs=` alone keeps today's query behaviour during alpha; passing both with different values raises `ValidationError`. `attrs["bbox_crs"]` always records the query CRS; `attrs["crs"]` remains the mosaic / output CRS (native grid for XYZ / WMTS; query CRS for WCS / WMS). `ArrayPlan.bbox_crs` mirrors the query. No client-side warp. Docs: design-principles, how-it-works, API, quickstart, troubleshooting
+
 ### Changed
 
 - Docs first-run path: install / quickstart / README / OSM London guide state that plotting needs a separate `matplotlib` install (not a core dependency; no `[plot]` extra). Primary OSM snippets use `expand_palette=True` for full-colour RGB and note that the default keeps palette indices; guide figure artifact script aligned

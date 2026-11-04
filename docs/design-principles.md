@@ -42,11 +42,9 @@ Keep these concepts separate in types, docs, and tests:
 
 ### Current alpha behaviour
 
-Today `create_array(..., crs=)` is a **single** public CRS argument that interprets the bbox. It accepts any pyproj-valid CRS (presets or EPSG strings such as `EPSG:25833`), not a fixed four-value enum. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS.
+Prefer `create_array(..., bbox_crs=)` for the **query** CRS (how the bbox is described). Legacy `crs=` alone still works with the same query behaviour during alpha; passing both with different values fails. Any pyproj-valid CRS is accepted (presets or EPSG strings such as `EPSG:25833`). Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS. `attrs["bbox_crs"]` always records the query CRS; `attrs["crs"]` is the output / mosaic CRS.
 
-**Labelling today:** for WCS / WMS, `attrs["crs"]` is that same caller `crs=`. For **XYZ and slippy WMTS** (no TileMatrixSet metadata), mosaics are labelled `EPSG:3857` with a tile-union extent — `crs=` interprets the query bbox only (`bbox_requested` keeps the caller's window); pixels are not client-warped. For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS and a tile-aligned extent (query bbox may differ). A separate public `bbox_crs=` for every protocol remains **planned** — do not treat the full three-role API as already shipped, but do not document native fixed-grid output CRS (WMTS matrices / XYZ·slippy 3857) as unshipped either.
-
-Prefer a clean documented contract over preserving an ambiguous `crs` forever; any migration will be explicit during alpha.
+**Labelling today:** for WCS / WMS, `attrs["crs"]` matches the query CRS (`bbox_crs` / legacy `crs`). For **XYZ and slippy WMTS** (no TileMatrixSet metadata), mosaics are labelled `EPSG:3857` with a tile-union extent — query CRS interprets the bbox only (`bbox_requested` keeps the caller's window); pixels are not client-warped. For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS and a tile-aligned extent (query bbox may differ). Prefer `bbox_crs=` in new code; do not overload `crs` with a second meaning.
 
 ### Imagery vs numerical coverages
 

@@ -59,7 +59,7 @@ Exported today; decide keep / demote / document before freeze:
 
 | Symbol | Note |
 |--------|------|
-| `CRS`, `Format`, `BoundingBox`, `BBoxTuple` | Caller-facing; `CRS` accepts any pyproj-valid projected/geographic CRS (#92 / #105). One public `crs=` interprets the bbox; WCS/WMS still label with it; XYZ/slippy label `EPSG:3857` tile-union; metadata-backed WMTS labels with matrix SupportedCRS (target: separate public `bbox_crs=` — see {doc}`design-principles`) |
+| `CRS`, `Format`, `BoundingBox`, `BBoxTuple` | Caller-facing; `CRS` accepts any pyproj-valid projected/geographic CRS (#92 / #105). Prefer public `bbox_crs=` for the query CRS; legacy `crs=` alone still works during alpha. WCS/WMS label mosaics with the query CRS; XYZ/slippy label `EPSG:3857` tile-union; metadata-backed WMTS labels with matrix SupportedCRS (`attrs["bbox_crs"]` records the query) — see {doc}`design-principles` |
 | `TileRequest`, `TileResponse`, `TileGeometry` | Useful for advanced callers; candidates to keep thin or document as “supported advanced” |
 | `CoverageDescription`, `ServiceCapabilities`, `SpatialExtent`, `TemporalExtent`, `WCSResponse`, `ServiceTypeEnum` | Capability / parse shapes — prefer not growing these as a second API |
 | `detect_service_type`, `get_service`, `register_service` | Registry hooks; keep for extension, avoid teaching as the happy path |
