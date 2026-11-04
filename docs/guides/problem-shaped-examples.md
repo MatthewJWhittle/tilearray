@@ -33,3 +33,4 @@ Stay polite: modest bboxes, fetch presets where they exist, no bulk OSM scrape. 
 ## Honesty rule
 
 A community post that *inspired* an example is not automatic proof that tilearray “fixes” that post. Treat notebook runs and these guides as evidence you can inspect, then file remaining gaps as issues.
+
