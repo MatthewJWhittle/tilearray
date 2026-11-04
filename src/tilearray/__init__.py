@@ -5,7 +5,12 @@ from ._version import __version__
 __author__ = "Matthew Whittle"
 __email__ = "47574804+MatthewJWhittle@users.noreply.github.com"
 
-from .array import compute_with_policy, create_array, load_array
+from .array import (
+    compute_with_policy,
+    create_array,
+    load_array,
+    recommend_grid_shape,
+)
 from .errors import (
     ConfigurationError,
     NetworkError,
@@ -22,6 +27,7 @@ from .inspect import (
     inspect_capabilities,
     inspect_endpoint,
 )
+from .plan import ArrayPlan, FetchSummary, fetch_summary, plan_array
 from .service import (
     ServiceConfig,
     TileGeometry,
@@ -61,6 +67,11 @@ __all__ = [
     "compute_with_policy",
     "create_array",
     "load_array",
+    "plan_array",
+    "recommend_grid_shape",
+    "fetch_summary",
+    "ArrayPlan",
+    "FetchSummary",
     "FetchPolicy",
     "TileArrayError",
     "ServiceError",

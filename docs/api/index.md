@@ -14,10 +14,17 @@ Public entry points for building lazy mosaics, configuring services, and handlin
    create_array
    load_array
    compute_with_policy
+   plan_array
+   recommend_grid_shape
+   fetch_summary
+   ArrayPlan
+   FetchSummary
    array.compute_thread_pool_size
 ```
 
 `create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_with_policy` over plain `.compute()` so Dask workers match the fetch ceiling. {py:func}`~tilearray.load_array` is eager sugar (`create_array(..., compute=True)` by default) — useful for tiny windows, not a second primary habit. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
+
+Before a large fetch, {py:func}`~tilearray.plan_array` returns a read-only {py:class}`~tilearray.ArrayPlan` (request count, planned bbox, concurrency ceiling, cache warm/cold, honest unknowns). {py:func}`~tilearray.recommend_grid_shape` is the pure AOI helper for resolution × chunk sizing. After planning or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters without inventing wall time or cost.
 
 **`crs=` today:** one argument interprets the bbox and labels the mosaic (`attrs["crs"]`). Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. There is no client-side raster warp onto another CRS. Separate query / service / output CRS roles are **target** design — see {doc}`../design-principles`.
 
