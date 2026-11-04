@@ -45,6 +45,7 @@ Host ceiling / concurrency semantics are unchanged — progress only observes ti
 | Symptom | Likely mix-up | What to do |
 |---------|---------------|------------|
 | One polite call serialises sibling mosaics | Shared gate shrunk (`FetchPolicy.max_concurrent=1` / raised-then-shared override) | Lower `max_concurrent_requests=` on `create_array` (call-local) or set `call_max_concurrent`; keep the preset host ceiling |
+| Twenty ML sites → huge empty mosaic / host stampede | Union bbox, or raised ceiling “for 20 jobs” | One `create_array` per bbox; sequential (or small-batch) compute under the shared gate — {doc}`multi-aoi-ml-patches` |
 | `compute_with_policy(..., max_concurrent=N)` changed HTTP in-flight | That kwarg sizes **Dask workers only** | Set fetch politeness at `create_array` / config; see the name map in {doc}`how-it-works` |
 | Headers / `resolution` / AIMD knobs “ignored” or applied oddly | Same `**service_options` bag feeds **fetch**, **planner**, and **identity** families | Match the key to its family in {doc}`how-it-works` (fetch keys are popped into `FetchPolicy` first) |
 

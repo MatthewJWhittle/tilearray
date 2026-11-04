@@ -111,6 +111,8 @@ print(arr.shape, da.attrs["crs"])  # CRS is EPSG:25833
 
 Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough + simpler GIBS WMTS recipe: {doc}`guides/wmts`. To discover layer / TileMatrixSet / matrix ids on an unfamiliar host, use {doc}`inspect-endpoint`.
 
+Many noncontiguous sample boxes (ML chips): {doc}`multi-aoi-ml-patches` — one `create_array` per bbox, not a union megamosaic.
+
 ## Private or keyed hosts
 
 Same habit: config → `create_array` → `compute_with_policy`. Pass static credentials on the config with `params=` (query API keys, legacy username/password query params) or `headers=` (Bearer, API-key headers, Basic). Prefer env-backed `params=` over secrets in XYZ URL templates. Details and the WCS/WMTS capabilities caveat: {doc}`troubleshooting`. Keyed OS Maps XYZ: {doc}`example-sources`.
