@@ -88,7 +88,7 @@ These landed on `main` during the post-0.2.0 uniqueness / DX queue. They are **A
 | [#109](https://github.com/MatthewJWhittle/tilearray/pull/109) | [#61](https://github.com/MatthewJWhittle/tilearray/issues/61) | `recommend_grid_shape`, `plan_array` / `ArrayPlan`, `fetch_summary` / `FetchSummary` |
 | [#112](https://github.com/MatthewJWhittle/tilearray/pull/112) | [#87](https://github.com/MatthewJWhittle/tilearray/issues/87) | Multi-AOI / ML sample-loop **docs + offline tests** — **no** orchestration API |
 | [#113](https://github.com/MatthewJWhittle/tilearray/pull/113) | [#59](https://github.com/MatthewJWhittle/tilearray/issues/59) | Don’t-stampede **docs + honesty** (process-local gates); warn on non-`threads` scheduler — **no** distributed coordinator |
-| [#103](https://github.com/MatthewJWhittle/tilearray/pull/103) | [#97](https://github.com/MatthewJWhittle/tilearray/issues/97) | Community problem-shaped worked examples (notebook + guide) — **no** new library exports |
+| [#116](https://github.com/MatthewJWhittle/tilearray/pull/116) / [#103](https://github.com/MatthewJWhittle/tilearray/pull/103) | [#97](https://github.com/MatthewJWhittle/tilearray/issues/97) | Community problem-shaped worked examples (notebook + guide) — **no** new library exports |
 | [#104](https://github.com/MatthewJWhittle/tilearray/pull/104) | docs filter | Maintainer docs-writing principles / leakage seatbelt — **no** runtime API |
 
 **Still not a public orchestration API:** multi-AOI remains a documented loop ({doc}`multi-aoi-ml-patches`); fetch gates remain process-local. Design before inventing `map_aois` or a cross-process coordinator.
