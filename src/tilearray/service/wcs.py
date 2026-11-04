@@ -663,12 +663,10 @@ class WCSService(BaseService):
         )
 
     def _coerce_format(self, fmt: Any) -> Format:
-        if isinstance(fmt, Format):
-            return fmt
-        if isinstance(fmt, str):
-            try:
-                return Format(fmt)
-            except ValueError as exc:
+        try:
+            return Format.coerce(fmt)
+        except ValueError as exc:
+            if isinstance(fmt, str):
                 meta = self.coverage_metadata()
                 raise ValidationError(
                     unsupported_format_message(
@@ -678,7 +676,7 @@ class WCSService(BaseService):
                         native_format=None if meta is None else meta.native_format,
                     )
                 ) from exc
-        raise ValidationError(f"Invalid WCS format value: {fmt!r}")
+            raise ValidationError(f"Invalid WCS format value: {fmt!r}") from exc
 
     def _coerce_crs(self, crs: Any) -> CRS:
         return CRS.parse(crs)

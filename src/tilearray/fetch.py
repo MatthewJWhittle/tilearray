@@ -20,6 +20,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from ._http_client import make_sync_client
 from .error_messages import looks_like_html, redact_url
 from .errors import NetworkError, ValidationError
 from .pressure import (
@@ -648,12 +649,12 @@ class TileFetcher:
         )
         self.stats = FetchStats()
         pool_size = self._policy.max_connections or self._policy.max_concurrent
-        self._client = httpx.Client(
+        self._client = make_sync_client(
+            timeout=self._policy.timeout,
             limits=httpx.Limits(
                 max_connections=pool_size,
                 max_keepalive_connections=self._policy.max_concurrent,
             ),
-            timeout=httpx.Timeout(self._policy.timeout),
         )
         self._adaptive_gate: AdaptiveConcurrencyGate | None = None
         self._semaphore: threading.Semaphore | None = None

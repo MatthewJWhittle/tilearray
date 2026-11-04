@@ -234,14 +234,12 @@ class WMSService(BaseService):
         )
 
     def _coerce_format(self, fmt: Any) -> Format:
-        if isinstance(fmt, Format):
-            return fmt
-        if isinstance(fmt, str):
-            try:
-                return Format(fmt)
-            except ValueError as exc:
+        try:
+            return Format.coerce(fmt)
+        except ValueError as exc:
+            if isinstance(fmt, str):
                 raise ValidationError(unsupported_format_message("WMS", fmt)) from exc
-        raise ValidationError(f"Invalid WMS format value: {fmt!r}")
+            raise ValidationError(f"Invalid WMS format value: {fmt!r}") from exc
 
     def _coerce_crs(self, crs: Any) -> CRS:
         return CRS.parse(crs)

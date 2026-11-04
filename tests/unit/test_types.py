@@ -141,3 +141,12 @@ def test_temporal_extent_validation() -> None:
 def test_format_enum_values() -> None:
     assert Format.GEOTIFF.value == "image/tiff"
     assert Format.PNG.value == "image/png"
+
+
+def test_format_coerce_accepts_member_and_mime() -> None:
+    assert Format.coerce(Format.PNG) is Format.PNG
+    assert Format.coerce("image/jpeg") is Format.JPEG
+    with pytest.raises(ValueError):
+        Format.coerce("image/webp")
+    with pytest.raises(ValueError, match="Invalid format value"):
+        Format.coerce(123)

@@ -267,6 +267,20 @@ class Format(str, Enum):
     PNG = "image/png"
     JPEG = "image/jpeg"
 
+    @classmethod
+    def coerce(cls, value: Any) -> Format:
+        """Normalise a format input to a :class:`Format` member.
+
+        Raises :class:`ValueError` for unknown MIME strings (callers wrap with
+        protocol-specific messages) and for non-string / non-``Format`` values.
+        """
+
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, str):
+            return cls(value)
+        raise ValueError(f"Invalid format value: {value!r}")
+
 
 BBoxTuple = tuple[float, float, float, float]
 
