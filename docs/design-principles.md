@@ -92,3 +92,5 @@ Before adding a new public option or adapter:
 7. Does the change keep GDAL-free defaults and host politeness intact?
 
 Engineering standards for contributors live in [guidelines.md](https://github.com/MatthewJWhittle/tilearray/blob/main/guidelines.md) and [AGENTS.md](https://github.com/MatthewJWhittle/tilearray/blob/main/AGENTS.md). Product ethos stays here.
+
+**When writing user-facing docs** (Sphinx, README, usage guides), apply the cut filter in {doc}`docs-writing-principles` — reader jobs only; keep release-process and agent/PR chatter out of Start-here paths. Do not restate that filter here.
