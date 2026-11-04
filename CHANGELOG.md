@@ -25,12 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
-<<<<<<< HEAD
 - how-it-works / troubleshooting / OSM guide: clipped WCS placement, band/dtype/palette contract, and coverage-pad vs soft-fail distinction (#94, #95)
 - how-it-works / troubleshooting / API: plan-before-fetch recipe, cache lifecycle (`{sha}.tile` + `.meta`, warm vs cold, when to clear), and fetch summary for diagnosing host pressure (#61)
-=======
 - Multi-AOI / ML sample patches how-to: per-bbox `create_array` → `compute_with_policy` → save/release loop; warn against union megamosaic; shared host-gate vs overlapping computes; snapping/provenance, cache reuse, soft-fail vs nodata; Dask list-friendly without an orchestration API. Linked from Start-here, quickstart, how-it-works, troubleshooting. Offline unit coverage for noncontiguous WMTS loops, union-tile inflation, shared ceiling under concurrent mosaics, and cache warm hits (#87)
->>>>>>> 57a9202 (Document multi-AOI / ML sample loops under shared host politeness)
 - Codify design principles: canonical `docs/design-principles.md` (ethos, CRS roles, access vs processing, imagery vs numerical coverages), root `AGENTS.md`, audited `guidelines.md` (Sphinx / Python 3.9+, API design checklist), and cross-links from CONTRIBUTING / README / how-it-works / API / troubleshooting. Labels current single-`crs=` behaviour vs target `bbox_crs` / native-grid output; no version bump (#98)
 - Document arbitrary CRS inputs on `create_array` / API / troubleshooting; EA Lidar guide notes British National Grid as a non-Mercator example (#92)
 - WMTS quickstart / how-it-works / troubleshooting note native TileMatrixSet grids (load GetCapabilities or pass `matrix=`) (#93)
