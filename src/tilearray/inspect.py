@@ -885,6 +885,14 @@ def _resolve_format(
     return fmt
 
 
+_CRS_PRESETS: tuple[CRS, ...] = (
+    CRS.EPSG_4326,
+    CRS.EPSG_3857,
+    CRS.EPSG_32633,
+    CRS.EPSG_27700,
+)
+
+
 def _resolve_crs(
     value: Any,
     *,
@@ -892,22 +900,33 @@ def _resolve_crs(
     default_when_unique: bool,
 ) -> CRS | None:
     if value is None:
+        # Prefer named presets when they match advertised ids, then fall back
+        # to any single parseable advertised CRS (CRS accepts any pyproj CRS).
+        advertised_upper = {text.upper() for text in advertised}
         library_hits = [
             item
-            for item in CRS
-            if item.value in advertised
-            or item.value.upper() in {text.upper() for text in advertised}
+            for item in _CRS_PRESETS
+            if item.value in advertised or item.value.upper() in advertised_upper
         ]
-        # Also match common URN suffixes for the four known enums.
         if not library_hits:
             library_hits = [
                 item
-                for item in CRS
+                for item in _CRS_PRESETS
                 if any(item.value.split(":")[-1] in text for text in advertised)
             ]
         unique = list(dict.fromkeys(library_hits))
         if default_when_unique and len(unique) == 1:
             return unique[0]
+        if default_when_unique and not unique and advertised:
+            parsed: list[CRS] = []
+            for text in advertised:
+                try:
+                    parsed.append(CRS.parse(text))
+                except ValidationError:
+                    continue
+            unique_parsed = list(dict.fromkeys(parsed))
+            if len(unique_parsed) == 1:
+                return unique_parsed[0]
         return None
     crs = _coerce_crs_value(value)
     if advertised:
@@ -925,21 +944,14 @@ def _resolve_crs(
 
 
 def _coerce_crs_value(value: Any) -> CRS:
-    if isinstance(value, CRS):
-        return value
-    if isinstance(value, int):
-        return CRS.from_integer(value)
-    if isinstance(value, str):
-        text = value.strip()
-        if text.upper().startswith("EPSG:"):
-            return CRS.from_epsg(text.upper())
-        if text.isdigit():
-            return CRS.from_integer(int(text))
-    raise ValidationError(
-        f"Unsupported crs={value!r}. Expected a CRS enum / EPSG string / int "
-        f"from {[item.value for item in CRS]} "
-        "(broader CRS support is tracked separately)."
-    )
+    try:
+        return CRS.parse(value)
+    except ValidationError as exc:
+        raise ValidationError(
+            f"Unsupported crs={value!r}. Expected a pyproj-valid CRS "
+            "(authority string such as 'EPSG:4326', integer EPSG code, "
+            f"or CRS instance). Presets: {[item.value for item in _CRS_PRESETS]}."
+        ) from exc
 
 
 def _normalize_crs_token(value: str) -> str:
