@@ -7,7 +7,7 @@ Uses `WCSConfig.from_url(..., **ea_dsp_fetch_defaults())` (AIMD under a hard cei
 ## Code
 
 ```python
-from tilearray import WCSConfig, compute_with_policy, create_array
+from tilearray import WCSConfig, compute_mosaic, create_array
 from tilearray.fetch_presets import ea_dsp_fetch_defaults
 from tilearray.types import CRS, Format
 
@@ -34,11 +34,11 @@ bbox = (431900.0, 382700.0, 432156.0, 382956.0)
 
 # Presets or any pyproj-valid EPSG string work the same way
 da = create_array(config, bbox, CRS.EPSG_27700)  # or "EPSG:27700"
-elevation = compute_with_policy(da)  # match Dask workers to fetch ceiling
+elevation = compute_mosaic(da)  # match Dask workers to fetch ceiling
 print(elevation.shape, float(elevation.mean()))
 ```
 
-`create_array` stays lazy until compute. For multi-tile mosaics, prefer {py:func}`tilearray.compute_with_policy` over plain `.compute()`.
+`create_array` stays lazy until compute. For multi-tile mosaics, prefer {py:func}`tilearray.compute_mosaic` over plain `.compute()`.
 
 ## Result
 

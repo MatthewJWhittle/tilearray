@@ -2,7 +2,7 @@
 
 Fetch **many small, noncontiguous bboxes** (training chips, sample sites) without building one country-wide mosaic.
 
-Loop `create_array` per bbox, then `compute_with_policy`, save, and release. Stay polite under the shared host ceiling. Do **not** union distant boxes into one `bbox=`.
+Loop `create_array` per bbox, then `compute_mosaic`, save, and release. Stay polite under the shared host ceiling. Do **not** union distant boxes into one `bbox=`.
 
 Background: {doc}`how-it-works`. Copy-paste hosts: {doc}`quickstart`.
 
@@ -15,7 +15,7 @@ Each `create_array` call plans and assembles **one** contiguous mosaic for its b
 ```text
 boxes → [create_array(config, b, crs, ...) for b in boxes]   # lazy list is fine
 for da in lazy:
-    arr = compute_with_policy(da)
+    arr = compute_mosaic(da)
     save_patch(arr)   # GeoTIFF / zarr / your training record
     del arr
 ```
@@ -26,12 +26,12 @@ Planning twenty graphs is cheap. HTTP cost appears at compute. Prefer **compute 
 
 ## Example — noncontiguous WMTS patches
 
-Same habit as XYZ/WMS: shared config + per-bbox `create_array` then `compute_with_policy`. Below uses three separated Web Mercator windows at one matrix level (swap host / layer / matrix for your service).
+Same habit as XYZ/WMS: shared config + per-bbox `create_array` then `compute_mosaic`. Below uses three separated Web Mercator windows at one matrix level (swap host / layer / matrix for your service).
 
 ```python
 from pathlib import Path
 
-from tilearray import WMTSConfig, compute_with_policy, create_array
+from tilearray import WMTSConfig, compute_mosaic, create_array
 from tilearray.types import CRS, Format
 
 # Shared host identity + politeness (same FetchPolicy / process gate)
@@ -63,7 +63,7 @@ lazy = [
 ]
 
 for i, da in enumerate(lazy):
-    arr = compute_with_policy(da)
+    arr = compute_mosaic(da)
     # Predictable handoff: slippy mosaics label native EPSG:3857 (query crs= still
     # interprets the bbox); mosaic Affine, pixel centres, service provenance
     assert arr.attrs["crs"] == CRS.EPSG_3857.value
@@ -84,7 +84,7 @@ Same host preset / same `FetchPolicy.cache_key` → **one process-wide concurren
 
 | How you compute | What happens |
 |-----------------|--------------|
-| **Sequential** `compute_with_policy` per patch | Each mosaic can use the full ceiling when idle — polite and simple. |
+| **Sequential** `compute_mosaic` per patch | Each mosaic can use the full ceiling when idle — polite and simple. |
 | **Overlapping** computes (thread pool of mosaics, or `dask.compute` on several) | Mosaics **contend** on the shared semaphore — still polite to the host, slower per patch. |
 
 Do **not**:

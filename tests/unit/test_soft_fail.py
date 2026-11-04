@@ -13,7 +13,7 @@ import respx
 from tilearray import (
     NetworkError,
     ValidationError,
-    compute_with_policy,
+    compute_mosaic,
     soft_fail_exhausted_tiles,
 )
 from tilearray.array import (
@@ -254,10 +254,10 @@ def test_mosaic_soft_fail_every_tenth_completes(
     assert _PROGRESS_REF_ATTR not in result.attrs
 
 
-def test_mosaic_soft_fail_attrs_refresh_via_compute_with_policy(
+def test_mosaic_soft_fail_attrs_refresh_via_compute_mosaic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Lazy create_array → compute_with_policy must refresh tilearray_tile_errors (#73)."""
+    """Lazy create_array → compute_mosaic must refresh tilearray_tile_errors (#73)."""
 
     rows, cols = 4, 5  # 20 tiles; indices 0,10 soft-fail → 2/20 = 0.1
     _patch_grid(monkeypatch, rows=rows, cols=cols, fail_every=10, fail_status=404)
@@ -287,7 +287,7 @@ def test_mosaic_soft_fail_attrs_refresh_via_compute_with_policy(
     assert lazy_errors["soft_failed"] == 0
     assert isinstance(lazy.attrs.get(_PROGRESS_REF_ATTR), FetchProgress)
 
-    result = compute_with_policy(lazy)
+    result = compute_mosaic(lazy)
 
     tile_errors = result.attrs[_TILE_ERRORS_ATTR]
     assert tile_errors["armed"] is True

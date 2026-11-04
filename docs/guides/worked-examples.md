@@ -28,4 +28,4 @@ Bad CRS format (e.g. `EPGS:…`) raises {py:exc}`~tilearray.ValidationError`. An
 
 Run larger mosaics without overwhelming the host: visible progress, loud failure by default, opt-in soft-fill.
 
-Fetch presets, default progress, and `soft_fail=True` / `on_tile_error=` — see {doc}`../how-it-works`. Multi-AOI / ML sample loops: per-bbox `create_array` then `compute_with_policy` with a shared `cache_dir` — {doc}`../multi-aoi-ml-patches`. Fetch gates are process-local; do not multiply them with multi-process Dask workers.
+Fetch presets, default progress, and `soft_fail=True` / `on_tile_error=` — see {doc}`../how-it-works`. Multi-AOI / ML sample loops: per-bbox `create_array` then `compute_mosaic` with a shared `cache_dir` — {doc}`../multi-aoi-ml-patches`. Fetch gates are process-local; do not multiply them with multi-process Dask workers.

@@ -125,15 +125,10 @@ def _resolve_fetch_policy_for_compute(
     obj: Any,
     *,
     fetch_policy: FetchPolicy | None = None,
-    max_concurrent: int | None = None,
 ) -> FetchPolicy:
     if fetch_policy is not None:
         return fetch_policy
-    base = _policy_from_attrs_or_default(obj)
-    if max_concurrent is not None:
-        # Override concurrency for worker sizing only; keep AIMD / breaker / etc.
-        return base.model_copy(update={"max_concurrent": max_concurrent})
-    return base
+    return _policy_from_attrs_or_default(obj)
 
 
 def compute_thread_pool_size(
@@ -155,46 +150,48 @@ def compute_thread_pool_size(
     return max(cpu_count, fetch_policy.max_concurrent)
 
 
-def compute_with_policy(
+def compute_mosaic(
     obj: Any,
     fetch_policy: FetchPolicy | None = None,
     *,
-    max_concurrent: int | None = None,
     num_workers: int | None = None,
     **compute_kwargs: Any,
 ) -> Any:
     """
-    Compute a Dask-backed xarray or dask object with fetch-aligned thread workers.
+    Compute a lazy mosaic with fetch-aligned Dask thread workers.
 
-    Dask's default ``.compute()`` uses ``num_workers=cpu_count()``, which can cap
-    in-flight tile fetches below :attr:`~tilearray.fetch.FetchPolicy.max_concurrent`
-    when AIMD allows more parallel HTTP. This helper runs the threaded scheduler with
-    ``num_workers=compute_thread_pool_size(policy)``.
+    Prefer this over plain ``.compute()``. Dask's default ``num_workers=cpu_count()``
+    can cap in-flight tile fetches below
+    :attr:`~tilearray.fetch.FetchPolicy.max_concurrent` when AIMD allows more
+    parallel HTTP. This helper sizes ``num_workers`` from the fetch policy
+    (override with ``num_workers=``).
 
     Always uses ``scheduler="threads"`` so tile loads share the **process-local**
     fetch gate. Passing another ``scheduler=`` in ``compute_kwargs`` is ignored
     with a :class:`UserWarning` — multi-process / distributed schedulers do not
-    share one host ceiling (see don't-stampede guidance in the docs).
+    share one host ceiling.
 
-    Policy resolution order: explicit ``fetch_policy``; else ``tilearray_fetch_policy``
-    on ``obj.attrs`` (set by :func:`create_array`) with optional ``max_concurrent``
-    merged in (preserves AIMD / circuit-breaker fields from attrs); else
-    :class:`~tilearray.fetch.FetchPolicy` defaults. ``max_concurrent`` only adjusts
-    Dask worker sizing here — the HTTP fetch gate was fixed at :func:`create_array`
-    time from the host/preset ceiling.
+    Policy resolution: explicit ``fetch_policy``; else ``tilearray_fetch_policy``
+    on ``obj.attrs`` (set by :func:`create_array`); else
+    :class:`~tilearray.fetch.FetchPolicy` defaults. The HTTP host ceiling was
+    fixed at :func:`create_array` time — pass ``num_workers=`` only to size
+    Dask threads, not to change the fetch gate.
 
     After compute, refreshes ``attrs["tilearray_tile_errors"]`` from the mosaic's
     :class:`~tilearray.fetch.FetchProgress` when present (same counters as the
     ``create_array(..., compute=True)`` path).
     """
 
-    policy = _resolve_fetch_policy_for_compute(
-        obj,
-        fetch_policy=fetch_policy,
-        max_concurrent=max_concurrent,
-    )
+    if "max_concurrent" in compute_kwargs:
+        raise ValidationError(
+            "compute_mosaic no longer accepts max_concurrent=; pass "
+            "num_workers= to size Dask thread workers. Host ceilings stay on "
+            "create_array / FetchPolicy / max_concurrent_requests."
+        )
 
-    if num_workers is None and fetch_policy is None and max_concurrent is None:
+    policy = _resolve_fetch_policy_for_compute(obj, fetch_policy=fetch_policy)
+
+    if num_workers is None and fetch_policy is None:
         attrs = _attrs_from_compute_target(obj)
         if attrs is not None:
             recommended = attrs.get(_RECOMMENDED_NUM_WORKERS_ATTR)
@@ -205,7 +202,7 @@ def compute_with_policy(
     requested_scheduler = compute_kwargs.get("scheduler")
     if requested_scheduler is not None and requested_scheduler != "threads":
         warnings.warn(
-            "compute_with_policy ignores scheduler="
+            "compute_mosaic ignores scheduler="
             f"{requested_scheduler!r} and uses scheduler='threads' so the "
             "process-local fetch gate can keep host ceilings polite. "
             "Multi-process / distributed workers do not share that gate.",
@@ -354,7 +351,7 @@ def create_array(
     Create an xarray ``DataArray`` backed by Dask from a remote service.
 
     Builds a lazy mosaic by default (``compute=False``). Prefer
-    :func:`compute_with_policy` over plain ``.compute()`` so Dask workers match
+    :func:`compute_mosaic` over plain ``.compute()`` so Dask workers match
     the fetch ceiling. Fetch-policy metadata is stored on ``DataArray.attrs``
     for that path. With ``compute=True``, tile fetches run on Dask's threaded
     scheduler with ``num_workers=compute_thread_pool_size(fetch_policy)``
@@ -428,7 +425,7 @@ def create_array(
     compute:
         If ``True``, materialise immediately on the threaded scheduler.
         Default ``False`` (lazy). For lazy arrays use
-        :func:`compute_with_policy`.
+        :func:`compute_mosaic`.
     compute_num_workers:
         Override Dask thread workers when ``compute=True``. Default sizes
         from the fetch-policy ceiling.
@@ -609,7 +606,7 @@ def create_array(
         else None,
         progress=None,
     )
-    # Shared with delayed tile loads; compute_with_policy refreshes counters from it.
+    # Shared with delayed tile loads; compute_mosaic refreshes counters from it.
     attrs[_PROGRESS_REF_ATTR] = progress
 
     normalized_bbox = request.bbox
@@ -667,7 +664,7 @@ def load_array(*args: Any, compute: bool = True, **kwargs: Any) -> xr.DataArray:
 
     Defaults to ``compute=True`` so a small window materialises immediately with
     fetch-aligned Dask workers. For multi-tile mosaics prefer lazy
-    ``create_array`` (default ``compute=False``) plus :func:`compute_with_policy`.
+    ``create_array`` (default ``compute=False``) plus :func:`compute_mosaic`.
     """
 
     return create_array(*args, compute=compute, **kwargs)

@@ -40,12 +40,12 @@ pip install matplotlib
 
 ## Quick start
 
-Prefer **`compute_with_policy`** over plain `.compute()` so Dask workers match the fetch ceiling (attrs are read automatically).
+Prefer **`compute_mosaic`** over plain `.compute()` so Dask workers match the fetch ceiling (attrs are read automatically).
 
 ### First run — OpenStreetMap XYZ
 
 ```python
-from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray import XYZConfig, compute_mosaic, create_array
 from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
 from tilearray.types import CRS
 
@@ -56,7 +56,7 @@ da = create_array(
     bbox_crs=CRS.EPSG_4326,
     expand_palette=True,  # full-colour RGB; omit for single-band palette indices
 )
-arr = compute_with_policy(da)
+arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"], da.attrs["transform"])
 # Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — bbox_crs= is query only
 arr.plot.imshow(rgb="band", add_colorbar=False)
@@ -67,7 +67,7 @@ OSM tiles are often palette PNGs: `expand_palette=True` expands to RGB; the defa
 ### Also — WCS (Environment Agency Lidar)
 
 ```python
-from tilearray import WCSConfig, compute_with_policy, create_array
+from tilearray import WCSConfig, compute_mosaic, create_array
 from tilearray.fetch_presets import ea_dsp_fetch_defaults
 from tilearray.types import CRS, Format
 
@@ -83,7 +83,7 @@ config = WCSConfig.from_url(
 )
 bbox = (431900.0, 382700.0, 432700.0, 383500.0)  # British National Grid
 da = create_array(config, bbox, CRS.EPSG_27700)
-elevation = compute_with_policy(da)
+elevation = compute_mosaic(da)
 print(elevation.shape, float(elevation.mean()), elevation.attrs["crs"])
 ```
 

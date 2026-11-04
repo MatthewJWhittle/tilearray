@@ -324,7 +324,7 @@ def stage_lazy_compute_cache() -> None:
         (
             3.5,
             "B · Compute",
-            "compute_with_policy(da)\nthread workers ↔\nfetch ceiling",
+            "compute_mosaic(da)\nthread workers ↔\nfetch ceiling",
             ACCENT,
         ),
         (
@@ -343,7 +343,7 @@ def stage_lazy_compute_cache() -> None:
     _box(ax, 0.3, 0.35, 9.35, 1.4, fc="#ffffff")
     ax.text(0.55, 1.4, "API map", fontsize=9, color=INK, fontweight="bold")
     lines = [
-        "Preferred: create_array(...) → compute_with_policy(da)",
+        "Preferred: create_array(...) → compute_mosaic(da)",
         "load_array(...) is eager sugar for create_array(..., compute=True)",
         "Plain da.compute() may under-use a high AIMD ceiling (CPU-bound worker default)",
     ]

@@ -53,7 +53,7 @@ from .types import (
 FETCH_POLICY_ATTR = "tilearray_fetch_policy"
 RECOMMENDED_NUM_WORKERS_ATTR = "tilearray_recommended_num_workers"
 TILE_ERRORS_ATTR = "tilearray_tile_errors"
-# Internal handle so compute_with_policy can refresh tile_errors after lazy compute.
+# Internal handle so compute_mosaic can refresh tile_errors after lazy compute.
 # Not part of the public attrs contract; stripped from eager/computed results.
 PROGRESS_REF_ATTR = "_tilearray_fetch_progress"
 

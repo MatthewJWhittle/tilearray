@@ -19,7 +19,7 @@ _REMOVED_FROM_PUBLIC = frozenset(
 _REQUIRED_PUBLIC = frozenset(
     {
         "FetchPolicy",
-        "compute_with_policy",
+        "compute_mosaic",
         "create_array",
         "load_array",
         "inspect_endpoint",

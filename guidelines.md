@@ -63,8 +63,8 @@ make docs          # Sphinx HTML under docs/_build/html/
 ## 4. Public API
 
 - Explicit `__all__` in `src/tilearray/__init__.py` is the contract.
-- Prefer configs + `create_array` / `load_array` / `compute_with_policy`; do not re-export parsers/services users don’t need.
-- One primary compute habit: **`compute_with_policy`** (not competing README folklore).
+- Prefer configs + `create_array` / `load_array` / `compute_mosaic`; do not re-export parsers/services users don’t need.
+- One primary compute habit: **`compute_mosaic`** (not competing README folklore).
 - Host politeness: `tilearray.fetch_presets` composed onto `*Config.from_url` — **no** new `for_*` host methods on protocol configs.
 - Plan-time bind: fetch policy, `on_tile_error`, custom decoders are arguments to `create_array` before the Dask graph is built.
 

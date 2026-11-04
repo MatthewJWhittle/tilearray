@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from tilearray import XYZConfig, compute_with_policy, create_array  # noqa: E402
+from tilearray import XYZConfig, compute_mosaic, create_array  # noqa: E402
 from tilearray.fetch_presets import (  # noqa: E402
     EA_LIDAR_BENCH_BBOX,
     EA_LIDAR_COVERAGE_ID,
@@ -94,7 +94,7 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
         CRS.EPSG_4326,
         expand_palette=True,
     )
-    arr = compute_with_policy(da)
+    arr = compute_mosaic(da)
     elapsed = time.perf_counter() - start
 
     # expand_palette=True → RGB; coords / extent are native EPSG:3857
@@ -177,7 +177,7 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
     )
     start = time.perf_counter()
     da = create_array(config, GIBS_BBOX, CRS.EPSG_4326)
-    arr = compute_with_policy(da)
+    arr = compute_mosaic(da)
     elapsed = time.perf_counter() - start
 
     fig, ax = plt.subplots(figsize=(6.0, 5.0))
@@ -252,7 +252,7 @@ def generate_ea(out_dir: Path) -> dict[str, Any]:
     )
     start = time.perf_counter()
     da = create_array(config, EA_GUIDE_BBOX, CRS.EPSG_27700)
-    elevation = compute_with_policy(da)
+    elevation = compute_mosaic(da)
     elapsed = time.perf_counter() - start
 
     values = np.asarray(elevation.values, dtype=np.float64)
@@ -344,7 +344,7 @@ def generate_kartverket(out_dir: Path) -> dict[str, Any]:
         CRS.EPSG_4326,
         show_progress=False,
     )
-    arr = compute_with_policy(da)
+    arr = compute_mosaic(da)
     elapsed = time.perf_counter() - start
 
     fig, ax = plt.subplots(figsize=(5.5, 5.5))

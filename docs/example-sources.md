@@ -54,7 +54,7 @@ Public endpoints and thin fetch presets for testing host quirks — **not** a pr
 
 ```python
 import os
-from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray import XYZConfig, compute_mosaic, create_array
 from tilearray.types import CRS
 
 config = XYZConfig.from_url(
@@ -63,7 +63,7 @@ config = XYZConfig.from_url(
     params={"key": os.environ["OS_MAPS_API_KEY"]},
 )
 da = create_array(config, bbox=(-0.1, 51.4, 0.0, 51.5), bbox_crs=CRS.EPSG_4326)
-arr = compute_with_policy(da)
+arr = compute_mosaic(da)
 ```
 
 - Useful for real HTTP 429 throttle behaviour. Attribution required. Do not commit keys. Same `params=` / `headers=` pattern covers other keyed or private tile hosts — see {doc}`troubleshooting`.

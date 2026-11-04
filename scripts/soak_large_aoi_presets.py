@@ -8,7 +8,7 @@ opt-in path for county-/valley-scale evidence (hundreds–thousands of tiles)
 that feeds the 0.3 large-AOI exit criterion — not folklore, not always-on PR CI.
 
 Respect host ceilings: EA DSP AIMD ceiling 10; OSM max 2 in-flight / ~2 req/s.
-Do not raise concurrency past the presets. Prefer ``compute_with_policy``.
+Do not raise concurrency past the presets. Prefer ``compute_mosaic``.
 
 Usage:
     uv run python scripts/soak_large_aoi_presets.py
@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from tilearray import compute_with_policy, create_array  # noqa: E402
+from tilearray import compute_mosaic, create_array  # noqa: E402
 from tilearray.fetch_presets import (  # noqa: E402
     EA_LIDAR_COVERAGE_ID,
     EA_LIDAR_WCS_URL,
@@ -46,7 +46,7 @@ from tilearray.types import CRS, Format  # noqa: E402
 _EA_PROFILES: dict[str, tuple[tuple[float, float, float, float], tuple[int, int]]] = {
     # 16 tiles (same footprint as nightly soak)
     "small": ((431900.0, 382700.0, 432156.0, 382956.0), (64, 64)),
-    # ~64 tiles near Skipton (see scripts/bench_compute_with_policy_live.py)
+    # ~64 tiles near Skipton (see scripts/bench_compute_mosaic_live.py)
     "medium": ((418_000.0, 451_400.0, 419_024.0, 452_424.0), (128, 128)),
     # ~1015-tile Aire valley cold mosaic (0.3-scale evidence target)
     "large": ((410_000.0, 430_000.0, 414_048.0, 434_048.0), (128, 128)),
@@ -102,7 +102,7 @@ def _soak_ea(profile: str, cache_dir: Path | None) -> None:
         f"adaptive={policy['adaptive_concurrency']}"
     )
     start = time.perf_counter()
-    result = compute_with_policy(da.mean())
+    result = compute_mosaic(da.mean())
     elapsed = time.perf_counter() - start
     print(f"  wall={elapsed:.1f}s  mean={float(result):.2f}  ok")
 
@@ -130,7 +130,7 @@ def _soak_osm(profile: str, cache_dir: Path | None) -> None:
         f"adaptive={policy['adaptive_concurrency']}"
     )
     start = time.perf_counter()
-    result = compute_with_policy(da)
+    result = compute_mosaic(da)
     elapsed = time.perf_counter() - start
     print(f"  wall={elapsed:.1f}s  shape={tuple(result.shape)}  ok")
 

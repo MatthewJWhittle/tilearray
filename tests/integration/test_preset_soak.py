@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from tilearray import NetworkError, compute_with_policy, create_array
+from tilearray import NetworkError, compute_mosaic, create_array
 from tilearray.fetch import TileFetcher
 from tilearray.fetch_presets import (
     EA_LIDAR_COVERAGE_ID,
@@ -110,7 +110,7 @@ def test_ea_dsp_multi_tile_cold_mosaic_under_preset_ceiling(
     assert da.attrs["tilearray_tile_errors"]["armed"] is False
     assert _nchunks(da) == _EA_EXPECTED_TILES
 
-    elevation = compute_with_policy(da)
+    elevation = compute_mosaic(da)
     assert elevation.shape == (256, 256)
     mean_value = float(elevation.mean())
     assert -1000.0 < mean_value < 1000.0
@@ -147,7 +147,7 @@ def test_osm_multi_tile_cold_mosaic_under_preset_ceiling(
     assert da.attrs["tilearray_tile_errors"]["armed"] is False
     assert _nchunks(da) >= _OSM_MIN_TILES
 
-    mosaic = compute_with_policy(da)
+    mosaic = compute_mosaic(da)
     assert mosaic.size > 0
     # Palette PNG may be single-band; either shape is fine for soak evidence.
     assert mosaic.ndim in (2, 3)

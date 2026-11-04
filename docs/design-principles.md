@@ -77,7 +77,7 @@ Do not treat a colourful mosaic as proof of numerical fidelity, or elevation NaN
 
 | Prefer | Over |
 |--------|------|
-| One clear path (`config` / preset → `create_array` → `compute_with_policy`) | Dual habits or parallel helpers for the same job |
+| One clear path (`config` / preset → `create_array` → `compute_mosaic`) | Dual habits or parallel helpers for the same job |
 | Hard-fail + abort after retries | Silent NaN holes as default “helpfulness” |
 | Plan-time bind of load behaviour | Post-plan monkeypatch / global loader install |
 | Host ceiling from presets; call-local lower limits | Shrinking the shared process gate for one polite call |

@@ -1,6 +1,6 @@
 # WMTS — GIBS glance and Kartverket UTM33
 
-WMTS is the same habit as XYZ/WCS: config → {py:func}`~tilearray.create_array` → {py:func}`~tilearray.compute_with_policy`. You name the layer, TileMatrixSet, and TileMatrix from GetCapabilities; tilearray plans tiles on that grid and returns a georeferenced lazy mosaic. You do **not** hand-compute tile rows/columns or reproject the downloaded rasters.
+WMTS is the same habit as XYZ/WCS: config → {py:func}`~tilearray.create_array` → {py:func}`~tilearray.compute_mosaic`. You name the layer, TileMatrixSet, and TileMatrix from GetCapabilities; tilearray plans tiles on that grid and returns a georeferenced lazy mosaic. You do **not** hand-compute tile rows/columns or reproject the downloaded rasters.
 
 Two copy-paste paths below: a simple Web Mercator host, then a projected EPSG:25833 matrix (the awkward case that usually breaks “download tiles, hope for georef” workflows).
 
@@ -9,7 +9,7 @@ Two copy-paste paths below: a simple Web Mercator host, then a projected EPSG:25
 GIBS publishes a REST GetTile template. For common GoogleMapsCompatible matrix names, planning works from the numeric TileMatrix without fetching the large GetCapabilities document.
 
 ```python
-from tilearray import WMTSConfig, compute_with_policy, create_array
+from tilearray import WMTSConfig, compute_mosaic, create_array
 from tilearray.types import CRS, Format
 
 config = WMTSConfig.from_url(
@@ -34,7 +34,7 @@ config = WMTSConfig.from_url(
 
 bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
 da = create_array(config, bbox, CRS.EPSG_4326)
-arr = compute_with_policy(da)
+arr = compute_mosaic(da)
 print(arr.shape, arr.dims, da.attrs["crs"])  # mosaic CRS is EPSG:3857
 ```
 
@@ -50,7 +50,7 @@ Imagery: NASA GIBS / BlueMarble_NextGeneration. Slippy / GoogleMapsCompatible mo
 Norwegian Mapping Authority cache: layer `topo`, TileMatrixSet `utm33n` (EPSG:25833). Pass a lon/lat bbox; the mosaic comes back on the **native** UTM33 grid with tile-aligned extent (often slightly larger than the query window).
 
 ```python
-from tilearray import WMTSConfig, compute_with_policy, create_array
+from tilearray import WMTSConfig, compute_mosaic, create_array
 from tilearray.types import Format
 
 config = WMTSConfig.from_url(
@@ -71,7 +71,7 @@ config = WMTSConfig.from_url(
 # Small Oslo-area window in lon/lat — mosaic CRS becomes EPSG:25833
 bbox = (10.6, 59.85, 10.8, 59.95)
 da = create_array(config, bbox, "EPSG:4326", show_progress=False)
-arr = compute_with_policy(da)
+arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"], da.attrs.get("bbox_requested"))
 print(float(arr.x.min()), float(arr.x.max()), float(arr.y.min()), float(arr.y.max()))
 ```
@@ -127,7 +127,7 @@ plan = plan_array(
 )
 print(choice.identifier, choice.resolution)
 print(plan.matrix_id, plan.planned_pixel_size, plan.crs, plan.bbox_crs)
-# Then: create_array → compute_with_policy as usual. Same-grid trim (no
+# Then: create_array → compute_mosaic as usual. Same-grid trim (no
 # interpolation) is ordinary xarray slicing on the native mosaic — not a warp.
 ```
 

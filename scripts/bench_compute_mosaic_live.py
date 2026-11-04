@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Live bench: plain ``.compute()`` vs ``compute_with_policy`` on county-scale EA DTM.
+Live bench: plain ``.compute()`` vs ``compute_mosaic`` on county-scale EA DTM.
 
 Compares wall time for a lazy Skipton/Yorkshire mosaic (~64 tiles) where Dask's
 default thread pool (~cpu_count) under-saturates AIMD fetch headroom.
@@ -8,8 +8,8 @@ default thread pool (~cpu_count) under-saturates AIMD fetch headroom.
 Requires network access to EA public WCS. Not run in CI.
 
 Usage:
-    uv run python scripts/bench_compute_with_policy_live.py
-    uv run python scripts/bench_compute_with_policy_live.py --cache-dir /tmp/ea-dtm-bench
+    uv run python scripts/bench_compute_mosaic_live.py
+    uv run python scripts/bench_compute_mosaic_live.py --cache-dir /tmp/ea-dtm-bench
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from tilearray import compute_with_policy, create_array  # noqa: E402
+from tilearray import compute_mosaic, create_array  # noqa: E402
 from tilearray.fetch_presets import (  # noqa: E402
     EA_LIDAR_COVERAGE_ID,
     EA_LIDAR_WCS_URL,
@@ -100,9 +100,9 @@ def main() -> int:
         lambda lazy, _da: lazy.compute(),
     )
     policy_s = _bench(
-        "compute_with_policy()",
+        "compute_mosaic()",
         args.cache_dir,
-        lambda lazy, da: compute_with_policy(
+        lambda lazy, da: compute_mosaic(
             lazy,
             max_concurrent=da.attrs["tilearray_fetch_policy"]["max_concurrent"],
         ),
@@ -110,14 +110,14 @@ def main() -> int:
 
     print("\n--- summary ---")
     print(f"plain .compute():        {plain_s:.2f}s")
-    print(f"compute_with_policy():   {policy_s:.2f}s")
+    print(f"compute_mosaic():   {policy_s:.2f}s")
     if policy_s > 0:
         ratio = plain_s / policy_s
         print(f"speedup (plain/policy):  {ratio:.2f}x")
     print(
         "\nWhy plain .compute() is slower on cold fetch: Dask defaults to "
         "~cpu_count() thread workers, capping in-flight tile HTTP below the AIMD "
-        f"ceiling ({EA_MAX_CONCURRENT} for EA preset). compute_with_policy sets "
+        f"ceiling ({EA_MAX_CONCURRENT} for EA preset). compute_mosaic sets "
         "num_workers=max(cpu_count, max_concurrent) on the threaded scheduler."
     )
     return 0
