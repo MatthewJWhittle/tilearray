@@ -195,14 +195,13 @@ def _coerce_crs_value(value: Any) -> CRS:
 
 
 def _normalize_crs_token(value: str) -> str:
-    upper = value.upper().replace("URN:OGC:DEF:CRS:", "")
-    if "EPSG" in upper:
-        digits = "".join(ch for ch in upper.rsplit("EPSG", 1)[-1] if ch.isdigit())
-        if digits:
-            return f"EPSG:{digits}"
-    if upper.endswith("CRS84") or "CRS:84" in upper:
+    """Normalise advertised CRS tokens for equality checks in ``build_config``."""
+
+    canonical = canonicalize_crs_input(value)
+    # Keep CRS84 comparisons stable against host spellings that displayed as CRS:84.
+    if canonical == "OGC:CRS84":
         return "CRS:84"
-    return upper
+    return canonical.upper() if canonical.upper().startswith("EPSG:") else canonical
 
 
 def _coerce_tile_matrix(value: Any, matrix_ids: Sequence[str]) -> int:

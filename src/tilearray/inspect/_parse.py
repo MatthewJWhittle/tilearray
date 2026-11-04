@@ -266,4 +266,3 @@ def _from_wms_capabilities(
         headers=headers,
         params=params,
     )
-

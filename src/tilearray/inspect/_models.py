@@ -400,4 +400,3 @@ class EndpointInspection:
             )
         kwargs = _merge_auth_kwargs(self, choices)
         return XYZConfig.from_url(self.base_url, zoom=int(zoom), **kwargs)
-
