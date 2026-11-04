@@ -546,8 +546,9 @@ class ArrayRequest(BaseModel):
         ):
             self.grid_shape = inferred_grid
 
-        # Native WMTS grids: mosaic extent/CRS follow the planned tile matrix,
-        # not the caller's query bbox / crs= label (#93).
+        # Fixed grids (metadata WMTS + XYZ / slippy WMTS): mosaic extent/CRS
+        # follow the planned native tile union, not the caller's query bbox /
+        # crs= label (#93; XYZ/slippy native 3857).
         inferred_bbox = getattr(service, "inferred_mosaic_bbox", None)
         if isinstance(inferred_bbox, BoundingBox):
             if self.requested_bbox is None:

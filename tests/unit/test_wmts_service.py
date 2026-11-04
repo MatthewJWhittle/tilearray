@@ -755,3 +755,56 @@ def test_create_array_wmts_native_matrix_labels_output_crs(
     assert float(result.y.max()) == pytest.approx(expected_max_y - _UTM33_PIXEL_M / 2.0)
     assert float(result.y.min()) == pytest.approx(expected_min_y + _UTM33_PIXEL_M / 2.0)
     assert "bbox_requested" in result.attrs
+
+
+def test_wmts_slippy_fallback_labels_native_3857(
+    png_tile_bytes: bytes,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """No-caps Web Mercator WMTS matches XYZ: tile-union EPSG:3857 georef."""
+
+    monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
+
+    zoom = 16
+    tile_x, tile_y = 32768, 21770
+    bbox = _single_tile_bbox(zoom, tile_x, tile_y)
+    # Independent metre footprint (same formula as XYZ tests; not via planner).
+    origin = math.pi * 6378137.0
+    span = 2.0 * origin / (2**zoom)
+    exp_min_x = -origin + tile_x * span
+    exp_max_x = exp_min_x + span
+    exp_max_y = origin - tile_y * span
+    exp_min_y = exp_max_y - span
+
+    service = WMTSService(
+        WMTS_URL,
+        layer="example_layer",
+        tile_matrix_set="GoogleMapsCompatible",
+        tile_matrix=zoom,
+        output_format=Format.PNG,
+    )
+    tiles = list(service.plan_tiles(bbox, (256, 256), crs=CRS.EPSG_4326))
+    assert len(tiles) == 1
+    assert service.inferred_mosaic_bbox is not None
+    assert service.inferred_mosaic_bbox.crs == CRS.EPSG_3857
+    assert tiles[0].crs == CRS.EPSG_3857
+
+    config = WMTSConfig.from_url(
+        WMTS_URL,
+        layer="example_layer",
+        tile_matrix_set="GoogleMapsCompatible",
+        tile_matrix=zoom,
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+    )
+    result = create_array(
+        config, bbox, CRS.EPSG_4326, compute=True, show_progress=False
+    )
+
+    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["bbox_requested"]["crs"] == "EPSG:4326"
+    a, _b, c, _d, e, f = result.attrs["transform"]
+    assert c == pytest.approx(exp_min_x)
+    assert f == pytest.approx(exp_max_y)
+    assert a == pytest.approx((exp_max_x - exp_min_x) / 256)
+    assert e == pytest.approx((exp_min_y - exp_max_y) / 256)

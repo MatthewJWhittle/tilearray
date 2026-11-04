@@ -22,7 +22,11 @@ from .http import (
     http_get,
     resolve_timeout,
 )
-from .xyz import _tile_bounds, _tile_range_for_bbox
+from .xyz import (
+    _tile_bounds_3857,
+    _tile_range_for_bbox,
+    _tile_union_bounds_3857,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -395,14 +399,13 @@ class WMTSService(BaseService):
                     "get_capabilities()/apply_capabilities() or pass matrix= with "
                     "native TileMatrix fields."
                 ) from exc
+            # query_crs only gates slippy fallback eligibility above; mosaic
+            # georef is always native EPSG:3857 (same as XYZ).
             return self._plan_web_mercator_tiles(
                 bbox,
                 zoom,
                 tile_width,
                 tile_height,
-                query_crs
-                if query_crs in {CRS.EPSG_4326, CRS.EPSG_3857}
-                else CRS.EPSG_4326,
             )
 
         raise ValidationError(
@@ -568,7 +571,6 @@ class WMTSService(BaseService):
         zoom: int,
         tile_width: int,
         tile_height: int,
-        target_crs: CRS,
     ) -> Iterable[TileGeometry]:
         working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
         x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
@@ -576,15 +578,18 @@ class WMTSService(BaseService):
         rows = y_max - y_min + 1
         cols = x_max - x_min + 1
         self.inferred_grid_shape = (rows, cols)
+        self.inferred_mosaic_bbox = _tile_union_bounds_3857(
+            x_min, y_min, x_max, y_max, zoom
+        )
 
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
-                tile_bbox = _tile_bounds(tile_x, tile_y, zoom, target_crs)
+                tile_bbox = _tile_bounds_3857(tile_x, tile_y, zoom)
                 yield TileGeometry(
                     bbox=tile_bbox,
                     width=tile_width,
                     height=tile_height,
-                    crs=target_crs,
+                    crs=CRS.EPSG_3857,
                     tile_x=tile_x,
                     tile_y=tile_y,
                     zoom=zoom,

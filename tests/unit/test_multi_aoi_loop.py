@@ -123,10 +123,11 @@ def test_multi_aoi_loop_noncontiguous_wmts_shapes_and_provenance(
 
     for arr in patches:
         assert arr.shape == (256, 256)
-        assert arr.attrs["crs"] == CRS.EPSG_4326.value
+        assert arr.attrs["crs"] == CRS.EPSG_3857.value
         assert arr.attrs["transform_source"] == "mosaic_bbox"
         assert arr.attrs["service_type"] == ServiceTypeEnum.WMTS.value
         assert "nodata" not in arr.attrs  # rendered PNG imagery
+        assert arr.attrs["bbox_requested"]["crs"] == CRS.EPSG_4326.value
         a, _b, c, _d, e, f = arr.attrs["transform"]
         assert arr.coords["x"].values[0] == pytest.approx(c + a * 0.5)
         assert arr.coords["y"].values[0] == pytest.approx(f + e * 0.5)

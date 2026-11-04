@@ -12,8 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `inspect_endpoint` / `inspect_capabilities` + `EndpointInspection.build_config`: discover layers/coverages, formats, CRS, and WMTS matrices from GetCapabilities (or explain XYZ template limits), then build a validated `*Config` without guessing identifiers. Supports `headers=` / `params=` with secret redaction in printed summaries. How-to: `docs/inspect-endpoint.md` (#96)
 - AOI / fetch preflight helpers: `recommend_grid_shape`, `plan_array` → `ArrayPlan`, and `fetch_summary` → `FetchSummary`. Inspect planned bbox, grid, request count, concurrency ceiling, cache warm/cold, and unknown band/byte counts where not yet knowable before mosaic pixel fetch; summarise progress / pressure after compute. Default progress bar and `create_array` path unchanged (#61)
 
+### Breaking
+
+- **XYZ / slippy WMTS mosaic georef (alpha):** mosaics are now labelled **`EPSG:3857`** with a **tile-union** extent and metre Affine/`y`/`x` coords — matching the unwarped Web Mercator pixel grid. Previously `attrs["crs"]` echoed the query `crs=` (often `EPSG:4326`) and the Affine was stretched from the **query** lon/lat bbox onto the full multi-tile grid (wrong scale/origin; falsely geographic). `crs=` remains the **query** CRS for bbox interpretation only; `bbox_requested` keeps the caller's window. **No client-side warp** of pixels. Callers that assumed XYZ/`GoogleMapsCompatible` mosaics were geographic must read `attrs["crs"]` / `transform` as Web Mercator (or reproject downstream). Metadata-backed WMTS native matrices are unchanged.
+
 ### Fixed
 
+- XYZ and no-caps slippy WMTS planning set `inferred_mosaic_bbox` in EPSG:3857 (same adopt path as metadata WMTS), so mosaic CRS / transform / coords describe the native slippy grid instead of the query window
 - Clipped / partial WCS GeoTIFF responses are placed on the requested tile grid using `ModelPixelScale` / `ModelTiepoint` (and optional GeoKey EPSG), with NaN padding for uncovered cells — never stretched or silently shifted. Mismatched resolution, CRS, rotation, or missing georef fails with a clear `ValidationError`. Coverage pads are distinct from soft-fail tile fills (#95)
 - Raster fidelity: GeoTIFF default `band_policy` is now `preserve` (multiband coverages keep all bands; pass `band_policy="first_band"` to reduce explicitly). Palette PNGs stay as indices unless `expand_palette=True`. Imagery decode keeps native dtype until the `create_array(..., dtype=)` cast; GeoTIFF still promotes to float32 for NaN nodata. Mosaic attrs record `band_policy`, `palette_mode`, and `dtype_policy` (#94)
 
@@ -31,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Design principles / how-it-works / API / troubleshooting: XYZ and slippy WMTS mosaics are labelled native `EPSG:3857` (tile-union extent); `crs=` is query-only for those paths — no longer documented as “still target” vs metadata WMTS
 - Broader plain-reader docs pass: drop agent/process slogans and checklist voice from user-facing pages; demote maintainer freeze / writing-principles / building-docs pages off the published Sphinx site (kept in-repo for CONTRIBUTING / AGENTS); rename worked-examples guide; trim roadmap and duplicated CRS digressions
 - Inspect how-to / API index: everyday entry is `inspect_endpoint(url)`; `inspect_capabilities` is offline / fixture body parsing only (no longer a peer “Offline / fixtures” how-to section)
 - CRS / georef after native WMTS: mosaic `attrs["crs"]` follows TileMatrixSet SupportedCRS when caps metadata is present (query `crs=` may differ); README links the WMTS guide + inspect how-to; decode blurb matches default `band_policy="preserve"`; `create_array` docstring gains a full Parameters section plus an explicit CRS contract (WCS/WMS/XYZ/slippy vs native WMTS)
