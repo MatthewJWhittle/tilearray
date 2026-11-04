@@ -28,7 +28,7 @@ config = WMTSConfig.from_url(
     max_concurrent_requests=2,
     rate_limit_per_second=2.0,
     headers={
-        "User-Agent": "tilearray/0.2 (+https://github.com/MatthewJWhittle/tilearray/issues)",
+        "User-Agent": "tilearray/0.3 (+https://github.com/MatthewJWhittle/tilearray/issues)",
     },
 )
 
@@ -64,7 +64,7 @@ config = WMTSConfig.from_url(
     max_concurrent_requests=2,
     rate_limit_per_second=2.0,
     headers={
-        "User-Agent": "tilearray/0.2 (+https://github.com/MatthewJWhittle/tilearray/issues)",
+        "User-Agent": "tilearray/0.3 (+https://github.com/MatthewJWhittle/tilearray/issues)",
     },
 )
 

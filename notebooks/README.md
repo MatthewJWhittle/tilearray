@@ -22,6 +22,6 @@ uv sync --dev
 uv run jupyter lab
 ```
 
-[`stage_gate_0_2.ipynb`](stage_gate_0_2.ipynb) is a hands-on scratch pad (pick a layer, set a point + box width, fetch/plot). Layers: OSM, EA Lidar, GIBS, EA VOM. It is **not** always-on CI.
+[`stage_gate_0_3.ipynb`](stage_gate_0_3.ipynb) is the 0.3 checkout pad: five-minute OSM path with editable knobs, `plan_array` / `fetch_summary`, and EPSG:3857 georef checks. [`stage_gate_0_2.ipynb`](stage_gate_0_2.ipynb) is the broader multi-layer pad (OSM, EA Lidar, GIBS, EA VOM). Neither is always-on CI.
 
 Example stubs under [`examples/`](examples/) point at the Sphinx guides.

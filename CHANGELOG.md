@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-04
+
+Alpha cut: native XYZ/slippy georef, inspect/plan preflight, broader CRS/WMTS fidelity, and a five-minute first-run docs path. The API remains Alpha.
+
 ### Added
 
 - `inspect_endpoint` / `inspect_capabilities` + `EndpointInspection.build_config`: discover layers/coverages, formats, CRS, and WMTS matrices from GetCapabilities (or explain XYZ template limits), then build a validated `*Config` without guessing identifiers. Supports `headers=` / `params=` with secret redaction in printed summaries. How-to: `docs/inspect-endpoint.md` (#96)
 - AOI / fetch preflight helpers: `recommend_grid_shape`, `plan_array` → `ArrayPlan`, and `fetch_summary` → `FetchSummary`. Inspect planned bbox, grid, request count, concurrency ceiling, cache warm/cold, and unknown band/byte counts where not yet knowable before mosaic pixel fetch; summarise progress / pressure after compute. Default progress bar and `create_array` path unchanged (#61)
+- Maintainer stage-gate notebook (`notebooks/stage_gate_0_3.ipynb`): five-minute OSM path with editable knobs, `plan_array` / `fetch_summary`, and EPSG:3857 georef checks before the 0.3.0 cut
 
 ### Breaking
 
@@ -155,7 +160,8 @@ Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
 - Package renamed from scaffold `ogc-array` to `tilearray`; README, CI, and metadata aligned with shipped API
 - EA Lidar WCS GeoTIFF decode and non-divisible tile resize for native-resolution tiles
 
-[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/MatthewJWhittle/tilearray/releases/tag/v0.1.0
