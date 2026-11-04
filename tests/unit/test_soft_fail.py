@@ -223,7 +223,7 @@ def test_mosaic_soft_fail_every_tenth_completes(
     result = create_array(
         service_url="https://example.com",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         service_type=ServiceTypeEnum.XYZ,
         chunk_size=(4, 4),
         grid_shape=(rows, cols),
@@ -266,7 +266,7 @@ def test_mosaic_soft_fail_attrs_refresh_via_compute_with_policy(
     lazy = create_array(
         service_url="https://example.com",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         service_type=ServiceTypeEnum.XYZ,
         chunk_size=(4, 4),
         grid_shape=(rows, cols),
@@ -314,7 +314,7 @@ def test_mosaic_without_soft_fail_aborts(
         create_array(
             service_url="https://example.com",
             bbox=bbox,
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             service_type=ServiceTypeEnum.XYZ,
             chunk_size=(4, 4),
             grid_shape=(rows, cols),
@@ -470,7 +470,7 @@ def test_soft_fail_threshold_aborts_mosaic(
         create_array(
             service_url="https://example.com",
             bbox=bbox,
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             service_type=ServiceTypeEnum.XYZ,
             chunk_size=(2, 2),
             grid_shape=(rows, cols),
@@ -582,7 +582,7 @@ def test_probe_ignores_soft_fail_handler(
         create_array(
             service_url="https://example.com",
             bbox=bbox,
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             service_type=ServiceTypeEnum.XYZ,
             chunk_size=(4, 4),
             grid_shape=(rows, cols),
@@ -675,7 +675,7 @@ def test_on_tile_error_and_soft_fail_mutually_exclusive(
         create_array(
             service_url="https://example.com",
             bbox=bbox,
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             service_type=ServiceTypeEnum.XYZ,
             chunk_size=(2, 2),
             grid_shape=(1, 1),

@@ -29,7 +29,7 @@ config = inspection.build_config(
 da = create_array(
     config,
     bbox=(431900.0, 382700.0, 432700.0, 383500.0),
-    crs=CRS.EPSG_27700,
+    bbox_crs=CRS.EPSG_27700,
 )
 elevation = compute_with_policy(da)
 ```
@@ -50,7 +50,7 @@ config = inspection.build_config(
     tile_matrix_set="GoogleMapsCompatible",
     tile_matrix=5,
 )
-# create_array(config, bbox=…, crs=…) as usual
+# create_array(config, bbox=…, bbox_crs=…) as usual
 ```
 
 Pass `layer`, `tile_matrix_set`, and `tile_matrix` unless only one option exists. Wrong ids raise {py:exc}`~tilearray.ValidationError` — tilearray does not rename or guess. Inspection does **not** warp pixels: for metadata-backed WMTS the mosaic stays on the matrix SupportedCRS (your bbox `crs=` is only the query window); see {doc}`guides/wmts` and {doc}`design-principles`.

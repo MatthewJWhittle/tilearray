@@ -242,7 +242,7 @@ def test_create_array_clipped_wcs_keeps_shape_and_values(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_27700,
+        bbox_crs=CRS.EPSG_27700,
         chunk_size=(8, 8),
         output_format=Format.GEOTIFF,
         compute=True,
@@ -328,7 +328,7 @@ def test_adjacent_clipped_tiles_seam(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=mosaic_bbox,
-        crs=CRS.EPSG_27700,
+        bbox_crs=CRS.EPSG_27700,
         chunk_size=(4, 4),
         grid_shape=(1, 2),
         output_format=Format.GEOTIFF,

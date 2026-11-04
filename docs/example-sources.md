@@ -62,7 +62,7 @@ config = XYZConfig.from_url(
     zoom=10,
     params={"key": os.environ["OS_MAPS_API_KEY"]},
 )
-da = create_array(config, bbox=(-0.1, 51.4, 0.0, 51.5), crs=CRS.EPSG_4326)
+da = create_array(config, bbox=(-0.1, 51.4, 0.0, 51.5), bbox_crs=CRS.EPSG_4326)
 arr = compute_with_policy(da)
 ```
 

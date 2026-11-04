@@ -37,7 +37,7 @@ def test_recommend_grid_shape_matches_array_request() -> None:
     resolution = (1.0, 1.0)
 
     grid = recommend_grid_shape(
-        bbox, chunk_size=chunk, resolution=resolution, crs=CRS.EPSG_4326
+        bbox, chunk_size=chunk, resolution=resolution, bbox_crs=CRS.EPSG_4326
     )
     assert grid == (2, 2)
 
@@ -45,7 +45,7 @@ def test_recommend_grid_shape_matches_array_request() -> None:
         service_url="http://example.com/wcs",
         service_config=None,
         bbox_input=bbox,
-        crs_input=CRS.EPSG_4326,
+        bbox_crs_input=CRS.EPSG_4326,
         chunk_size_input=chunk,
         grid_shape_input=None,
         output_format_input=Format.GEOTIFF,
@@ -69,7 +69,7 @@ def test_recommend_grid_shape_rejects_bad_inputs() -> None:
             (0.0, 0.0, 10.0, 10.0),
             chunk_size=(8, 8),
             resolution=(0.0, 1.0),
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
         )
     with pytest.raises(ValidationError, match="crs is required"):
         recommend_grid_shape(

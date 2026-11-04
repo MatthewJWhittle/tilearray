@@ -223,9 +223,8 @@ class FetchSummary:
 def plan_array(
     service_url: str | ServiceConfigModel,
     bbox: BoundingBox | BBoxTuple,
-    crs: CRS | str | int | None = None,
+    bbox_crs: CRS | str | int,
     *,
-    bbox_crs: CRS | str | int | None = None,
     service_type: ServiceTypeEnum | None = None,
     chunk_size: tuple[int, int] | None = None,
     grid_shape: tuple[int, int] | None = None,
@@ -237,9 +236,9 @@ def plan_array(
 ) -> ArrayPlan:
     """Plan tile requests without building a mosaic or fetching pixels.
 
-    Mirrors the planning inputs of :func:`~tilearray.create_array` (including
-    ``bbox_crs=`` / legacy ``crs=``). Capabilities / DescribeCoverage may still
-    run for WCS (same as today). Mosaic tile bytes are not fetched unless
+    Mirrors the planning inputs of :func:`~tilearray.create_array`
+    (including ``bbox_crs``). Capabilities / DescribeCoverage may still run
+    for WCS (same as today). Mosaic tile bytes are not fetched unless
     ``probe_bands=True`` (opt-in band discovery).
 
     Use this to inspect grid size, concurrency ceiling, and cache warmth before
@@ -261,13 +260,17 @@ def plan_array(
         )
 
     options = dict(service_options)
+    if "crs" in options:
+        raise ValidationError(
+            "plan_array no longer accepts crs=; pass bbox_crs= for the query "
+            "CRS (service config crs= for request defaults is unchanged)."
+        )
     fetch_policy = resolve_fetch_policy(service_config, options)
 
     request = ArrayRequest.from_inputs(
         service_url=base_service_url,
         service_config=service_config,
         bbox_input=bbox,
-        crs_input=crs,
         bbox_crs_input=bbox_crs,
         chunk_size_input=chunk_size,
         grid_shape_input=grid_shape,

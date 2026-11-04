@@ -1,4 +1,4 @@
-"""Public ``bbox_crs=`` query CRS — migration from overloaded ``crs=``."""
+"""Public ``bbox_crs=`` query CRS (replaces overloaded create/plan ``crs=``)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ import tilearray._planning as planning_module
 import tilearray.array as array_module
 import tilearray.decode as decode_module
 from tilearray import create_array, plan_array
-from tilearray._planning import resolve_query_crs
 from tilearray.errors import ValidationError
 from tilearray.fetch import TileFetcher
 from tilearray.service.base import TileGeometry
@@ -34,7 +33,6 @@ OSM_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 WMTS_URL = "https://example.com/wmts"
 WMS_URL = "https://example.com/wms"
 
-# UTM33 matrix constants (match test_wmts_service).
 _UTM33_SCALE = 3571.4285714285716
 _UTM33_TOP_LEFT_X = -92761.87160000019
 _UTM33_TOP_LEFT_Y = 8_041_211.588458344
@@ -106,19 +104,6 @@ class _DummyWCS:
         return [TileGeometry(bbox=bbox, width=width, height=height, crs=bbox.crs)]
 
 
-def test_resolve_query_crs_bbox_crs_preferred() -> None:
-    assert resolve_query_crs(bbox_crs=CRS.EPSG_4326) == CRS.EPSG_4326
-    assert resolve_query_crs(crs=CRS.EPSG_27700) == CRS.EPSG_27700
-    assert resolve_query_crs(crs=CRS.EPSG_4326, bbox_crs="EPSG:4326") == CRS.EPSG_4326
-
-
-def test_resolve_query_crs_rejects_conflict_and_missing() -> None:
-    with pytest.raises(ValidationError, match="disagree"):
-        resolve_query_crs(crs=CRS.EPSG_4326, bbox_crs=CRS.EPSG_3857)
-    with pytest.raises(ValidationError, match="bbox_crs="):
-        resolve_query_crs()
-
-
 def test_create_array_bbox_crs_xyz_native_3857(
     png_tile_bytes: bytes, monkeypatch: MonkeyPatch
 ) -> None:
@@ -130,14 +115,14 @@ def test_create_array_bbox_crs_xyz_native_3857(
         OSM_TEMPLATE, zoom=10, output_format=Format.PNG, chunk_size=(256, 256)
     )
     result = create_array(
-        config, bbox, bbox_crs=CRS.EPSG_4326, compute=True, show_progress=False
+        config, bbox, CRS.EPSG_4326, compute=True, show_progress=False
     )
     assert result.attrs["crs"] == "EPSG:3857"
     assert result.attrs["bbox_crs"] == "EPSG:4326"
     assert result.attrs["bbox_requested"]["crs"] == "EPSG:4326"
 
 
-def test_create_array_crs_alone_still_works_xyz(
+def test_create_array_bbox_crs_keyword_matches_positional(
     png_tile_bytes: bytes, monkeypatch: MonkeyPatch
 ) -> None:
     monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
@@ -145,15 +130,30 @@ def test_create_array_crs_alone_still_works_xyz(
     config = XYZConfig.from_url(
         OSM_TEMPLATE, zoom=10, output_format=Format.PNG, chunk_size=(256, 256)
     )
-    with_crs = create_array(
+    positional = create_array(
         config, bbox, CRS.EPSG_4326, compute=True, show_progress=False
     )
-    with_bbox_crs = create_array(
+    keyword = create_array(
         config, bbox, bbox_crs=CRS.EPSG_4326, compute=True, show_progress=False
     )
-    assert with_crs.attrs["crs"] == with_bbox_crs.attrs["crs"] == "EPSG:3857"
-    assert with_crs.attrs["bbox_crs"] == with_bbox_crs.attrs["bbox_crs"] == "EPSG:4326"
-    assert with_crs.shape == with_bbox_crs.shape
+    assert positional.attrs["crs"] == keyword.attrs["crs"] == "EPSG:3857"
+    assert positional.attrs["bbox_crs"] == keyword.attrs["bbox_crs"] == "EPSG:4326"
+    assert positional.shape == keyword.shape
+
+
+def test_create_array_rejects_old_crs_keyword(
+    png_tile_bytes: bytes, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
+    config = XYZConfig.from_url(OSM_TEMPLATE, zoom=10)
+    with pytest.raises(ValidationError, match="no longer accepts crs="):
+        create_array(  # type: ignore[call-arg]
+            config,
+            (-0.001, 51.5, 0.001, 51.501),
+            CRS.EPSG_4326,
+            crs=CRS.EPSG_4326,
+            show_progress=False,
+        )
 
 
 def test_create_array_bbox_crs_wmts_native_matrix(
@@ -174,11 +174,6 @@ def test_create_array_bbox_crs_wmts_native_matrix(
     expected_max_x = _UTM33_TOP_LEFT_X + 3 * _UTM33_TILE_SPAN
     expected_max_y = _UTM33_TOP_LEFT_Y - 1 * _UTM33_TILE_SPAN
     expected_min_y = _UTM33_TOP_LEFT_Y - 2 * _UTM33_TILE_SPAN
-    # Query in lon/lat; mosaic stays EPSG:25833.
-    bbox = BoundingBox(
-        min_x=10.55, min_y=60.05, max_x=10.75, max_y=60.20, crs=CRS.EPSG_4326
-    )
-    # Use projected tile window so planning does not need live caps.
     bbox_proj = BoundingBox(
         min_x=expected_min_x + 50.0,
         min_y=expected_min_y + 50.0,
@@ -198,7 +193,7 @@ def test_create_array_bbox_crs_wmts_native_matrix(
     result = create_array(
         config,
         bbox_proj,
-        bbox_crs="EPSG:25833",
+        "EPSG:25833",
         compute=True,
         matrix=matrix,
         matrix_crs=CRS.parse("EPSG:25833"),
@@ -207,19 +202,6 @@ def test_create_array_bbox_crs_wmts_native_matrix(
     assert result.attrs["crs"] == "EPSG:25833"
     assert result.attrs["bbox_crs"] == "EPSG:25833"
     assert "bbox_requested" in result.attrs
-
-    # Lon/lat query CRS against the same matrix via crs= vs bbox_crs= agreement.
-    _ = bbox  # documented intent: query may differ from matrix CRS
-    with pytest.raises(ValidationError, match="disagree"):
-        create_array(
-            config,
-            bbox_proj,
-            crs=CRS.EPSG_4326,
-            bbox_crs="EPSG:25833",
-            matrix=matrix,
-            matrix_crs=CRS.parse("EPSG:25833"),
-            show_progress=False,
-        )
 
 
 def test_create_array_bbox_crs_wms(
@@ -237,7 +219,7 @@ def test_create_array_bbox_crs_wms(
         min_x=-0.05, min_y=51.45, max_x=0.05, max_y=51.55, crs=CRS.EPSG_4326
     )
     result = create_array(
-        config, bbox, bbox_crs=CRS.EPSG_4326, compute=True, show_progress=False
+        config, bbox, CRS.EPSG_4326, compute=True, show_progress=False
     )
     assert isinstance(result, xr.DataArray)
     assert result.attrs["crs"] == "EPSG:4326"
@@ -273,7 +255,7 @@ def test_create_array_bbox_crs_wcs(monkeypatch: MonkeyPatch) -> None:
     result = create_array(
         "http://example.com/wcs",
         bbox,
-        bbox_crs=CRS.EPSG_27700,
+        CRS.EPSG_27700,
         chunk_size=(8, 4),
         output_format=Format.GEOTIFF,
         show_progress=False,
@@ -290,15 +272,9 @@ def test_plan_array_exposes_bbox_crs_and_output_crs(
     config = XYZConfig.from_url(
         OSM_TEMPLATE, zoom=10, output_format=Format.PNG, chunk_size=(256, 256)
     )
-    plan = plan_array(config, bbox, bbox_crs=CRS.EPSG_4326)
+    plan = plan_array(config, bbox, CRS.EPSG_4326)
     assert plan.bbox_crs == "EPSG:4326"
     assert plan.crs == "EPSG:3857"
     text = plan.summary()
     assert "bbox_crs (query)" in text
     assert "crs (output)" in text
-
-
-def test_create_array_requires_query_crs() -> None:
-    config = XYZConfig.from_url(OSM_TEMPLATE, zoom=10)
-    with pytest.raises(ValidationError, match="bbox_crs="):
-        create_array(config, (-0.001, 51.5, 0.001, 51.501), show_progress=False)

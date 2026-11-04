@@ -217,7 +217,7 @@ class EndpointInspection:
             [
                 "",
                 f"# {protocol}: set bbox/crs to the AOI you need, then:",
-                "da = create_array(config, bbox=(...), crs=CRS.EPSG_4326)",
+                "da = create_array(config, bbox=(...), bbox_crs=CRS.EPSG_4326)",
                 "arr = compute_with_policy(da)",
             ]
         )

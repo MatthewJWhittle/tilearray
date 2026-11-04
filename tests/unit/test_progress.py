@@ -289,7 +289,7 @@ def test_create_array_default_progress_multi_tile(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(tile_width, tile_height),
         grid_shape=(rows, cols),
         compute=True,
@@ -404,7 +404,7 @@ def test_create_array_show_progress_false_skips_default(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(tile_width, tile_height),
         grid_shape=(rows, cols),
         compute=True,

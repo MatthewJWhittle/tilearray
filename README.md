@@ -53,7 +53,7 @@ config = XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 da = create_array(
     config,
     bbox=(-0.005, 51.495, 0.005, 51.505),  # query lon/lat
-    crs=CRS.EPSG_4326,
+    bbox_crs=CRS.EPSG_4326,
     expand_palette=True,  # full-colour RGB; omit for single-band palette indices
 )
 arr = compute_with_policy(da)

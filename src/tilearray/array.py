@@ -328,9 +328,8 @@ def _refresh_tile_errors_attr_from_progress(
 def create_array(
     service_url: str | ServiceConfigModel,
     bbox: BoundingBox | BBoxTuple,
-    crs: CRS | str | int | None = None,
+    bbox_crs: CRS | str | int,
     *,
-    bbox_crs: CRS | str | int | None = None,
     service_type: ServiceTypeEnum | None = None,
     chunk_size: tuple[int, int] | None = None,
     grid_shape: tuple[int, int] | None = None,
@@ -360,27 +359,25 @@ def create_array(
     scheduler with ``num_workers=compute_thread_pool_size(fetch_policy)``
     (override via ``compute_num_workers``).
 
-    CRS contract (current alpha)
-    ----------------------------
-    Prefer ``bbox_crs=`` for the **query** CRS (how the bbox is described).
-    ``crs=`` alone still works with today's query behaviour during alpha.
-    Passing both with different values raises :class:`~tilearray.ValidationError`.
-    There is **no** client-side raster warp onto another CRS.
-    ``attrs["bbox_crs"]`` always records the query CRS used for planning.
+    CRS contract
+    ------------
+    ``bbox_crs`` is the **query** CRS (how the bbox is described). There is
+    **no** client-side raster warp onto another CRS.
+    ``attrs["bbox_crs"]`` records that query CRS; ``attrs["crs"]`` is the
+    mosaic / output CRS.
 
-    * **WCS / WMS** — ``attrs["crs"]`` matches the query CRS (``bbox_crs`` /
-      ``crs``). Mosaic georef comes from the planned bbox + shape
-      (``transform_source="mosaic_bbox"``); per-tile GeoTIFF tags never
-      silently replace mosaic CRS.
+    * **WCS / WMS** — ``attrs["crs"]`` matches ``bbox_crs``. Mosaic georef
+      comes from the planned bbox + shape (``transform_source="mosaic_bbox"``);
+      per-tile GeoTIFF tags never silently replace mosaic CRS.
     * **XYZ / slippy WMTS** — pixels stay on the Web Mercator grid;
       ``attrs["crs"]`` is ``EPSG:3857`` and the planned extent is the
-      tile-union footprint (query CRS interprets the bbox only;
+      tile-union footprint (``bbox_crs`` interprets the query bbox only;
       ``bbox_requested`` records the caller's window). No client-side warp.
     * **WMTS with TileMatrixSet metadata** — pixels stay on the native matrix
       grid; ``attrs["crs"]`` and the planned extent follow the matrix
-      SupportedCRS (query bbox / CRS may differ; ``bbox_requested`` records
-      the caller's window). Auto-loads GetCapabilities for non-slippy matrices
-      (or pass ``matrix=`` via ``**service_options``).
+      SupportedCRS (query bbox / ``bbox_crs`` may differ; ``bbox_requested``
+      records the caller's window). Auto-loads GetCapabilities for non-slippy
+      matrices (or pass ``matrix=`` via ``**service_options``).
 
     Raster fidelity: ``band_policy`` defaults to ``\"preserve\"`` (keep all
     bands; pass ``\"first_band\"`` to reduce explicitly). Palette PNGs stay as
@@ -397,16 +394,11 @@ def create_array(
         config (often ``from_url`` + ``fetch_presets``) over a bare string.
     bbox:
         Area of interest as ``(minx, miny, maxx, maxy)`` or a
-        :class:`~tilearray.types.BoundingBox`, in the units of ``bbox_crs``
-        (or ``crs`` when that is the only CRS argument).
-    crs:
-        Legacy query CRS (preset, EPSG string/int, or ``pyproj.CRS``). Alone,
-        same behaviour as today. Prefer ``bbox_crs=`` for new code. For
-        WCS / WMS this also labels the mosaic; for XYZ / WMTS see the CRS
-        contract above (native-grid label).
+        :class:`~tilearray.types.BoundingBox`, in the units of ``bbox_crs``.
     bbox_crs:
-        Unambiguous **query** CRS for the bbox. Preferred over ``crs=``.
-        Must agree with ``crs`` when both are passed.
+        **Query** CRS for the bbox (preset, EPSG string/int, or
+        ``pyproj.CRS``). For WCS / WMS this also labels the mosaic; for
+        XYZ / WMTS see the CRS contract above (native-grid label).
     service_type:
         Optional protocol override when ``service_url`` is a bare string.
         Must match the config when a config is passed.
@@ -497,13 +489,17 @@ def create_array(
     )
 
     options = dict(service_options)
+    if "crs" in options:
+        raise ValidationError(
+            "create_array no longer accepts crs=; pass bbox_crs= for the query "
+            "CRS (service config crs= for request defaults is unchanged)."
+        )
     fetch_policy = _resolve_fetch_policy(service_config, options)
 
     request = ArrayRequest.from_inputs(
         service_url=base_service_url,
         service_config=service_config,
         bbox_input=bbox,
-        crs_input=crs,
         bbox_crs_input=bbox_crs,
         chunk_size_input=chunk_size,
         grid_shape_input=grid_shape,

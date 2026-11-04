@@ -244,7 +244,7 @@ def generate_ea(out_dir: Path) -> dict[str, Any]:
     config = WCSConfig.from_url(
         EA_LIDAR_WCS_URL,
         coverage_id=EA_LIDAR_COVERAGE_ID,
-        crs=CRS.EPSG_27700,
+        bbox_crs=CRS.EPSG_27700,
         output_format=Format.GEOTIFF,
         chunk_size=EA_CHUNK,
         resolution=EA_RESOLUTION,
