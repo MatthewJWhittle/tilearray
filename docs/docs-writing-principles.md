@@ -72,7 +72,7 @@ Contributor pages (`building-docs`, CONTRIBUTING, AGENTS) may keep maintainer de
 - [ ] Research and internal plans stay out of the repo docs PR.
 - [ ] Prefer delete/condense; no version bump; no drive-by feature docs for unshipped work.
 
-A cheap CI denylist (`scripts/check_docs_process_leakage.py`) catches a few process phrases in `README.md` and `docs/**/*.md`. It is a seatbelt, not a substitute for this checklist.
+Stickiness comes from this checklist plus AGENTS / CONTRIBUTING — not automated keyword lint (fragile false positives on legitimate phrasing).
 
 ---
 

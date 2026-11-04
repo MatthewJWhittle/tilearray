@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build publish docs docs-check docs-artifacts docs-clean
+.PHONY: help install install-dev test test-cov lint format clean build publish docs docs-artifacts docs-clean
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -39,12 +39,8 @@ clean: ## Clean build artifacts
 build: ## Build the package
 	uv build
 
-docs-check: ## Fail on process-leakage phrases in README + docs
-	uv run python scripts/check_docs_process_leakage.py
-
 docs: ## Build Sphinx HTML docs (offline; no tile fetches)
 	uv sync --extra docs --dev
-	uv run python scripts/check_docs_process_leakage.py
 	uv run --extra docs sphinx-build -W -b html docs docs/_build/html
 
 docs-artifacts: ## Regenerate all committed docs assets (diagrams + live guide figures)

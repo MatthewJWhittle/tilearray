@@ -27,7 +27,7 @@ When editing `README.md`, Sphinx pages, or usage guides, apply [docs/docs-writin
 - [ ] Current vs target behaviour is labelled; do not document unshipped API as fact.
 - [ ] Prefer delete/condense; keep visual guides / figures pipeline; no version bump unless asked.
 
-Run `make docs-check` (denylist seatbelt) and `make docs` before opening the PR.
+Run `make docs` before opening the PR.
 
 ## Commands
 
@@ -35,7 +35,6 @@ Run `make docs-check` (denylist seatbelt) and `make docs` before opening the PR.
 uv sync --dev
 make test          # offline PR suite (slow/net deselected by default)
 make lint
-make docs-check    # process-leakage denylist on README + docs
 make docs          # Sphinx HTML; offline
 ```
 

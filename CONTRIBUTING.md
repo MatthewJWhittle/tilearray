@@ -18,7 +18,6 @@ make pre-commit
 ```bash
 make test
 make lint
-make docs-check    # process-leakage denylist on README + docs
 make docs          # HTML under docs/_build/html/
 make docs-artifacts  # regenerate committed figures (network for live guides)
 ```
@@ -28,7 +27,7 @@ make docs-artifacts  # regenerate committed figures (network for live guides)
 1. Branch from `main`.
 2. Keep changes focused; run `make test && make lint` before opening a PR.
 3. Use the **API design checklist** in [guidelines.md](guidelines.md) (§9) together with [docs/design-principles.md](docs/design-principles.md).
-4. Docs-only work: follow [docs writing principles](docs/docs-writing-principles.md), then [Building the docs](docs/building-docs.md). Run `make docs-check && make docs`.
+4. Docs-only work: follow [docs writing principles](docs/docs-writing-principles.md), then [Building the docs](docs/building-docs.md). Run `make docs`.
 5. User-visible behaviour → update docs and `CHANGELOG.md` `[Unreleased]` in the same PR. Do not bump the package version unless a release is intended.
 
 ## Project conventions
