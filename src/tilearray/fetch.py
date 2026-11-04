@@ -780,11 +780,6 @@ class TileFetcher:
         assert self._semaphore is not None
         self._semaphore.release()
 
-    def _record_pressure(self, host: str) -> None:
-        if self._adaptive_gate is not None:
-            self._adaptive_gate.record_pressure(host)
-            self.stats._sync_adaptive_stats(self._adaptive_gate, host)
-
     def _classify_response(self, response: httpx.Response) -> ResponseClassification:
         return classify_response(response, self._pressure_classifier)
 

@@ -184,7 +184,7 @@ class WMSService(BaseService):
         self.output_format = self._coerce_format(
             output_format or config.get("format") or Format.PNG
         )
-        self.native_crs = self._coerce_crs(crs or config.get("crs") or CRS.EPSG_4326)
+        self.native_crs = CRS.parse(crs or config.get("crs") or CRS.EPSG_4326)
 
     @classmethod
     def from_url(cls, url: str, **config: Any) -> WMSService:
@@ -203,7 +203,7 @@ class WMSService(BaseService):
             options.get("styles") if options.get("styles") is not None else self.styles
         )
         fmt = self._coerce_format(options.get("output_format") or self.output_format)
-        crs = self._coerce_crs(options.get("crs") or tile.crs or self.native_crs)
+        crs = CRS.parse(options.get("crs") or tile.crs or self.native_crs)
 
         params: dict[str, Any] = {
             "service": "WMS",

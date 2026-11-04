@@ -4,12 +4,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-import math
 import os
 import warnings
-from collections.abc import Sequence
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -26,6 +23,48 @@ from dask.array import from_delayed as da_from_delayed
 from dask.delayed import Delayed, delayed
 from pydantic import BaseModel, ConfigDict, Field
 
+from ._planning import (
+    FETCH_POLICY_ATTR as _FETCH_POLICY_ATTR,
+)
+from ._planning import (
+    PROGRESS_REF_ATTR as _PROGRESS_REF_ATTR,
+)
+from ._planning import (
+    RECOMMENDED_NUM_WORKERS_ATTR as _RECOMMENDED_NUM_WORKERS_ATTR,
+)
+from ._planning import (
+    TILE_ERRORS_ATTR as _TILE_ERRORS_ATTR,
+)
+from ._planning import (
+    cache_key as _cache_key,
+)
+from ._planning import (
+    coerce_array_origin as _coerce_array_origin,
+)
+from ._planning import (
+    fetch_policy_from_summary as _fetch_policy_from_summary,
+)
+from ._planning import (
+    fetch_policy_summary as _fetch_policy_summary,
+)
+from ._planning import (
+    normalize_bbox as _normalize_bbox,
+)
+from ._planning import (
+    organize_tiles as _organize_tiles,
+)
+from ._planning import (
+    recommend_grid_shape,
+)
+from ._planning import (
+    resolve_fetch_policy as _resolve_fetch_policy,
+)
+from ._planning import (
+    resolve_grid_shape as _resolve_grid_shape,
+)
+from ._planning import (
+    validate_chunk_size as _validate_chunk_size,
+)
 from .decode import (
     DEFAULT_BAND_POLICIES,
     BandPolicy,
@@ -73,13 +112,6 @@ if TYPE_CHECKING:
     from dask.array.core import Array as DaskArray
 else:  # pragma: no cover - typing aid
     DaskArray = Any
-
-_FETCH_POLICY_ATTR = "tilearray_fetch_policy"
-_RECOMMENDED_NUM_WORKERS_ATTR = "tilearray_recommended_num_workers"
-_TILE_ERRORS_ATTR = "tilearray_tile_errors"
-# Internal handle so compute_with_policy can refresh tile_errors after lazy compute.
-# Not part of the public attrs contract; stripped from eager/computed results.
-_PROGRESS_REF_ATTR = "_tilearray_fetch_progress"
 
 
 class ArrayRequest(BaseModel):
@@ -139,7 +171,7 @@ class ArrayRequest(BaseModel):
         cache_dir_input: str | Path | None,
         service_options_input: dict[str, Any],
     ) -> ArrayRequest:
-        target_crs = _coerce_crs(crs_input)
+        target_crs = CRS.parse(crs_input)
         normalized_bbox = _normalize_bbox(bbox_input, target_crs)
 
         defaults = service_config.array_defaults() if service_config else {}
@@ -362,105 +394,6 @@ def _delayed_call(func: Callable[..., Any], *args: Any) -> Delayed:
     return cast(Delayed, delayed(func)(*args))
 
 
-def _organize_tiles(
-    tile_requests: Sequence[TileRequest],
-    rows: int,
-    cols: int,
-) -> list[list[TileRequest]]:
-    if len(tile_requests) != rows * cols:
-        raise ValidationError(
-            f"Service produced {len(tile_requests)} tile requests; expected {rows * cols}"
-        )
-
-    annotated: list[tuple[TileRequest, BoundingBox]] = []
-    for request in tile_requests:
-        if request.bbox is None:
-            raise ValidationError("TileRequest is missing spatial metadata (bbox)")
-        annotated.append((request, request.bbox))
-
-    sorted_tiles = [
-        request
-        for request, _ in sorted(
-            annotated,
-            key=lambda item: (-item[1].max_y, item[1].min_x),
-        )
-    ]
-
-    grid: list[list[TileRequest]] = []
-    idx = 0
-    for _ in range(rows):
-        row_tiles: list[TileRequest] = []
-        for _ in range(cols):
-            row_tiles.append(sorted_tiles[idx])
-            idx += 1
-        grid.append(row_tiles)
-    return grid
-
-
-def _fetch_policy_summary(policy: FetchPolicy) -> dict[str, Any]:
-    """JSON-serializable fetch policy snapshot for xarray attrs."""
-
-    return {
-        "max_concurrent": policy.max_concurrent,
-        "max_connections": policy.max_connections,
-        "retries": policy.retries,
-        "timeout": policy.timeout,
-        "rate_limit_per_second": policy.rate_limit_per_second,
-        "adaptive_concurrency": policy.adaptive_concurrency,
-        "initial_concurrent": policy.initial_concurrent,
-        "min_concurrent": policy.min_concurrent,
-        "multiplicative_decrease": policy.multiplicative_decrease,
-        "additive_increase": policy.additive_increase,
-        "forbidden_circuit_breaker": policy.forbidden_circuit_breaker,
-        "forbidden_window_seconds": policy.forbidden_window_seconds,
-        "forbidden_threshold": policy.forbidden_threshold,
-        "forbidden_cooldown_seconds": policy.forbidden_cooldown_seconds,
-        "call_max_concurrent": policy.call_max_concurrent,
-    }
-
-
-def _fetch_policy_from_summary(summary: dict[str, Any]) -> FetchPolicy:
-    defaults = FetchPolicy()
-    call_max = summary.get("call_max_concurrent", defaults.call_max_concurrent)
-    return FetchPolicy(
-        max_concurrent=int(summary.get("max_concurrent", defaults.max_concurrent)),
-        max_connections=summary.get("max_connections", defaults.max_connections),
-        retries=int(summary.get("retries", defaults.retries)),
-        timeout=float(summary.get("timeout", defaults.timeout)),
-        rate_limit_per_second=summary.get(
-            "rate_limit_per_second", defaults.rate_limit_per_second
-        ),
-        adaptive_concurrency=bool(
-            summary.get("adaptive_concurrency", defaults.adaptive_concurrency)
-        ),
-        initial_concurrent=int(
-            summary.get("initial_concurrent", defaults.initial_concurrent)
-        ),
-        min_concurrent=int(summary.get("min_concurrent", defaults.min_concurrent)),
-        multiplicative_decrease=float(
-            summary.get("multiplicative_decrease", defaults.multiplicative_decrease)
-        ),
-        additive_increase=int(
-            summary.get("additive_increase", defaults.additive_increase)
-        ),
-        forbidden_circuit_breaker=bool(
-            summary.get("forbidden_circuit_breaker", defaults.forbidden_circuit_breaker)
-        ),
-        forbidden_window_seconds=float(
-            summary.get("forbidden_window_seconds", defaults.forbidden_window_seconds)
-        ),
-        forbidden_threshold=int(
-            summary.get("forbidden_threshold", defaults.forbidden_threshold)
-        ),
-        forbidden_cooldown_seconds=float(
-            summary.get(
-                "forbidden_cooldown_seconds", defaults.forbidden_cooldown_seconds
-            )
-        ),
-        call_max_concurrent=int(call_max) if call_max is not None else None,
-    )
-
-
 def _attrs_from_compute_target(obj: Any) -> dict[str, Any] | None:
     attrs = getattr(obj, "attrs", None)
     if isinstance(attrs, dict):
@@ -590,71 +523,6 @@ def compute_with_policy(
                 target_attrs.pop(_PROGRESS_REF_ATTR, None)
 
     return result
-
-
-def _resolve_fetch_policy(
-    service_config: ServiceConfigModel | None,
-    service_options: dict[str, Any],
-) -> FetchPolicy:
-    """Build the fetch policy for :func:`create_array`.
-
-    ``max_concurrent`` on the returned policy is the **shared process-local
-    gate ceiling** (host / preset). A lower ``max_concurrent_requests`` override
-    on a configured service becomes ``call_max_concurrent`` so one caller's
-    local politeness cannot shrink the shared gate for siblings. Raising the
-    override (or setting it without a service config) still sets the shared
-    ceiling. Separate OS processes do not share this gate.
-    """
-
-    base = (
-        service_config.fetch_policy() if service_config is not None else FetchPolicy()
-    )
-    override = service_options.pop("max_concurrent_requests", None)
-    call_max_concurrent: int | None = None
-    if override is None:
-        max_concurrent = base.max_concurrent
-    elif service_config is not None and int(override) < base.max_concurrent:
-        # Local politeness: keep host/preset ceiling as the shared gate.
-        max_concurrent = base.max_concurrent
-        call_max_concurrent = int(override)
-    else:
-        max_concurrent = int(override)
-
-    return FetchPolicy(
-        max_concurrent=max_concurrent,
-        max_connections=service_options.pop("max_connections", base.max_connections),
-        retries=service_options.pop("fetch_retries", base.retries),
-        timeout=service_options.pop("fetch_timeout", base.timeout),
-        rate_limit_per_second=service_options.pop(
-            "rate_limit_per_second", base.rate_limit_per_second
-        ),
-        rate_limiter=service_options.pop("rate_limiter", base.rate_limiter),
-        adaptive_concurrency=service_options.pop(
-            "adaptive_concurrency", base.adaptive_concurrency
-        ),
-        initial_concurrent=service_options.pop(
-            "initial_concurrent_requests", base.initial_concurrent
-        ),
-        min_concurrent=service_options.pop(
-            "min_concurrent_requests", base.min_concurrent
-        ),
-        multiplicative_decrease=service_options.pop(
-            "multiplicative_decrease", base.multiplicative_decrease
-        ),
-        forbidden_circuit_breaker=service_options.pop(
-            "forbidden_circuit_breaker", base.forbidden_circuit_breaker
-        ),
-        forbidden_window_seconds=service_options.pop(
-            "forbidden_window_seconds", base.forbidden_window_seconds
-        ),
-        forbidden_threshold=service_options.pop(
-            "forbidden_threshold", base.forbidden_threshold
-        ),
-        forbidden_cooldown_seconds=service_options.pop(
-            "forbidden_cooldown_seconds", base.forbidden_cooldown_seconds
-        ),
-        call_max_concurrent=call_max_concurrent,
-    )
 
 
 def _resolve_on_tile_error(
@@ -885,7 +753,7 @@ def create_array(
         Lazy Dask-backed unless ``compute=True``.
     """
 
-    target_crs = _coerce_crs(crs)
+    target_crs = CRS.parse(crs)
     normalized_bbox = _normalize_bbox(bbox, target_crs)
 
     service_config = (
@@ -1073,10 +941,6 @@ def load_array(*args: Any, compute: bool = True, **kwargs: Any) -> xr.DataArray:
     return create_array(*args, compute=compute, **kwargs)
 
 
-def _coerce_crs(crs: CRS | str | int) -> CRS:
-    return CRS.parse(crs)
-
-
 def _mosaic_affine_transform(
     bbox: BoundingBox, height: int, width: int
 ) -> tuple[float, float, float, float, float, float]:
@@ -1142,92 +1006,6 @@ def _geospatial_attrs(
         elif output_format in {Format.PNG, Format.JPEG}:
             attrs["dtype_policy"] = "native_then_array_dtype"
     return attrs
-
-
-def _coerce_array_origin(value: object) -> tuple[float, float]:
-    if value is None:
-        return (0.0, 0.0)
-    if isinstance(value, tuple) and len(value) == 2:
-        origin_x = value[0]
-        origin_y = value[1]
-        return (float(origin_x), float(origin_y))
-    raise ValidationError("origin must be a tuple of two numbers")
-
-
-def _normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
-    if isinstance(bbox, BoundingBox):
-        return bbox if bbox.crs == crs else bbox.to_crs(crs)
-    return BoundingBox.from_tuple(bbox, crs)
-
-
-def recommend_grid_shape(
-    bbox: BoundingBox | BBoxTuple,
-    *,
-    chunk_size: tuple[int, int],
-    resolution: tuple[float, float],
-    crs: CRS | str | int | None = None,
-    origin: tuple[float, float] = (0.0, 0.0),
-) -> tuple[int, int]:
-    """Infer ``(rows, cols)`` covering ``bbox`` at ``resolution`` × ``chunk_size``.
-
-    ``chunk_size`` matches :func:`create_array`: ``(width, height)`` in pixels.
-    The bbox is snapped outward onto the resolution grid before counting tiles.
-    Geometry only — no host contact and no client-side pixel resampling.
-    """
-
-    res_x, res_y = resolution
-    if res_x <= 0 or res_y <= 0:
-        raise ValidationError("resolution values must be positive")
-
-    if isinstance(bbox, BoundingBox):
-        if crs is None:
-            normalized = bbox
-        else:
-            target_crs = _coerce_crs(crs)
-            normalized = bbox if bbox.crs == target_crs else bbox.to_crs(target_crs)
-    else:
-        if crs is None:
-            raise ValidationError("crs is required when bbox is a coordinate tuple")
-        normalized = _normalize_bbox(bbox, _coerce_crs(crs))
-
-    chunk_height, chunk_width = _validate_chunk_size(chunk_size)
-    snapped = snap_bbox_outward(normalized, resolution, origin)
-    span_x = snapped.max_x - snapped.min_x
-    span_y = snapped.max_y - snapped.min_y
-    cols = (
-        max(1, int(math.ceil(span_x / (chunk_width * res_x)))) if chunk_width > 0 else 1
-    )
-    rows = (
-        max(1, int(math.ceil(span_y / (chunk_height * res_y))))
-        if chunk_height > 0
-        else 1
-    )
-    return rows, cols
-
-
-def _resolve_grid_shape(
-    explicit: tuple[int, int] | None,
-    fallback: tuple[int, int] | None,
-) -> tuple[int, int]:
-    if explicit is not None:
-        return _validate_grid_shape(explicit)
-    if fallback is not None:
-        return _validate_grid_shape(fallback)
-    return (1, 1)
-
-
-def _validate_grid_shape(grid: tuple[int, int]) -> tuple[int, int]:
-    rows, cols = grid
-    if rows <= 0 or cols <= 0:
-        raise ValidationError("grid_shape must contain positive integers")
-    return rows, cols
-
-
-def _validate_chunk_size(chunk_size: tuple[int, int]) -> tuple[int, int]:
-    width, height = chunk_size
-    if width <= 0 or height <= 0:
-        raise ValidationError("chunk_size dimensions must be positive integers")
-    return height, width
 
 
 def _assemble_tile_mosaic(
@@ -1611,19 +1389,6 @@ def _fetch_with_cache(
         if cached_data:
             _write_cache(cache_dir, request, cached_data, response.content_type)
     return response
-
-
-def _cache_key(request: TileRequest) -> str:
-    payload = {
-        "url": request.url,
-        "params": sorted((str(k), str(v)) for k, v in request.params.items()),
-        "format": request.output_format.value if request.output_format else None,
-        "bbox": request.bbox.model_dump() if request.bbox else None,
-        "width": request.width,
-        "height": request.height,
-    }
-    serialized = json.dumps(payload, sort_keys=True)
-    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _read_cache(cache_dir: Path, request: TileRequest) -> tuple[bytes, str] | None:
