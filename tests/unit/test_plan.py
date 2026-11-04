@@ -139,16 +139,18 @@ def test_plan_array_large_aoi_respects_chunk_cap(
     assert plan.request_count >= 8
     assert plan.pixel_height == 1500
     assert plan.pixel_width == 2000
-    assert plan.bands == 1
-    assert plan.bands_source == "format_policy"
-    assert plan.estimated_nbytes == 1500 * 2000 * 1 * 4
+    # GeoTIFF default band_policy is preserve (#94): band count needs a probe.
+    assert plan.bands is None
+    assert plan.bands_source == "unknown"
+    assert plan.estimated_nbytes is None
+    assert any("band count" in item for item in plan.unknowns)
     assert plan.fetch_policy["max_concurrent"] >= 1
     assert all(w * h <= max_chunk[0] * max_chunk[1] for w, h in service.seen_sizes)
     assert all(w <= max_chunk[0] and h <= max_chunk[1] for w, h in service.seen_sizes)
     text = plan.summary()
     assert "preflight" in text
     assert "2000" in text
-    assert "unknowns" not in text or "band" not in text.split("unknowns")[-1]
+    assert "unknowns" in text
 
 
 def test_plan_array_edge_leftover_tiles(monkeypatch: pytest.MonkeyPatch) -> None:

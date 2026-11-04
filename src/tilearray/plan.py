@@ -286,7 +286,10 @@ def plan_array(
     unknowns: list[str] = []
     notes: list[str] = []
 
-    fixed_bands = default_band_count_for_format(effective_format)
+    band_policy = options.get("band_policy")
+    fixed_bands = default_band_count_for_format(
+        effective_format, band_policy=band_policy
+    )
     if probe_bands:
         decoder = _resolve_decoder(request, service, None)
         bands = _probe_tile_band_count(
@@ -305,7 +308,8 @@ def plan_array(
         bands = None
         bands_source = "unknown"
         unknowns.append(
-            "band count (JPEG/PNG and similar need a probe or create_array)"
+            "band count (preserve-policy formats need probe_bands=True "
+            "or create_array; pass band_policy='first_band' for a fixed 1)"
         )
 
     estimated_nbytes: int | None
