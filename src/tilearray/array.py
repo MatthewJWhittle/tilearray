@@ -36,6 +36,7 @@ from ._planning import (
 )
 from ._planning import (
     ArrayRequest,
+    recommend_grid_shape,
 )
 from ._planning import (
     cache_key as _cache_key,
