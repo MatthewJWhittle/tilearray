@@ -34,6 +34,10 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "**/.ipynb_checkpoints",
+    # Maintainer / agent pages — kept in-repo for CONTRIBUTING / AGENTS, not the published site
+    "api-freeze-checklist.md",
+    "building-docs.md",
+    "docs-writing-principles.md",
 ]
 
 source_suffix = {

@@ -12,7 +12,7 @@ The API may change.
 
 1. {doc}`install` — install the package
 2. {doc}`quickstart` — copy-paste recipes against public hosts
-3. {doc}`inspect-endpoint` — unknown WMS/WMTS/WCS URL → valid config
+3. {doc}`inspect-endpoint` — discover layers and build a config from an unknown WMS/WMTS/WCS URL
 4. {doc}`how-it-works` — what happens for a large AOI (plan, fetch, lazy mosaic)
 5. {doc}`multi-aoi-ml-patches` — many sample bboxes / ML chips (one mosaic per bbox)
 6. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar, WMTS)
@@ -40,15 +40,4 @@ troubleshooting
 api/index
 design-principles
 roadmap
-```
-
-
-```{toctree}
-:caption: Contributing
-:hidden:
-:maxdepth: 1
-
-building-docs
-docs-writing-principles
-api-freeze-checklist
 ```

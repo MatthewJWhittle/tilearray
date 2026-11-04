@@ -1,15 +1,8 @@
 # Roadmap
 
-tilearray turns remote tile services into Dask-backed xarray arrays for **geo data engineers**: a large AOI becomes a polite fetch-and-assemble problem, with a clear memory / concurrency / lazy-vs-cache story and the **same API** from a laptop to a larger machine.
+tilearray turns remote tile services into Dask-backed xarray arrays for **geo data engineers**: a large AOI becomes a polite fetch-and-assemble problem, with clear memory / concurrency / lazy-vs-cache behaviour and the **same API** from a laptop to a larger machine.
 
-**Today (0.2.x, Alpha):** one `create_array` entry point for WCS, WMS, WMTS, and XYZ; presets for OSM XYZ and EA DSP WCS; documented recipes for USGS 3DEP WCS, GIBS XYZ/WMTS, Kartverket WMTS (EPSG:25833), EA VOM WMS, and keyed OS Maps XYZ. Prefer fewer, meaningful PyPI cuts over drip releases.
-
-```text
-  0.1.x (shipped)          0.2.x (shipped)          next                         1.0
-  open alpha          →    core path solid     →    scale + hosts          →    stable contract
-```
-
-Tracking: [GitHub milestones](https://github.com/MatthewJWhittle/tilearray/milestones) and [open issues](https://github.com/MatthewJWhittle/tilearray/issues).
+**Today (0.2.x, Alpha):** one `create_array` entry point for WCS, WMS, WMTS, and XYZ; presets for OSM XYZ and EA DSP WCS; documented paths for USGS 3DEP WCS, GIBS XYZ/WMTS, Kartverket WMTS (EPSG:25833), EA VOM WMS, and keyed OS Maps XYZ. The package is Alpha until a stable 1.0 contract.
 
 ## Protocol & host coverage (today)
 
@@ -26,7 +19,7 @@ New host presets and deeper WMTS/WMS guides are the next theme after the shipped
 
 **Scale & hosts** — big AOI on more real hosts without a second API: USGS 3DEP WCS preset, NASA GIBS as first-class XYZ and/or native WMTS + visual guide, EA VOM WMS guide, keyed XYZ pattern (env/`params`; no secrets in repo), guidance for scaling compute without raising host concurrency past the ceiling, and stronger WMS/WMTS contract coverage.
 
-**Stable contract (1.0)** — freeze the public API users already rely on; graduate from Alpha; harden tests and supported Python matrix; deeper API reference. Maintainer checklist: {doc}`api-freeze-checklist` (inventory on `main`, SemVer draft — do not cut 1.0 early).
+**Stable contract (1.0)** — freeze the public API users already rely on; graduate from Alpha; harden tests and supported Python matrix; deeper API reference.
 
 Product boundaries and CRS vocabulary: {doc}`design-principles`.
 
@@ -36,16 +29,12 @@ Product boundaries and CRS vocabulary: {doc}`design-principles`.
 2. **Map SDK or tile server** — no Leaflet/Cesium UI; no OWS-style serving.
 3. **Async-first rewrite** — sync httpx + Dask threads stays the laptop-friendly model unless evidence forces otherwise.
 4. **GDAL on every path** — optional extra later is fine; basic XYZ should not require full GDAL.
-5. **Many tiny PyPI releases** — batch on `main`; cut when a theme is ready.
-6. **Universal host coverage / ToS-grey demos** — no Google-Satellite-first docs; presets only where politeness and licensing are clear.
-7. **Full temporal datacube API** — year/layer switching stays recipe-level until the spatial large-AOI story is solid.
-8. **Rewriting Sphinx onto another docs stack** — the usage-guides pipeline stays unless it fails the visual/live-host preference.
-9. **WCS 1.x full stack** — defer unless a named must-have host appears.
-10. **OAuth / short-lived token refresh** — keyed hosts use env-based keys/headers only for now.
+5. **Universal host coverage / ToS-grey demos** — no Google-Satellite-first docs; presets only where politeness and licensing are clear.
+6. **Full temporal datacube API** — year/layer switching stays recipe-level until the spatial large-AOI path is solid.
+7. **WCS 1.x full stack** — defer unless a named must-have host appears.
+8. **OAuth / short-lived token refresh** — keyed hosts use env-based keys/headers only for now.
 
 ## See also
 
-- {doc}`how-it-works` — plan → polite fetch → mosaic
+- {doc}`how-it-works` — plan, polite fetch, mosaic
 - {doc}`example-sources` — public endpoints and presets
-- {doc}`building-docs` — maintainer notes for Sphinx and figures
-- {doc}`api-freeze-checklist` — public vs provisional surface and 1.0 graduation gate

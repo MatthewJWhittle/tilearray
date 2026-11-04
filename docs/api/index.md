@@ -24,9 +24,9 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 
 `create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_with_policy` over plain `.compute()` so Dask workers match the fetch ceiling. {py:func}`~tilearray.load_array` is eager sugar (`create_array(..., compute=True)` by default) — useful for tiny windows, not a second primary habit. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
 
-Before a large fetch, {py:func}`~tilearray.plan_array` returns a read-only {py:class}`~tilearray.ArrayPlan` (request count, planned bbox, concurrency ceiling, cache warm/cold, honest unknowns). {py:func}`~tilearray.recommend_grid_shape` is the pure AOI helper for resolution × chunk sizing. After planning or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters without inventing wall time or cost.
+Before a large fetch, {py:func}`~tilearray.plan_array` returns a read-only {py:class}`~tilearray.ArrayPlan` (request count, planned bbox, concurrency ceiling, cache warm/cold, and unknown band/byte counts where not yet knowable). {py:func}`~tilearray.recommend_grid_shape` is the pure AOI helper for resolution × chunk sizing. After planning or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters without inventing wall time or cost.
 
-**`crs=` today:** one argument interprets the bbox. Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. For WCS / WMS / XYZ / slippy WMTS it also labels the mosaic (`attrs["crs"]`). For **WMTS with TileMatrixSet metadata**, the mosaic CRS / planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). No client-side raster warp. A separate public `bbox_crs=` for every protocol remains **target** — see {doc}`../design-principles`. Full parameter list (chunk/grid, cache, `band_policy="preserve"`, soft-fail, progress): {py:func}`~tilearray.create_array` docstring.
+**`crs=`:** one argument interprets the bbox. Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. For WCS / WMS / XYZ / slippy WMTS it also labels the mosaic (`attrs["crs"]`). For **WMTS with TileMatrixSet metadata**, the mosaic CRS / planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). No client-side raster warp. Planned: separate public `bbox_crs=` — see {doc}`../design-principles`. Full parameter list (chunk/grid, cache, `band_policy="preserve"`, soft-fail, progress): {py:func}`~tilearray.create_array` docstring.
 
 Multi-tile mosaics attach a default tqdm-style progress bar through `on_progress` during compute. Opt out with `show_progress=False` or `TILEARRAY_PROGRESS=0`; pass a custom `on_progress=` to replace the bar. Soft-fail (`on_tile_error=` / `soft_fail=True`) is plan-time only — default stays hard-fail + abort. Details: {doc}`../how-it-works` · {doc}`../troubleshooting`.
 
@@ -80,7 +80,7 @@ Custom hosts: `from_url` alone (no preset unpack). `WCSConfig.build_service()` v
    MatrixSetSummary
 ```
 
-Unknown WMS / WMTS / WCS URL → capability summary → validated config. How-to: {doc}`../inspect-endpoint`. Does not invent a second `create_array` path or silently guess layer / coverage / matrix / CRS / format.
+From an unknown WMS / WMTS / WCS URL, inspect returns a capability summary and can build a validated config. How-to: {doc}`../inspect-endpoint`. Does not invent a second `create_array` path or silently guess layer / coverage / matrix / CRS / format.
 
 ## Fetch presets
 

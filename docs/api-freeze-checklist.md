@@ -35,8 +35,8 @@ These are the SemVer spine for 1.0:
 |--------|------|
 | `create_array` | Primary entry — plan / bind / lazy mosaic |
 | `load_array` | Eager sugar (`create_array(..., compute=True)`); not a second habit |
-| `compute_with_policy` | Canonical compute helper (Dask workers ↔ fetch ceiling); process-local gate honesty |
-| `plan_array` / `ArrayPlan` | Preflight — request count, grid, concurrency, cache warm/cold, honest unknowns (#61 / #109) |
+| `compute_with_policy` | Canonical compute helper (Dask workers ↔ fetch ceiling); process-local gate documented |
+| `plan_array` / `ArrayPlan` | Preflight — request count, grid, concurrency, cache warm/cold, unknown band/byte counts where not knowable (#61 / #109) |
 | `recommend_grid_shape` | Pure AOI helper for resolution × chunk sizing (#61 / #109) |
 | `fetch_summary` / `FetchSummary` | Post-plan / post-compute progress & pressure counters (#61 / #109) |
 | `inspect_endpoint` / `inspect_capabilities` / `EndpointInspection` (+ `ResourceSummary`, `MatrixSetSummary`) | Discover → choose → validated config from GetCapabilities (#96 / #108) |
@@ -81,23 +81,23 @@ These landed on `main` during the post-0.2.0 uniqueness / DX queue. They are **A
 | PR | Issue | What shipped |
 |----|-------|--------------|
 | [#105](https://github.com/MatthewJWhittle/tilearray/pull/105) | [#92](https://github.com/MatthewJWhittle/tilearray/issues/92) | Wider `CRS` acceptance (pyproj / any valid EPSG); same `create_array(..., crs=)` path |
-| [#106](https://github.com/MatthewJWhittle/tilearray/pull/106) | [#94](https://github.com/MatthewJWhittle/tilearray/issues/94) / [#95](https://github.com/MatthewJWhittle/tilearray/issues/95) | Clipped WCS GeoTIFF placement; default `band_policy="preserve"` / palette / dtype honesty |
+| [#106](https://github.com/MatthewJWhittle/tilearray/pull/106) | [#94](https://github.com/MatthewJWhittle/tilearray/issues/94) / [#95](https://github.com/MatthewJWhittle/tilearray/issues/95) | Clipped WCS GeoTIFF placement; default `band_policy="preserve"` / palette / dtype contract |
 | [#107](https://github.com/MatthewJWhittle/tilearray/pull/107) | [#93](https://github.com/MatthewJWhittle/tilearray/issues/93) | Native TileMatrixSet planning / mosaic CRS labelling |
-| [#110](https://github.com/MatthewJWhittle/tilearray/pull/110) | [#60](https://github.com/MatthewJWhittle/tilearray/issues/60) | WMTS productization guide + Kartverket contract tests; auto-load caps for non-slippy matrices |
+| [#110](https://github.com/MatthewJWhittle/tilearray/pull/110) | [#60](https://github.com/MatthewJWhittle/tilearray/issues/60) | WMTS host guide + Kartverket contract tests; auto-load caps for non-slippy matrices |
 | [#108](https://github.com/MatthewJWhittle/tilearray/pull/108) | [#96](https://github.com/MatthewJWhittle/tilearray/issues/96) | `inspect_endpoint` / `inspect_capabilities` / `EndpointInspection.build_config` |
 | [#109](https://github.com/MatthewJWhittle/tilearray/pull/109) | [#61](https://github.com/MatthewJWhittle/tilearray/issues/61) | `recommend_grid_shape`, `plan_array` / `ArrayPlan`, `fetch_summary` / `FetchSummary` |
 | [#112](https://github.com/MatthewJWhittle/tilearray/pull/112) | [#87](https://github.com/MatthewJWhittle/tilearray/issues/87) | Multi-AOI / ML sample-loop **docs + offline tests** — **no** orchestration API |
-| [#113](https://github.com/MatthewJWhittle/tilearray/pull/113) | [#59](https://github.com/MatthewJWhittle/tilearray/issues/59) | Don’t-stampede **docs + honesty** (process-local gates); warn on non-`threads` scheduler — **no** distributed coordinator |
-| [#116](https://github.com/MatthewJWhittle/tilearray/pull/116) / [#103](https://github.com/MatthewJWhittle/tilearray/pull/103) | [#97](https://github.com/MatthewJWhittle/tilearray/issues/97) | Community problem-shaped worked examples (notebook + guide) — **no** new library exports |
+| [#113](https://github.com/MatthewJWhittle/tilearray/pull/113) | [#59](https://github.com/MatthewJWhittle/tilearray/issues/59) | Process-local fetch-gate docs; warn on non-`threads` scheduler — **no** distributed coordinator |
+| [#116](https://github.com/MatthewJWhittle/tilearray/pull/116) / [#103](https://github.com/MatthewJWhittle/tilearray/pull/103) | [#97](https://github.com/MatthewJWhittle/tilearray/issues/97) | Worked examples notebook + guide — **no** new library exports |
 | [#104](https://github.com/MatthewJWhittle/tilearray/pull/104) | docs filter | Maintainer docs-writing principles / leakage seatbelt — **no** runtime API |
 
-**Still not a public orchestration API:** multi-AOI remains a documented loop ({doc}`multi-aoi-ml-patches`); fetch gates remain process-local. Design before inventing `map_aois` or a cross-process coordinator.
+**Still not a public orchestration API:** multi-AOI remains a documented loop ([multi-aoi-ml-patches.md](multi-aoi-ml-patches.md)); fetch gates remain process-local. Design before inventing `map_aois` or a cross-process coordinator.
 
 ---
 
 ## Draft SemVer promise (publish at 1.0)
 
-Until 1.0, Alpha may change; still prefer additive changes and CHANGELOG honesty ({doc}`design-principles`).
+Until 1.0, Alpha may change; still prefer additive changes and documented CHANGELOG behaviour changes ({doc}`design-principles`).
 
 At **1.0.0**, publish something equivalent to:
 
@@ -153,8 +153,8 @@ Do **not** cut 1.0 until every box is true (or an unchecked item is explicitly a
 
 ## Related
 
-- {doc}`design-principles` — ethos, CRS roles, scope
-- {doc}`roadmap` — coverage today, direction, non-goals
-- {doc}`api/index` — advertised reference
-- {doc}`building-docs` — Sphinx / figures
+- [design-principles.md](design-principles.md) — ethos, CRS roles, scope
+- [roadmap.md](roadmap.md) — coverage today, direction, non-goals
+- [api/index.md](api/index.md) — advertised reference
+- [building-docs.md](building-docs.md) — Sphinx / figures
 - [AGENTS.md](https://github.com/MatthewJWhittle/tilearray/blob/main/AGENTS.md) · [guidelines.md](https://github.com/MatthewJWhittle/tilearray/blob/main/guidelines.md) · [CONTRIBUTING.md](https://github.com/MatthewJWhittle/tilearray/blob/main/CONTRIBUTING.md)
