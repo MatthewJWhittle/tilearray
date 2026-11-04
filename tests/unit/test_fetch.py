@@ -32,6 +32,24 @@ def reset_fetcher_instances() -> Any:
     TileFetcher.reset_instances()
 
 
+def test_fetch_policy_rejects_invalid_bounds() -> None:
+    from pydantic import ValidationError as PydanticValidationError
+
+    with pytest.raises(PydanticValidationError):
+        FetchPolicy(max_concurrent=0)
+    with pytest.raises(PydanticValidationError):
+        FetchPolicy(timeout=-1.0)
+    with pytest.raises(PydanticValidationError):
+        FetchPolicy(multiplicative_decrease=1.0)
+    with pytest.raises(PydanticValidationError):
+        FetchPolicy(call_max_concurrent=0)
+
+    policy = FetchPolicy(max_concurrent=4, call_max_concurrent=2)
+    copied = policy.model_copy(update={"call_max_concurrent": None})
+    assert copied.max_concurrent == 4
+    assert copied.call_max_concurrent is None
+
+
 def _tile_request(**overrides: Any) -> TileRequest:
     defaults = {
         "url": "https://example.com/tile",

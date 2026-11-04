@@ -47,6 +47,12 @@ def test_crs_parse_accepts_integer_and_pyproj() -> None:
     assert CRS("epsg:32632") == CRS.parse("EPSG:32632")
 
 
+def test_crs_parse_accepts_ogc_urn_and_uri_spellings() -> None:
+    assert CRS.parse("urn:ogc:def:crs:EPSG::25833") == "EPSG:25833"
+    assert CRS.parse("http://www.opengis.net/def/crs/EPSG/0/3857") == CRS.EPSG_3857
+    assert CRS.parse("urn:ogc:def:crs:OGC:1.3:CRS84") == CRS.parse("OGC:CRS84")
+
+
 def test_crs_presets_remain_usable() -> None:
     assert CRS.EPSG_4326.value == "EPSG:4326"
     assert CRS.EPSG_3857 == "EPSG:3857"

@@ -502,6 +502,9 @@ def test_normalize_crs_reference() -> None:
         == "EPSG:3857"
     )
     assert normalize_crs_reference("EPSG:27700") == "EPSG:27700"
+    assert normalize_crs_reference("urn:ogc:def:crs:EPSG::25833") == "EPSG:25833"
+    assert CRS.parse("urn:ogc:def:crs:EPSG::25833") == "EPSG:25833"
+    assert CRS.parse("urn:ogc:def:crs:OGC:1.3:CRS84") == CRS.parse("OGC:CRS84")
 
 
 def test_wcs_service_coerce_helpers_validate_inputs() -> None:

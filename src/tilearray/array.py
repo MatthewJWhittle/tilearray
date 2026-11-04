@@ -10,7 +10,6 @@ import math
 import os
 import warnings
 from collections.abc import Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -489,7 +488,7 @@ def _resolve_fetch_policy_for_compute(
     base = _policy_from_attrs_or_default(obj)
     if max_concurrent is not None:
         # Override concurrency for worker sizing only; keep AIMD / breaker / etc.
-        return replace(base, max_concurrent=max_concurrent)
+        return base.model_copy(update={"max_concurrent": max_concurrent})
     return base
 
 

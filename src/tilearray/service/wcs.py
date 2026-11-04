@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
@@ -28,6 +27,7 @@ from ..types import (
     TemporalExtent,
     TileRequest,
     WCSResponse,
+    canonicalize_crs_input,
 )
 from .base import BaseService, TileGeometry, register_service
 from .http import (
@@ -39,21 +39,15 @@ from .http import (
 
 logger = logging.getLogger(__name__)
 
-_OGC_EPSG_URI_RE = re.compile(r"/EPSG/(?:0/)?(\d+)/?$", re.I)
-
 
 def normalize_crs_reference(value: str) -> str:
-    """Normalize OGC URI or EPSG shorthand to ``EPSG:<code>``."""
+    """Normalize OGC URI / URN or EPSG shorthand to ``EPSG:<code>``.
 
-    text = value.strip()
-    upper = text.upper()
-    if upper.startswith("EPSG:"):
-        code = text.split(":", 1)[1].split("/")[0]
-        return f"EPSG:{code}"
-    match = _OGC_EPSG_URI_RE.search(text)
-    if match:
-        return f"EPSG:{match.group(1)}"
-    return text
+    Thin wrapper around :func:`tilearray.types.canonicalize_crs_input` kept for
+    WCS caps soft-skip paths and existing imports.
+    """
+
+    return canonicalize_crs_input(value)
 
 
 def _coerce_crs_enum(value: str | None) -> CRS | None:
