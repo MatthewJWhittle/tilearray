@@ -57,6 +57,24 @@ XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 
 Custom hosts: `from_url` alone (no preset unpack). `WCSConfig.build_service()` validates coverage via live DescribeCoverage (network on first `create_array` path that needs capabilities, not only at import time).
 
+## Inspect endpoint
+
+```{eval-rst}
+.. currentmodule:: tilearray
+
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   inspect_endpoint
+   inspect_capabilities
+   EndpointInspection
+   ResourceSummary
+   MatrixSetSummary
+```
+
+Unknown WMS / WMTS / WCS URL → capability summary → validated config. How-to: {doc}`../inspect-endpoint`. Does not invent a second `create_array` path or silently guess layer / coverage / matrix / CRS / format.
+
 ## Fetch presets
 
 ```{eval-rst}

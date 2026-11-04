@@ -15,6 +15,13 @@ from .errors import (
     ValidationError,
 )
 from .fetch import FetchPolicy
+from .inspect import (
+    EndpointInspection,
+    MatrixSetSummary,
+    ResourceSummary,
+    inspect_capabilities,
+    inspect_endpoint,
+)
 from .service import (
     ServiceConfig,
     TileGeometry,
@@ -69,6 +76,11 @@ __all__ = [
     "detect_service_type",
     "get_service",
     "register_service",
+    "inspect_endpoint",
+    "inspect_capabilities",
+    "EndpointInspection",
+    "ResourceSummary",
+    "MatrixSetSummary",
     "ServiceConfig",
     "XYZConfig",
     "WCSConfig",

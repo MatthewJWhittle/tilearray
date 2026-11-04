@@ -109,7 +109,7 @@ arr = compute_with_policy(da)
 print(arr.shape, da.attrs["crs"])  # CRS is EPSG:25833
 ```
 
-Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough + simpler GIBS WMTS recipe: {doc}`guides/wmts`.
+Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough + simpler GIBS WMTS recipe: {doc}`guides/wmts`. To discover layer / TileMatrixSet / matrix ids on an unfamiliar host, use {doc}`inspect-endpoint`.
 
 ## Private or keyed hosts
 

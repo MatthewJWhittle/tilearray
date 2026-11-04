@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<WMS_Capabilities xmlns="http://www.opengis.net/wms" version="1.3.0">
+  <Service>
+    <Title>Example WMS</Title>
+  </Service>
+  <Capability>
+    <Request>
+      <GetMap>
+        <Format>image/png</Format>
+        <Format>image/jpeg</Format>
+      </GetMap>
+    </Request>
+    <Layer>
+      <Title>Root</Title>
+      <CRS>EPSG:27700</CRS>
+      <CRS>EPSG:4326</CRS>
+      <Layer>
+        <Name>Vegetation_Object_Model_2022</Name>
+        <Title>VOM 2022</Title>
+        <CRS>EPSG:27700</CRS>
+        <Style>
+          <Name>default</Name>
+        </Style>
+      </Layer>
+      <Layer>
+        <Name>Vegetation_Object_Model_2021</Name>
+        <Title>VOM 2021</Title>
+      </Layer>
+    </Layer>
+  </Capability>
+</WMS_Capabilities>

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `inspect_endpoint` / `inspect_capabilities` + `EndpointInspection.build_config`: discover layers/coverages, formats, CRS, and WMTS matrices from GetCapabilities (or explain XYZ template limits), then build a validated `*Config` without guessing identifiers. Supports `headers=` / `params=` with secret redaction in printed summaries. How-to: `docs/inspect-endpoint.md` (#96)
+
 ### Fixed
 
 - Clipped / partial WCS GeoTIFF responses are placed on the requested tile grid using `ModelPixelScale` / `ModelTiepoint` (and optional GeoKey EPSG), with NaN padding for uncovered cells — never stretched or silently shifted. Mismatched resolution, CRS, rotation, or missing georef fails with a clear `ValidationError`. Coverage pads are distinct from soft-fail tile fills (#95)
