@@ -6,7 +6,7 @@ Maintainer / agent gate for the **stable contract** cut (1.0). Use this before r
 **Not for:** day-to-day bug fixes (use {doc}`design-principles` + [guidelines.md](https://github.com/MatthewJWhittle/tilearray/blob/main/guidelines.md) §9).  
 **Tracking issue:** [#62](https://github.com/MatthewJWhittle/tilearray/issues/62).
 
-**Status today:** package is **0.2.x Alpha**. This page is the checklist and inventory; boxes under [Graduation gate](#graduation-gate-10) stay open until exit criteria hold. **Do not** treat this checklist as a 1.0 cut or as dropping Alpha.
+**Status today:** package is **0.3.x Alpha**. This page is the checklist and inventory; boxes under [Graduation gate](#graduation-gate-10) stay open until exit criteria hold. **Do not** treat this checklist as a 1.0 cut or as dropping Alpha.
 
 ---
 
@@ -17,13 +17,13 @@ Maintainer / agent gate for the **stable contract** cut (1.0). Use this before r
 | **Public** | In package `__all__` and/or Sphinx {doc}`api/index` — callers may depend on it |
 | **Provisional** | Public today, but may shrink, rename, or get a deprecation before 1.0 |
 | **Internal** | Importable under submodules; **no** stability promise — may change without deprecation |
-| **Shipped (Alpha)** | On `main` in 0.2.x; part of today’s contract, still under Alpha (may change before 1.0) |
+| **Shipped (Alpha)** | On `main` in 0.3.x; part of today’s contract, still under Alpha (may change before 1.0) |
 
 SemVer for 1.0 applies to the **public** surface below (plus any symbols promoted from provisional with an explicit decision). Internal imports are unsupported.
 
 ---
 
-## Inventory on `main` (0.2.x Alpha)
+## Inventory on `main` (0.3.x Alpha)
 
 Source of truth: `tilearray.__all__` and {doc}`api/index`. Refresh this table when exports change.
 

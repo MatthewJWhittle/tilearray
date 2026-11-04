@@ -2,7 +2,7 @@
 
 tilearray turns remote tile services into Dask-backed xarray arrays for **geo data engineers**: a large AOI becomes a polite fetch-and-assemble problem, with clear memory / concurrency / lazy-vs-cache behaviour and the **same API** from a laptop to a larger machine.
 
-**Today (0.2.x, Alpha):** one `create_array` entry point for WCS, WMS, WMTS, and XYZ; presets for OSM XYZ and EA DSP WCS; documented paths for USGS 3DEP WCS, GIBS XYZ/WMTS, Kartverket WMTS (EPSG:25833), EA VOM WMS, and keyed OS Maps XYZ. The package is Alpha until a stable 1.0 contract.
+**Today (0.3.x, Alpha):** one `create_array` entry point for WCS, WMS, WMTS, and XYZ; presets for OSM XYZ and EA DSP WCS; documented paths for USGS 3DEP WCS, GIBS XYZ/WMTS, Kartverket WMTS (EPSG:25833), EA VOM WMS, and keyed OS Maps XYZ. The package is Alpha until a stable 1.0 contract.
 
 ## Protocol & host coverage (today)
 
