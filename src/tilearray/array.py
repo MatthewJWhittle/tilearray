@@ -23,10 +23,6 @@ from dask.array import from_delayed as da_from_delayed
 from dask.delayed import Delayed, delayed
 
 from ._planning import (
-    ArrayRequest,
-    recommend_grid_shape,
-)
-from ._planning import (
     FETCH_POLICY_ATTR as _FETCH_POLICY_ATTR,
 )
 from ._planning import (
@@ -37,6 +33,9 @@ from ._planning import (
 )
 from ._planning import (
     TILE_ERRORS_ATTR as _TILE_ERRORS_ATTR,
+)
+from ._planning import (
+    ArrayRequest,
 )
 from ._planning import (
     cache_key as _cache_key,

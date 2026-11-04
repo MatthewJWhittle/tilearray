@@ -11,8 +11,8 @@ import tifffile
 from _pytest.monkeypatch import MonkeyPatch
 from PIL import Image
 
-import tilearray.array as array_module
 import tilearray._planning as planning_module
+import tilearray.array as array_module
 import tilearray.decode as decode_module
 from tilearray.decode import (
     band_count_from_array,

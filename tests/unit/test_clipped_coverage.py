@@ -10,8 +10,8 @@ import pytest
 import tifffile
 from _pytest.monkeypatch import MonkeyPatch
 
-import tilearray.array as array_module
 import tilearray._planning as planning_module
+import tilearray.array as array_module
 from tilearray.decode import (
     GeoTransform,
     decoder_for_format,

@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 from pytest import MonkeyPatch
 
-import tilearray.array as array_module
 import tilearray._planning as planning_module
+import tilearray.array as array_module
 import tilearray.decode as decode_module
 import tilearray.progress as progress_module
 from tilearray.fetch import FetchProgress

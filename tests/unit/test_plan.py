@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 import xarray as xr
 
-import tilearray.array as array_module
 import tilearray._planning as planning_module
+import tilearray.array as array_module
 import tilearray.plan as plan_module
 from tilearray import (
     CRS,
@@ -23,7 +23,8 @@ from tilearray import (
     plan_array,
     recommend_grid_shape,
 )
-from tilearray._planning import ArrayRequest, cache_key as _cache_key
+from tilearray._planning import ArrayRequest
+from tilearray._planning import cache_key as _cache_key
 from tilearray.errors import ValidationError
 from tilearray.fetch import FetchPolicy, FetchProgress, TileFetcher
 from tilearray.service.base import BaseService, TileGeometry

@@ -10,8 +10,8 @@ import pytest
 import xarray as xr
 from pytest import MonkeyPatch
 
-import tilearray.array as array_module
 import tilearray._planning as planning_module
+import tilearray.array as array_module
 import tilearray.decode as decode_module
 from tilearray.array import (
     _FETCH_POLICY_ATTR,
