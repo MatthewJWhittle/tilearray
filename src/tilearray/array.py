@@ -103,7 +103,6 @@ else:  # pragma: no cover - typing aid
     DaskArray = Any
 
 
-
 def _delayed_call(func: Callable[..., Any], *args: Any) -> Delayed:
     """Typed helper around ``dask.delayed`` to satisfy static analysis."""
 
@@ -742,7 +741,6 @@ def _assemble_tile_mosaic(
         ]
         return cast(DaskArray, da_concatenate(row_arrays, axis=0))
     return cast(DaskArray, da_block(blocks))
-
 
 
 def _resize_tile_array(

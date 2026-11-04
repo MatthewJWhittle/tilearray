@@ -179,9 +179,7 @@ def test_array_request_rejects_invalid_origin() -> None:
 
 
 def test_array_request_rejects_nonpositive_sizes() -> None:
-    bbox = BoundingBox(
-        min_x=0.0, min_y=0.0, max_x=10.0, max_y=10.0, crs=CRS.EPSG_4326
-    )
+    bbox = BoundingBox(min_x=0.0, min_y=0.0, max_x=10.0, max_y=10.0, crs=CRS.EPSG_4326)
     with pytest.raises(ValidationError, match="chunk_size"):
         ArrayRequest(
             service_url="http://example.com/wcs",

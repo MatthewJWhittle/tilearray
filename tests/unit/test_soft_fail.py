@@ -117,7 +117,9 @@ def _patch_grid(
     fetch_side_effect: Any | None = None,
 ) -> list[dict[str, Any]]:
     service_cls = _grid_service(rows, cols, tile_retries=tile_retries)
-    monkeypatch.setattr("tilearray._planning.get_service", lambda *a, **k: service_cls())
+    monkeypatch.setattr(
+        "tilearray._planning.get_service", lambda *a, **k: service_cls()
+    )
 
     calls: list[dict[str, Any]] = []
 
