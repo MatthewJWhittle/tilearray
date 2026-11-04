@@ -799,6 +799,11 @@ def create_array(
     so nodata can be NaN; imagery decode keeps native dtype until the
     ``dtype=`` cast. Clipped WCS GeoTIFF responses are placed by their tags
     onto the requested grid and padded with NaN — never stretched.
+
+    ``crs`` interprets the bbox for planning. For WCS / WMS / XYZ / slippy
+    WMTS it also labels ``attrs["crs"]``. For WMTS with TileMatrixSet
+    metadata, the mosaic CRS and planned extent follow the matrix
+    SupportedCRS (query CRS may differ; no client-side warp).
     """
 
     target_crs = _coerce_crs(crs)

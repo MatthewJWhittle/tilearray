@@ -26,7 +26,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 
 Before a large fetch, {py:func}`~tilearray.plan_array` returns a read-only {py:class}`~tilearray.ArrayPlan` (request count, planned bbox, concurrency ceiling, cache warm/cold, honest unknowns). {py:func}`~tilearray.recommend_grid_shape` is the pure AOI helper for resolution × chunk sizing. After planning or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters without inventing wall time or cost.
 
-**`crs=` today:** one argument interprets the bbox and labels the mosaic (`attrs["crs"]`). Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. There is no client-side raster warp onto another CRS. Separate query / service / output CRS roles are **target** design — see {doc}`../design-principles`.
+**`crs=` today:** one argument interprets the bbox. Accepts presets (`CRS.EPSG_27700`), EPSG strings / integers (`"EPSG:25833"`, `25833`), or a `pyproj.CRS` — validated via pyproj; typos like `EPGS:…` fail early. For WCS / WMS / XYZ / slippy WMTS it also labels the mosaic (`attrs["crs"]`). For **WMTS with TileMatrixSet metadata**, the mosaic CRS / planned extent follow the matrix SupportedCRS (query CRS may differ). No client-side raster warp. A separate public `bbox_crs=` for every protocol remains **target** — see {doc}`../design-principles`.
 
 Multi-tile mosaics attach a default tqdm-style progress bar through `on_progress` during compute. Opt out with `show_progress=False` or `TILEARRAY_PROGRESS=0`; pass a custom `on_progress=` to replace the bar. Details: {doc}`../how-it-works` · {doc}`../troubleshooting`.
 

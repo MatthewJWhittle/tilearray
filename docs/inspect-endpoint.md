@@ -53,7 +53,7 @@ config = inspection.build_config(
 # create_array(config, bbox=…, crs=…) as usual
 ```
 
-Pass `layer`, `tile_matrix_set`, and `tile_matrix` unless only one option exists. Wrong ids raise {py:exc}`~tilearray.ValidationError` — tilearray does not rename or guess. Returned mosaics stay on the grid CRS you request; inspection does **not** warp pixels into your bbox CRS ({doc}`design-principles`).
+Pass `layer`, `tile_matrix_set`, and `tile_matrix` unless only one option exists. Wrong ids raise {py:exc}`~tilearray.ValidationError` — tilearray does not rename or guess. Inspection does **not** warp pixels: for metadata-backed WMTS the mosaic stays on the matrix SupportedCRS (your bbox `crs=` is only the query window); see {doc}`guides/wmts` and {doc}`design-principles`.
 
 ## WMS and private hosts
 
