@@ -30,7 +30,13 @@ or:
 pip install tilearray
 ```
 
-From a clone: `uv sync --dev`. Contributors: `make docs` (HTML), `make docs-artifacts` (regenerate figures).
+Plotting (`arr.plot.imshow`) needs **matplotlib**, which is not a core dependency:
+
+```bash
+pip install matplotlib
+```
+
+(or `conda install matplotlib` / `uv add matplotlib`). From a clone: `uv sync --dev` (includes matplotlib via `dev`). Contributors: `make docs` (HTML), `make docs-artifacts` (regenerate figures).
 
 ## Quick start
 
@@ -48,14 +54,15 @@ da = create_array(
     config,
     bbox=(-0.005, 51.495, 0.005, 51.505),  # query lon/lat
     crs=CRS.EPSG_4326,
+    expand_palette=True,  # full-colour RGB; omit for single-band palette indices
 )
 arr = compute_with_policy(da)
 print(arr.shape, da.attrs["crs"], da.attrs["transform"])
 # Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — crs= is query only
-arr.plot.imshow(cmap="gray", add_colorbar=False)
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-Palette PNGs decode as single-band. Include © OpenStreetMap contributors when displaying map imagery. Full plotted walkthrough: [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html) / [OSM guide](https://matthewjwhittle.github.io/tilearray/guides/osm-london.html).
+OSM tiles are often palette PNGs: `expand_palette=True` expands to RGB; the default keeps indices. Include © OpenStreetMap contributors when displaying map imagery. Full plotted walkthrough: [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html) / [OSM guide](https://matthewjwhittle.github.io/tilearray/guides/osm-london.html).
 
 ### Also — WCS (Environment Agency Lidar)
 

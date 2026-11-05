@@ -10,9 +10,10 @@
   "crs_query": "EPSG:4326",
   "dims": [
     "y",
-    "x"
+    "x",
+    "band"
   ],
-  "elapsed_s": 3.531,
+  "elapsed_s": 3.534,
   "extent_m": [
     -610.3018977139727,
     6708726.292861916,
@@ -21,12 +22,14 @@
   ],
   "figure": "osm-london.png",
   "host": "openstreetmap",
-  "mean": 186.28684997558594,
-  "note": "OSM PNGs are often palette mode; decoded mosaic is single-band today. Query crs= is lon/lat; mosaic attrs are native EPSG:3857.",
+  "mean": 206.9778289794922,
+  "note": "Generated with expand_palette=True (RGB). Default without it keeps palette indices. Query crs= is lon/lat; mosaic attrs are native EPSG:3857.",
+  "palette_mode": "rgb",
   "service": "XYZ",
   "shape": [
     1024,
-    512
+    512,
+    3
   ],
   "transform": [
     2.3886571339098737,

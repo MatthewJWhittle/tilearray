@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Docs first-run path: install / quickstart / README / OSM London guide state that plotting needs a separate `matplotlib` install (not a core dependency; no `[plot]` extra). Primary OSM snippets use `expand_palette=True` for full-colour RGB and note that the default keeps palette indices; guide figure artifact script aligned
+
 ## [0.3.0] - 2026-11-04
 
 Alpha cut: native XYZ/slippy georef, inspect/plan preflight, broader CRS/WMTS fidelity, and a five-minute first-run docs path. The API remains Alpha.
