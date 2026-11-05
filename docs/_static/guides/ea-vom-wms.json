@@ -1,0 +1,26 @@
+{
+  "bbox": [
+    430000.0,
+    380000.0,
+    430512.0,
+    380512.0
+  ],
+  "crs_mosaic": "EPSG:27700",
+  "crs_query": "EPSG:27700",
+  "dims": [
+    "y",
+    "x",
+    "band"
+  ],
+  "elapsed_s": 4.053,
+  "figure": "ea-vom-wms.png",
+  "host": "environment-agency-dsp",
+  "layers": "Vegetation_Object_Model_2022",
+  "note": "Transparent GetMap PNG often returns RGBA (4 bands). Confirm year-suffixed layer id via GetCapabilities.",
+  "service": "WMS",
+  "shape": [
+    512,
+    512,
+    4
+  ]
+}

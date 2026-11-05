@@ -78,6 +78,11 @@ print(elevation.shape, float(elevation.mean()))
 print(elevation.attrs["crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
 ```
 
+```{image} _static/guides/ea-lidar-elevation.png
+:alt: EA Lidar elevation map and histogram for a small OSGB window
+:width: 520px
+```
+
 The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["crs"]` matches `bbox_crs=`. Visual walkthrough: {doc}`guides/ea-lidar`.
 
 ### WMS — Environment Agency Vegetation Object Model
@@ -96,14 +101,20 @@ config = WMSConfig.from_url(
 )
 
 # Approximate OSGB window (British National Grid)
-bbox = (430000.0, 380000.0, 431000.0, 381000.0)
+bbox = (430000.0, 380000.0, 430512.0, 380512.0)
 da = create_array(config, bbox, CRS.EPSG_27700)
 img = compute_mosaic(da)
 # Transparent GetMap PNG → RGBA (4 bands)
 print(img.shape, da.attrs["service_type"])
+img.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. See {doc}`example-sources` for layer quirks.
+```{image} _static/guides/ea-vom-wms.png
+:alt: EA Vegetation Object Model WMS mosaic over a small OSGB window
+:width: 420px
+```
+
+No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. Visual walkthrough: {doc}`guides/ea-vom-wms`. Layer quirks: {doc}`example-sources`.
 
 ### WMTS — Kartverket topo (EPSG:25833)
 
@@ -127,9 +138,19 @@ config = WMTSConfig.from_url(
 )
 
 # Lon/lat AOI → native UTM33 mosaic (tile-aligned extent may expand)
-da = create_array(config, bbox=(10.6, 59.85, 10.8, 59.95), bbox_bbox_crs="EPSG:4326")
+da = create_array(
+    config,
+    bbox=(10.6, 59.85, 10.8, 59.95),
+    bbox_crs="EPSG:4326",
+)
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"])  # mosaic CRS is EPSG:25833, not the query CRS
+arr.plot.imshow(rgb="band", add_colorbar=False)
+```
+
+```{image} _static/guides/wmts-kartverket-oslo.png
+:alt: Kartverket topo WMTS mosaic over a small Oslo-area bbox in EPSG:25833
+:width: 420px
 ```
 
 Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough: {doc}`guides/wmts`. Unknown hosts: {doc}`inspect-endpoint`.

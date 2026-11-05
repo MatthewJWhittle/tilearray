@@ -35,7 +35,7 @@ print(
     float(arr.x.max()),
     float(arr.y.max()),
 )
-# Query crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
+# Query bbox_crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 

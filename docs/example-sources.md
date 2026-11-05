@@ -46,6 +46,7 @@ Public endpoints and thin fetch presets for testing host quirks — **not** a pr
 - Use `WMSConfig.from_url(..., layers=...)` — no fetch preset; thin GetMap adapter.
 - Layer id is year-suffixed (e.g. `Vegetation_Object_Model_2022` from GetCapabilities — confirm the year).
 - Transparent GetMap PNG decodes to 4 bands (RGBA), not 3.
+- Visual walkthrough: {doc}`guides/ea-vom-wms`.
 
 ## OS Maps API ZXY (needs key)
 
