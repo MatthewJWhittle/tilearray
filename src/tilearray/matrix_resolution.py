@@ -2,8 +2,9 @@
 
 Pure helpers over matrix-level summaries — no HTTP, no silent pick inside
 ``create_array``, and no resampling. Callers pass the chosen matrix id into
-``WMTSConfig`` / ``create_array`` themselves. Values are CRS coordinate units
-per pixel (not “ground metres” on Web Mercator).
+``WMTSConfig`` / ``create_array`` themselves. Public comparison is on
+**resolution** (CRS coordinate units per pixel — not “ground metres” on Web
+Mercator). ScaleDenominator is best-effort / internal when present.
 """
 
 from __future__ import annotations
@@ -28,7 +29,11 @@ __all__ = [
 
 @dataclass(frozen=True)
 class MatrixLevelSummary:
-    """One TileMatrix level with the scale needed for resolution selection."""
+    """One TileMatrix level for resolution selection.
+
+    Prefer setting ``resolution`` (CRS units per pixel). ``scale_denominator``
+    is optional OGC metadata used only to derive resolution when needed.
+    """
 
     identifier: str
     scale_denominator: float | None = None
@@ -38,10 +43,14 @@ class MatrixLevelSummary:
 
 @dataclass(frozen=True)
 class MatrixChoice:
-    """Result of :func:`choose_matrix_for_resolution`."""
+    """Result of :func:`choose_matrix_for_resolution`.
+
+    ``scale_denominator`` is best-effort: ``None`` when the chosen level only
+    had a precomputed ``resolution`` (no ScaleDenominator).
+    """
 
     identifier: str
-    scale_denominator: float
+    scale_denominator: float | None
     resolution: float
     policy: ResolutionPolicy
 
@@ -58,6 +67,9 @@ def choose_matrix_for_resolution(
     ``target_resolution`` is sample distance in **CRS units per pixel**
     (linear units/pixel for projected matrices such as UTM metres; degrees/pixel
     for geographic; Web Mercator uses its own CRS units — not ground metres).
+    Callers can pass a familiar ground spacing (for example ~10 m in a metre
+    CRS) without knowing OGC ScaleDenominator.
+
     Policies:
 
     * ``nearest`` — smallest absolute difference to the target
@@ -66,9 +78,12 @@ def choose_matrix_for_resolution(
     * ``finer`` — coarsest matrix that is still at least as fine as the target
       (``resolution <= target``); never undersamples
 
-    Fails when any level is missing a scale denominator (and no precomputed
-    ``resolution``), when ``crs`` is required to convert scales, or when no
-    matrix satisfies the policy. Does **not** choose a layer, CRS, or TileMatrixSet.
+    Levels are compared on ``resolution``. When ``resolution`` is missing but
+    ``scale_denominator`` is present, resolution is derived (``crs=`` required).
+    Levels that only have ``resolution`` (no scale) are accepted; levels with
+    neither are skipped. Fails when no usable level remains, when ``crs`` is
+    required to convert scales, or when no matrix satisfies the policy. Does
+    **not** choose a layer, CRS, or TileMatrixSet.
     """
 
     if target_resolution <= 0:
@@ -76,7 +91,8 @@ def choose_matrix_for_resolution(
     if not levels:
         raise ValidationError(
             "No TileMatrix levels provided. Pass matrix levels from "
-            "inspect_endpoint / GetCapabilities (with ScaleDenominator)."
+            "inspect_endpoint / GetCapabilities (with resolution or "
+            "ScaleDenominator)."
         )
     if policy not in {"coarser", "nearest", "finer"}:
         raise ValidationError(
@@ -85,31 +101,35 @@ def choose_matrix_for_resolution(
 
     parsed_crs = CRS.parse(crs) if crs is not None else None
     resolved: list[tuple[str, float | None, float]] = []
-    missing_scale: list[str] = []
+    skipped: list[str] = []
     for level in levels:
         identifier = str(level.identifier)
         scale = level.scale_denominator
         native = level.resolution
-        if scale is None:
-            missing_scale.append(identifier)
-            continue
         if native is None:
+            if scale is None:
+                skipped.append(identifier)
+                continue
             if parsed_crs is None:
                 raise ValidationError(
                     "crs= is required to convert ScaleDenominator to CRS units "
                     "per pixel when MatrixLevelSummary.resolution is not set."
                 )
             native = pixel_size_from_scale_denominator(float(scale), parsed_crs)
-        resolved.append((identifier, float(scale), float(native)))
+        scale_value = float(scale) if scale is not None else None
+        resolved.append((identifier, scale_value, float(native)))
 
-    if missing_scale:
-        raise ValidationError(
-            "TileMatrix ScaleDenominator is missing for: "
-            + ", ".join(missing_scale)
-            + ". Cannot choose a matrix from target resolution without scales."
-        )
     if not resolved:
-        raise ValidationError("No TileMatrix levels with usable scale/resolution")
+        detail = (
+            f" Skipped levels with neither resolution nor ScaleDenominator: "
+            f"{', '.join(skipped)}."
+            if skipped
+            else ""
+        )
+        raise ValidationError(
+            "No TileMatrix levels with usable resolution (CRS units/pixel)."
+            + detail
+        )
 
     if policy == "nearest":
         identifier, scale, native = min(
@@ -134,7 +154,6 @@ def choose_matrix_for_resolution(
             )
         identifier, scale, native = max(candidates, key=lambda item: item[2])
 
-    assert scale is not None
     return MatrixChoice(
         identifier=identifier,
         scale_denominator=scale,

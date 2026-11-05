@@ -91,7 +91,7 @@ What to notice:
 
 ## Choose a TileMatrix from a target resolution
 
-Callers often know a target **CRS units per pixel**, not the server's TileMatrix id. Use {py:func}`~tilearray.choose_matrix_for_resolution` on levels from {py:func}`~tilearray.inspect_endpoint` (or `MatrixSetSummary.levels`), then pass the chosen id into `WMTSConfig`. Values are in the matrix CRS (for example metres/pixel in UTM); Web Mercator uses Mercator CRS units — not ground metres. tilearray does **not** pick a matrix inside `create_array`, and it does **not** resample pixels to the target resolution — related: native-matrix planning (#93), plan-before-fetch (#61).
+Callers often know a familiar spacing (for example ~10 m in a metre CRS) as **CRS units per pixel**, not the server's TileMatrix id or OGC ScaleDenominator. Use {py:func}`~tilearray.choose_matrix_for_resolution` on levels from {py:func}`~tilearray.inspect_endpoint` (or `MatrixSetSummary.levels`), then pass the chosen id into `WMTSConfig`. Comparison is on resolution; ScaleDenominator is best-effort when present (levels with only `resolution` are accepted). Web Mercator uses Mercator CRS units — not ground metres. tilearray does **not** pick a matrix inside `create_array`, and it does **not** resample pixels to the target resolution — related: native-matrix planning (#93), plan-before-fetch (#61).
 
 ```python
 from tilearray import (
@@ -131,7 +131,7 @@ print(plan.matrix_id, plan.planned_pixel_size, plan.crs, plan.bbox_crs)
 # interpolation) is ordinary xarray slicing on the native mosaic — not a warp.
 ```
 
-Missing ScaleDenominator values raise {py:exc}`~tilearray.ValidationError` instead of guessing.
+Levels need a usable `resolution` (or a ScaleDenominator plus `crs=` to derive one). Levels with neither are skipped; if none remain, {py:exc}`~tilearray.ValidationError` is raised.
 
 ## What this documents vs what is untested
 
