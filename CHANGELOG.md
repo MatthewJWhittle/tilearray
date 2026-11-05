@@ -10,18 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking
 
 - `create_array` / `plan_array` / `load_array` take **`bbox_crs=`** as the query CRS (third positional argument). The overloaded `crs=` argument on those entry points is **removed** — use `bbox_crs=` (service config `crs=` for request defaults is unchanged). A `BoundingBox` whose CRS conflicts with `bbox_crs=` raises `ValidationError` (no silent reproject of conflicting declarations). `attrs["bbox_crs"]` records the query CRS; `attrs["crs"]` is the **actual** mosaic / output CRS. No client-side warp. Docs: design-principles, how-it-works, API, quickstart, troubleshooting
+- Renamed **`compute_with_policy` → `compute_mosaic`** (canonical compute habit). Removed the compute-path `max_concurrent=` shorthand — use `num_workers=` to size Dask threads only (does **not** change HTTP in-flight). Host ceilings stay on `create_array` / `FetchPolicy` / `max_concurrent_requests` / `call_max_concurrent`
 
 ### Added
 
 - Optional server-side **`output_crs=`** for WMS / WCS (`WMSConfig` / `WCSConfig` / create/plan named arg). WCS sends `outputCRS`; WMS uses it as the GetMap CRS. Mosaic `attrs["crs"]` matches. Unsupported values fail when the service advertises a supported-CRS list. **Rejected** on XYZ / WMTS (native grid only — never implies client reproject)
-<<<<<<< HEAD
-- `choose_matrix_for_resolution` (+ `MatrixLevelSummary` / `MatrixChoice`): pure helper to pick a WMTS TileMatrix from a target resolution in **CRS units/pixel** and policy (`coarser` / `nearest` / `finer`). Fails when ScaleDenominator is missing; does not choose inside `create_array` and does not resample. Inspect `MatrixSetSummary.levels` carries scale + resolution. `ArrayPlan` gains `matrix_id` and `planned_pixel_size` (extent ÷ shape; CRS units/pixel — not ground metres for Web Mercator). Docs recipe on the WMTS guide (#123; related #93 / #61)
-=======
-
-### Added
-
 - `choose_matrix_for_resolution` (+ `MatrixLevelSummary` / `MatrixChoice`): pure helper to pick a WMTS TileMatrix from a target resolution in **CRS units/pixel** and policy (`coarser` / `nearest` / `finer`). Compares on `resolution`; ScaleDenominator is best-effort (resolution-only levels accepted; `MatrixChoice.scale_denominator` may be `None`). Does not choose inside `create_array` and does not resample. Inspect `MatrixSetSummary.levels` carries scale + resolution. `ArrayPlan` gains `matrix_id` and `planned_pixel_size` (extent ÷ shape; CRS units/pixel — not ground metres for Web Mercator). Docs recipe on the WMTS guide (#123; related #93 / #61)
->>>>>>> c2c3d34 (Allow resolution-only TileMatrix levels (4B))
 
 ### Changed
 
@@ -57,7 +51,7 @@ Alpha cut: native XYZ/slippy georef, inspect/plan preflight, broader CRS/WMTS fi
 - `CRS` accepts any pyproj-valid projected/geographic CRS (EPSG authority strings, integers, `pyproj.CRS`), not only the four former enum members. Presets (`CRS.EPSG_4326`, `3857`, `32633`, `27700`) remain. Invalid codes (including typos like `EPGS:28992`) raise an actionable `ValidationError`. WMS 1.3 bbox axis order and WCS default subset axis labels follow geographic vs projected axes via pyproj (#92)
 - WMTS planning uses the service TileMatrixSet native CRS and ScaleDenominator units (projected metres vs geographic degrees), including non-numeric TileMatrix ids and layer TileMatrixSetLimits. Query bboxes may be in another CRS; the mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Unknown or incomplete matrices raise `ValidationError` instead of guessing Web Mercator (#93)
 - WMTS `create_array` auto-loads GetCapabilities for non-slippy TileMatrixSets (so native grids work without a separate `apply_capabilities()` call). Numeric `tile_matrix` values match zero-padded capabilities ids (e.g. `8` → `08`); planned TileMatrix ids win over config when building GetTile requests (#60)
-- `compute_with_policy` emits a `UserWarning` when a non-`threads` `scheduler=` is passed (still forces `scheduler="threads"` so the process-local fetch gate applies) (#59)
+- `compute_mosaic` emits a `UserWarning` when a non-`threads` `scheduler=` is passed (still forces `scheduler="threads"` so the process-local fetch gate applies) (#59)
 
 ### Documentation
 
@@ -69,7 +63,7 @@ Alpha cut: native XYZ/slippy georef, inspect/plan preflight, broader CRS/WMTS fi
 - CRS / georef after native WMTS: mosaic `attrs["crs"]` follows TileMatrixSet SupportedCRS when caps metadata is present (query `crs=` may differ); README links the WMTS guide + inspect how-to; decode blurb matches default `band_policy="preserve"`; `create_array` docstring gains a full Parameters section plus an explicit CRS contract (WCS/WMS/XYZ/slippy vs native WMTS)
 - how-it-works / troubleshooting / OSM guide: clipped WCS placement, band/dtype/palette contract, and coverage-pad vs soft-fail distinction (#94, #95)
 - how-it-works / troubleshooting / API: plan-before-fetch helpers, cache lifecycle (`{sha}.tile` + `.meta`, warm vs cold, when to clear), and fetch summary for diagnosing host pressure (#61)
-- Multi-AOI / ML sample patches how-to: per-bbox `create_array` → `compute_with_policy` → save/release loop; warn against one mosaic over the union of all sample boxes; shared host-gate vs overlapping computes; snapping/provenance, cache reuse, soft-fail vs nodata (#87)
+- Multi-AOI / ML sample patches how-to: per-bbox `create_array` → `compute_mosaic` → save/release loop; warn against one mosaic over the union of all sample boxes; shared host-gate vs overlapping computes; snapping/provenance, cache reuse, soft-fail vs nodata (#87)
 - Process-local fetch gates when scaling up: how-it-works / troubleshooting / API note that AIMD / semaphore ceilings are shared by threads in one process, not by multi-process or distributed workers (#59)
 - Worked examples guide + notebook (`docs/guides/worked-examples.md`, `notebooks/community_worked_examples.ipynb`): tile-grid AOI georef, WCS size habits, config/CRS mistakes, polite multi-tile fetch (#97)
 - Design principles page: ethos, CRS roles, access vs processing, imagery vs numerical coverages; labels current single-`crs=` behaviour vs planned `bbox_crs` / native-grid output (#98)
@@ -90,7 +84,7 @@ Trustworthy-core release: clean-env GeoTIFF install, analysis-ready mosaic attrs
 
 ### Fixed
 
-- Soft-fail observability: `compute_with_policy` refreshes `attrs["tilearray_tile_errors"]` (`soft_failed`, `aborted`, `examples`) from `FetchProgress` after lazy `create_array` — same counters as the eager `compute=True` path (#73)
+- Soft-fail observability: `compute_mosaic` refreshes `attrs["tilearray_tile_errors"]` (`soft_failed`, `aborted`, `examples`) from `FetchProgress` after lazy `create_array` — same counters as the eager `compute=True` path (#73)
 
 ### Breaking
 
@@ -102,7 +96,7 @@ Trustworthy-core release: clean-env GeoTIFF install, analysis-ready mosaic attrs
 - WCS GeoTIFF decode now uses ``tifffile`` directly (bytes or path); dropped the ``geotiff`` → ``zarr<2.13`` / ``numcodecs<0.16`` pin cage so clean-env installs no longer need that dependency gymnastics. XYZ-without-GDAL posture unchanged (no hard rasterio/GDAL runtime dep) (#53)
 - Public-boundary failures now raise the typed `TileArrayError` hierarchy instead of bare `ValueError` / `RuntimeError`: bad inputs → `ValidationError`, caps/XML parse → `ParseError`, service detection / missing decoder → `ConfigurationError`, WCS/WMTS capabilities HTTP (`httpx`) → `NetworkError`. **Compat:** callers that catch bare `ValueError` for library validation must switch to `TileArrayError` / the specific subclass (or catch both during transition). Pydantic model field checks (`BoundingBox` coordinates, etc.) still surface via pydantic as before (#72)
 - WCS/WMTS capabilities and DescribeCoverage (plus direct `WCSService.get_coverage`) now use sync **httpx** with one shared UA/timeout policy and inherit config `headers`/`params` — private-server credentials reach plan-time GETs the same way they reach tiles. Drops the runtime `requests` dependency (#57)
-- Docs: one compute habit on primary paths — OSM/GIBS guides, how-it-works, troubleshooting, and API index use `compute_with_policy`; `load_array` documented as eager sugar for `create_array(..., compute=True)`; quickstart WMTS honesty note (`WMTSConfig` supported, host guide TBD / #60) (#55)
+- Docs: one compute habit on primary paths — OSM/GIBS guides, how-it-works, troubleshooting, and API index use `compute_mosaic`; `load_array` documented as eager sugar for `create_array(..., compute=True)`; quickstart WMTS honesty note (`WMTSConfig` supported, host guide TBD / #60) (#55)
 
 ### Added
 

@@ -13,7 +13,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 
    create_array
    load_array
-   compute_with_policy
+   compute_mosaic
    plan_array
    recommend_grid_shape
    choose_matrix_for_resolution
@@ -25,7 +25,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
    array.compute_thread_pool_size
 ```
 
-`create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_with_policy` over plain `.compute()` so Dask workers match the fetch ceiling. {py:func}`~tilearray.load_array` is eager sugar (`create_array(..., compute=True)` by default) — useful for tiny windows, not a second primary habit. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
+`create_array` builds a lazy Dask-backed `xarray.DataArray`. Prefer {py:func}`~tilearray.compute_mosaic` over plain `.compute()` so Dask workers match the fetch ceiling. {py:func}`~tilearray.load_array` is eager sugar (`create_array(..., compute=True)` by default) — useful for tiny windows, not a second primary habit. Pass a service **config** (or URL where supported) as the first argument — not only a bare string for every service type.
 
 Before a large fetch, {py:func}`~tilearray.plan_array` returns a read-only {py:class}`~tilearray.ArrayPlan` (request count, planned bbox, `bbox_crs` / output `crs`, `matrix_id`, `planned_pixel_size` in CRS units/pixel, concurrency ceiling, cache warm/cold, and unknown band/byte counts where not yet knowable). {py:func}`~tilearray.recommend_grid_shape` is the pure AOI helper for resolution × chunk sizing. {py:func}`~tilearray.choose_matrix_for_resolution` picks a WMTS TileMatrix from a target resolution in CRS units/pixel + policy (`coarser` / `nearest` / `finer`) over inspect levels — it does not choose inside `create_array` and does not resample. Recipe: {doc}`../guides/wmts`. After planning or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters without inventing wall time or cost.
 
@@ -172,7 +172,7 @@ Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilear
 
 `FetchPolicy` controls concurrency, retries, timeouts, rate limits, and optional AIMD / circuit-breaker behaviour. Service configs expose the same knobs and build a policy via `.fetch_policy()`. Advanced callers may also import it as `tilearray.fetch.FetchPolicy`.
 
-`FetchPolicy.max_concurrent` is the **shared process-local gate** ceiling (threads in one process share it; separate OS processes / distributed workers do not). Per-call politeness is `call_max_concurrent` (or a lower `max_concurrent_requests` override on `create_array`). `compute_with_policy(..., max_concurrent=)` sizes Dask **thread** workers only and always uses `scheduler="threads"` — see {doc}`../how-it-works` (including notes on process-local fetch ceilings when scaling up).
+`FetchPolicy.max_concurrent` is the **shared process-local gate** ceiling (threads in one process share it; separate OS processes / distributed workers do not). Per-call politeness is `call_max_concurrent` (or a lower `max_concurrent_requests` override on `create_array`). `compute_mosaic(..., num_workers=)` sizes Dask **thread** workers only and always uses `scheduler="threads"` — see {doc}`../how-it-works` (including notes on process-local fetch ceilings when scaling up).
 
 ## Registry
 

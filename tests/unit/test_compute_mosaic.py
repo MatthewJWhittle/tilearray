@@ -1,4 +1,4 @@
-"""Unit tests for compute_with_policy (no network)."""
+"""Unit tests for compute_mosaic (no network)."""
 
 from __future__ import annotations
 
@@ -16,9 +16,10 @@ import tilearray.decode as decode_module
 from tilearray.array import (
     _FETCH_POLICY_ATTR,
     _RECOMMENDED_NUM_WORKERS_ATTR,
+    compute_mosaic,
     compute_thread_pool_size,
-    compute_with_policy,
 )
+from tilearray.errors import ValidationError
 from tilearray.fetch import FetchPolicy
 from tilearray.types import (
     CRS,
@@ -129,48 +130,55 @@ def _patch_dataarray_compute(
     return recorded
 
 
-def test_compute_with_policy_applies_thread_scheduler_and_workers(
+def test_compute_mosaic_applies_thread_scheduler_and_workers(
     monkeypatch: MonkeyPatch,
 ) -> None:
     da = _lazy_array(monkeypatch)
     recorded = _patch_dataarray_compute(monkeypatch)
 
-    compute_with_policy(da)
+    compute_mosaic(da)
 
     assert recorded["scheduler"] == "threads"
     assert recorded["num_workers"] == da.attrs[_RECOMMENDED_NUM_WORKERS_ATTR]
     assert recorded["num_workers"] >= 32
 
 
-def test_compute_with_policy_explicit_policy_overrides_attrs(
+def test_compute_mosaic_explicit_policy_overrides_attrs(
     monkeypatch: MonkeyPatch,
 ) -> None:
     da = _lazy_array(monkeypatch)
     recorded = _patch_dataarray_compute(monkeypatch)
 
     policy = FetchPolicy(max_concurrent=16)
-    compute_with_policy(da, fetch_policy=policy, num_workers=12)
+    compute_mosaic(da, fetch_policy=policy, num_workers=12)
 
     assert recorded["num_workers"] == 12
     assert recorded["scheduler"] == "threads"
 
 
-def test_compute_with_policy_max_concurrent_shorthand(
+def test_compute_mosaic_num_workers_sizes_dask_pool(
     monkeypatch: MonkeyPatch,
 ) -> None:
     da = _lazy_array(monkeypatch)
     recorded = _patch_dataarray_compute(monkeypatch)
 
-    compute_with_policy(da, max_concurrent=24)
+    compute_mosaic(da, num_workers=24)
+    assert recorded["num_workers"] == 24
+    assert recorded["scheduler"] == "threads"
 
-    expected = compute_thread_pool_size(FetchPolicy(max_concurrent=24))
-    assert recorded["num_workers"] == expected
 
-
-def test_compute_with_policy_max_concurrent_preserves_attrs_policy(
+def test_compute_mosaic_rejects_old_max_concurrent_kwarg(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """max_concurrent= merges into attrs policy; does not strip AIMD/breaker."""
+    da = _lazy_array(monkeypatch)
+    with pytest.raises(ValidationError, match="no longer accepts max_concurrent"):
+        compute_mosaic(da, max_concurrent=1)  # type: ignore[call-arg]
+
+
+def test_compute_mosaic_uses_attrs_fetch_policy_for_default_workers(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Without a stashed recommendation, worker sizing follows attrs FetchPolicy."""
 
     da = _lazy_array(monkeypatch)
     da.attrs[_FETCH_POLICY_ATTR] = {
@@ -181,33 +189,33 @@ def test_compute_with_policy_max_concurrent_preserves_attrs_policy(
         "min_concurrent": 4,
         "max_concurrent": 10,
     }
+    da.attrs.pop(_RECOMMENDED_NUM_WORKERS_ATTR, None)
     recorded = _patch_dataarray_compute(monkeypatch)
 
-    policy = array_module._resolve_fetch_policy_for_compute(da, max_concurrent=1)
-
-    assert policy.max_concurrent == 1
+    policy = array_module._resolve_fetch_policy_for_compute(da)
+    assert policy.max_concurrent == 10
     assert policy.adaptive_concurrency is True
     assert policy.forbidden_circuit_breaker is True
     assert policy.initial_concurrent == 8
     assert policy.min_concurrent == 4
 
-    compute_with_policy(da, max_concurrent=1)
+    compute_mosaic(da)
     assert recorded["num_workers"] == compute_thread_pool_size(policy)
 
 
-def test_compute_with_policy_merges_user_compute_kwargs(
+def test_compute_mosaic_merges_user_compute_kwargs(
     monkeypatch: MonkeyPatch,
 ) -> None:
     da = _lazy_array(monkeypatch)
     recorded = _patch_dataarray_compute(monkeypatch)
 
-    compute_with_policy(da, optimize_graph=False)
+    compute_mosaic(da, optimize_graph=False)
 
     assert recorded["optimize_graph"] is False
     assert recorded["scheduler"] == "threads"
 
 
-def test_compute_with_policy_warns_on_non_threads_scheduler(
+def test_compute_mosaic_warns_on_non_threads_scheduler(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """Honesty: non-threads scheduler= is ignored; gate stays process-local (#59)."""
@@ -216,12 +224,12 @@ def test_compute_with_policy_warns_on_non_threads_scheduler(
     recorded = _patch_dataarray_compute(monkeypatch)
 
     with pytest.warns(UserWarning, match="ignores scheduler='processes'"):
-        compute_with_policy(da, scheduler="processes")
+        compute_mosaic(da, scheduler="processes")
 
     assert recorded["scheduler"] == "threads"
 
 
-def test_compute_with_policy_default_policy_when_no_attrs(
+def test_compute_mosaic_default_policy_when_no_attrs(
     monkeypatch: MonkeyPatch,
 ) -> None:
     import dask.array as da_lib
@@ -235,7 +243,7 @@ def test_compute_with_policy_default_policy_when_no_attrs(
 
     monkeypatch.setattr(lazy, "compute", fake_compute)
 
-    compute_with_policy(lazy)
+    compute_mosaic(lazy)
 
     default_policy = FetchPolicy()
     assert recorded["num_workers"] == compute_thread_pool_size(default_policy)

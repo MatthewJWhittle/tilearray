@@ -2,17 +2,17 @@
 
 Short answers for the failures that show up first with public hosts. Background: {doc}`how-it-works`. Endpoints: {doc}`example-sources`.
 
-## Prefer `compute_with_policy`
+## Prefer `compute_mosaic`
 
 Lazy `create_array` only fetches when you compute. Plain `.compute()` uses Dask's default thread pool (often ~CPU count), which can leave fetch headroom unused. Prefer:
 
 ```python
-from tilearray import compute_with_policy
+from tilearray import compute_mosaic
 
-result = compute_with_policy(da)          # or compute_with_policy(da.mean())
+result = compute_mosaic(da)          # or compute_mosaic(da.mean())
 ```
 
-`create_array` stores fetch policy on `da.attrs`; `compute_with_policy` reads it automatically. You do not need to pass `max_concurrent` by hand.
+`create_array` stores fetch policy on `da.attrs`; `compute_mosaic` reads it automatically. Size Dask threads with `num_workers=` if needed — do not pass fetch-ceiling kwargs to compute.
 
 ## How big will this AOI be?
 
@@ -29,7 +29,7 @@ Tune `chunk_size` / `resolution` / `grid_shape` / `max_concurrent_requests` from
 
 ## Large mosaic looks hung / want quiet CI
 
-Multi-tile computes show a **tile progress bar by default** (tqdm-style via `on_progress`). If a large job still looks idle, confirm you are on `compute_with_policy` (or `compute=True`) so the graph is actually running.
+Multi-tile computes show a **tile progress bar by default** (tqdm-style via `on_progress`). If a large job still looks idle, confirm you are on `compute_mosaic` (or `compute=True`) so the graph is actually running.
 
 | Goal | What to do |
 |------|------------|
@@ -46,10 +46,10 @@ Host ceiling / concurrency semantics are unchanged — progress only observes ti
 |---------|---------------|------------|
 | One polite call serialises sibling mosaics | Shared gate shrunk (`FetchPolicy.max_concurrent=1` / raised-then-shared override) | Lower `max_concurrent_requests=` on `create_array` (call-local) or set `call_max_concurrent`; keep the preset host ceiling |
 | Many sample sites produce one huge empty mosaic or flood the host | Union bbox, or raised ceiling “for 20 jobs” | One `create_array` per bbox; sequential (or small-batch) compute under the shared gate — {doc}`multi-aoi-ml-patches` |
-| `compute_with_policy(..., max_concurrent=N)` changed HTTP in-flight | That kwarg sizes **Dask workers only** | Set fetch politeness at `create_array` / config; see the concurrency name map in {doc}`how-it-works` |
+| `compute_mosaic(..., num_workers=N)` changed HTTP in-flight | That kwarg sizes **Dask workers only** | Set fetch politeness at `create_array` / config; see the concurrency name map in {doc}`how-it-works` |
 | Headers / `resolution` / AIMD knobs “ignored” or applied oddly | Same `**service_options` bag feeds **fetch**, **planner**, and **identity** families | Match the key to its family in {doc}`how-it-works` (fetch keys are popped into `FetchPolicy` first) |
-| Many 403/429 after moving to “more workers” / processes / distributed | Process-local gate × N workers overwhelms the host | Stay on `compute_with_policy` (threads). Multi-process/distributed does **not** share one ceiling — see {doc}`how-it-works` (scaling without overwhelming the host); divide ceilings by worker count only as a conservative approach |
-| `compute_with_policy(..., scheduler="processes")` still threads | Helper **always** uses `scheduler="threads"` so the process gate can apply | Use threads on purpose; for processes, read the scaling section in {doc}`how-it-works` first — there is no cross-process host gate |
+| Many 403/429 after moving to “more workers” / processes / distributed | Process-local gate × N workers overwhelms the host | Stay on `compute_mosaic` (threads). Multi-process/distributed does **not** share one ceiling — see {doc}`how-it-works` (scaling without overwhelming the host); divide ceilings by worker count only as a conservative approach |
+| `compute_mosaic(..., scheduler="processes")` still threads | Helper **always** uses `scheduler="threads"` so the process gate can apply | Use threads on purpose; for processes, read the scaling section in {doc}`how-it-works` first — there is no cross-process host gate |
 
 Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `**service_options` key.
 
@@ -76,7 +76,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 |---------|--------------|------------|
 | Empty / invalid coverage | CoverageId ≠ URL path slug | Use the GetCapabilities id (e.g. `UUID__Lidar_Composite_Elevation_DTM_1m`), or `WCSConfig.from_url` + `**ea_dsp_fetch_defaults()` with the id from {doc}`example-sources` |
 | Many 403s / hard fail mid-mosaic | Burst above the EA ceiling | Keep AIMD ceiling at **10** (`ea_dsp_fetch_defaults`). Do not raise `max_concurrent_requests` for county-scale cold mosaics |
-| Slow multi-tile mosaic | Dask workers << fetch ceiling | Use `compute_with_policy` |
+| Slow multi-tile mosaic | Dask workers << fetch ceiling | Use `compute_mosaic` |
 
 ## OpenStreetMap XYZ
 
@@ -114,7 +114,7 @@ These fail **before** a useful mosaic exists. Exception text names what was wron
 | `Coverage '…' is not available` / no coverage description | Wrong or misspelled CoverageId | Use {py:func}`~tilearray.inspect_endpoint` (or `service.get_capabilities()`) and pick a listed CoverageId; for EA DSP, id looks like `UUID__…` and ≠ the URL path slug |
 | `Unknown coverage` / `Unknown layer` from `build_config` | Identifier not in GetCapabilities | Print the inspection summary and pass an exact listed id — no fuzzy rename |
 | `Unable to detect service type` | Ambiguous URL | Pass `service_type=` to `inspect_endpoint`, or a typed config / `{z}/{x}/{y}` for XYZ |
-| Tile `NetworkError` after plan succeeded | Host reject / politeness / transient | Keep preset ceilings; prefer `compute_with_policy`; HTML tile bodies usually mean auth/portal URL |
+| Tile `NetworkError` after plan succeeded | Host reject / politeness / transient | Keep preset ceilings; prefer `compute_mosaic`; HTML tile bodies usually mean auth/portal URL |
 
 ## Disk cache
 

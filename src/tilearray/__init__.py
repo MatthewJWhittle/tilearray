@@ -6,7 +6,7 @@ __author__ = "Matthew Whittle"
 __email__ = "47574804+MatthewJWhittle@users.noreply.github.com"
 
 from .array import (
-    compute_with_policy,
+    compute_mosaic,
     create_array,
     load_array,
 )
@@ -74,7 +74,7 @@ __all__ = [
     "__version__",
     "__author__",
     "__email__",
-    "compute_with_policy",
+    "compute_mosaic",
     "create_array",
     "load_array",
     "plan_array",

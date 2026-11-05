@@ -10,10 +10,10 @@ You pass a bounding box and a service config. The library plans the tile grid, f
 ```
 
 ```python
-from tilearray import create_array, compute_with_policy
+from tilearray import create_array, compute_mosaic
 
 da = create_array(config, bbox, crs)   # lazy Dask-backed DataArray by default
-result = compute_with_policy(da)       # fetch + assemble when you need values
+result = compute_mosaic(da)       # fetch + assemble when you need values
 ```
 
 WCS, WMS, WMTS, and XYZ share one request-and-decode path. Host **presets** in `tilearray.fetch_presets` (`osm_fetch_defaults`, `ea_dsp_fetch_defaults`) set polite defaults for known public endpoints — compose with `XYZConfig.from_url` / `WCSConfig.from_url`.
@@ -44,12 +44,12 @@ Estimates never invent transfer time, provider cost, or band counts. XYZ/WMTS no
 Pure geometry helper when you only need the grid: {py:func}`~tilearray.recommend_grid_shape` (`bbox` + `chunk_size` + `resolution` → `(rows, cols)`). After compute (or mid-flight on a lazy array), {py:func}`~tilearray.fetch_summary` reports done/total, soft-fails, and fetcher pressure counters when available.
 
 ```python
-from tilearray import plan_array, create_array, compute_with_policy, fetch_summary
+from tilearray import plan_array, create_array, compute_mosaic, fetch_summary
 
 plan = plan_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
 print(plan)                       # read-only preflight
 da = create_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
-result = compute_with_policy(da)
+result = compute_mosaic(da)
 print(fetch_summary(da))          # progress / pressure snapshot
 ```
 
@@ -72,7 +72,7 @@ Fetching uses **synchronous HTTP** (`httpx.Client`) with a concurrency gate:
 
 WCS/WMTS **GetCapabilities** / **DescribeCoverage** (and direct `WCSService.get_coverage`) use the same sync httpx stack: library User-Agent by default, `ServiceConfig.fetch_timeout` (default 30s), and config `headers`/`params` so private-server credentials apply at plan time as well as on tiles.
 
-AIMD only helps if Dask can schedule enough tile loads — use `compute_with_policy` for multi-tile mosaics.
+AIMD only helps if Dask can schedule enough tile loads — use `compute_mosaic` for multi-tile mosaics.
 
 ### `**service_options` key families
 
@@ -90,7 +90,13 @@ API surface: {doc}`api/index`. When a knob misbehaves: {doc}`troubleshooting`.
 
 ### Concurrency names (short)
 
-**Host ceiling ≠ call politeness ≠ Dask threads.** Preset / config `max_concurrent_requests` is the host ceiling; a lower override on `create_array` is call-local; `compute_with_policy(..., max_concurrent=)` sizes Dask workers only. Do not shrink `FetchPolicy.max_concurrent` to “be polite” — that lowers the shared process gate for sibling sessions. Full name map: {doc}`api/index`.
+**Host ceiling ≠ call politeness ≠ Dask threads.** Do not shrink `FetchPolicy.max_concurrent` to “be polite” — that lowers the shared process gate for sibling sessions.
+
+| Role | Name | Where |
+|------|------|-------|
+| Host ceiling (process gate) | `max_concurrent_requests` → `FetchPolicy.max_concurrent` | Preset / service config / raised override on `create_array` |
+| Call-local politeness | `call_max_concurrent` (or a *lower* `max_concurrent_requests=` on one call) | That mosaic only; siblings keep the host ceiling |
+| Dask thread workers | `compute_mosaic(..., num_workers=)` | Sizes the thread pool for compute; does **not** change HTTP in-flight |
 
 Stay at or below preset ceilings on multi-tile cold mosaics. Soft-fill is plan-time opt-in; the default remains hard `NetworkError` + sibling abort after retries.
 
@@ -100,7 +106,7 @@ Avoid flooding a server when you move from a laptop to a larger machine. The fet
 
 | Scale shape | What the gate does | Do this |
 |-------------|--------------------|---------|
-| **One process, Dask threads** | Shared ceiling holds for sibling mosaics | Prefer {py:func}`~tilearray.compute_with_policy` (always uses `scheduler="threads"`). Keep preset host ceilings; lower per-call with `max_concurrent_requests=` / `call_max_concurrent`. |
+| **One process, Dask threads** | Shared ceiling holds for sibling mosaics | Prefer {py:func}`~tilearray.compute_mosaic` (always uses `scheduler="threads"`). Keep preset host ceilings; lower per-call with `max_concurrent_requests=` / `call_max_concurrent`. |
 | **Several mosaics, same process** | Aggregate in-flight ≤ host ceiling | Same configs / presets; do not shrink `FetchPolicy.max_concurrent` for one polite call. |
 | **Multi-process or distributed workers** | Each process has its own gate — **no global ceiling** | Do **not** advertise a cluster-wide host limit. Either stay on threads, or set each worker’s ceiling to about `floor(preset_ceiling / N_workers)` and treat that as a conservative approach, not a library guarantee. |
 
@@ -113,7 +119,7 @@ Avoid flooding a server when you move from a laptop to a larger machine. The fet
 
 `Retry-After`, AIMD pressure backoff, circuit breakers, and hard-fail / soft-fail abort still apply **inside** each process. Concurrent mosaics in one process share that behaviour; across processes you only get N independent copies.
 
-Same public API on a larger box: `create_array` then `compute_with_policy`. Bigger machines help when the bottleneck is CPU/RAM for decode and assemble under the preset host ceiling — not by multiplying concurrent HTTP requests.
+Same public API on a larger box: `create_array` then `compute_mosaic`. Bigger machines help when the bottleneck is CPU/RAM for decode and assemble under the preset host ceiling — not by multiplying concurrent HTTP requests.
 
 ---
 
@@ -162,21 +168,21 @@ Three CRS roles matter ({doc}`design-principles`):
 ## 5 · Lazy · compute · cache
 
 ```{image} _static/guides/how-it-works-05-lazy-compute-cache.png
-:alt: Three panels for lazy create_array, compute_with_policy, and optional disk cache
+:alt: Three panels for lazy create_array, compute_mosaic, and optional disk cache
 :width: 740px
 ```
 
 | Path | What happens |
 |------|----------------|
 | `create_array(...)` (default) | **Lazy** Dask graph — coords/attrs ready; pixels not all in RAM. |
-| {py:func}`tilearray.compute_with_policy` | **Preferred** compute path: thread workers aligned to the fetch ceiling. |
-| `load_array(...)` | Eager sugar for `create_array(..., compute=True)` — builds then computes immediately (same fetch-aligned workers). Prefer lazy + `compute_with_policy` on primary paths. |
+| {py:func}`tilearray.compute_mosaic` | **Preferred** compute path: thread workers aligned to the fetch ceiling. |
+| `load_array(...)` | Eager sugar for `create_array(..., compute=True)` — builds then computes immediately (same fetch-aligned workers). Prefer lazy + `compute_mosaic` on primary paths. |
 | `da.compute()` | Works, but default Dask worker count can under-use a high fetch ceiling. |
 | `cache_dir=...` | Optional on-disk tile cache; warm hits skip the network. |
 
 **Tile progress:** multi-tile mosaics show a tqdm-style bar by default while tiles complete (same `on_progress` / `FetchProgress` path in scripts and notebooks). Quiet for CI / redirected scripts with `show_progress=False` or `TILEARRAY_PROGRESS=0`. Pass your own `on_progress=` to replace the default bar. Single-tile plans stay quiet unless you force progress.
 
-**Cache lifecycle:** each successful tile write stores `{sha256}.tile` plus a small `{sha256}.meta` sidecar under `cache_dir`. Keys hash URL, params, format, bbox, and width/height — change any of those and you miss. Warm hits skip HTTP but still decode; they do not bypass the shared host concurrency gate when a cold sibling is fetching. Clear the directory (or delete individual `.tile` files) after changing decode expectations, credentials, or when you suspect corruption. {py:func}`~tilearray.plan_array` reports how many planned tiles are already warm so you can size a cold run before `compute_with_policy`.
+**Cache lifecycle:** each successful tile write stores `{sha256}.tile` plus a small `{sha256}.meta` sidecar under `cache_dir`. Keys hash URL, params, format, bbox, and width/height — change any of those and you miss. Warm hits skip HTTP but still decode; they do not bypass the shared host concurrency gate when a cold sibling is fetching. Clear the directory (or delete individual `.tile` files) after changing decode expectations, credentials, or when you suspect corruption. {py:func}`~tilearray.plan_array` reports how many planned tiles are already warm so you can size a cold run before `compute_mosaic`.
 
 Memory tracks **what you compute** (full mosaic, a reduction, a window) — not automatically the whole AOI. Scale with bbox, chunks, and fetch policy. Use `plan_array` for a rough in-memory byte estimate when band count is known.
 

@@ -11,7 +11,7 @@ OSM raster tiles are often **palette PNGs**. Pass `expand_palette=True` (as belo
 ## Code
 
 ```python
-from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray import XYZConfig, compute_mosaic, create_array
 from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
 from tilearray.types import CRS, Format
 
@@ -25,7 +25,7 @@ config = XYZConfig.from_url(
 
 bbox = (-0.005, 51.495, 0.005, 51.505)  # query lon/lat near central London
 da = create_array(config, bbox, CRS.EPSG_4326, expand_palette=True)
-arr = compute_with_policy(da)
+arr = compute_mosaic(da)
 
 print(arr.shape, arr.dims, da.attrs["service_type"])
 print(da.attrs["crs"], da.attrs["transform"])

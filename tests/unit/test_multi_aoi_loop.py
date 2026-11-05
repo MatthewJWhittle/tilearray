@@ -21,7 +21,7 @@ import respx
 from PIL import Image
 from pytest import MonkeyPatch
 
-from tilearray import WMTSConfig, compute_with_policy, create_array
+from tilearray import WMTSConfig, compute_mosaic, create_array
 from tilearray.array import _fetch_policy_from_summary
 from tilearray.fetch import TileFetcher
 from tilearray.service.xyz import _tile_bounds
@@ -119,7 +119,7 @@ def test_multi_aoi_loop_noncontiguous_wmts_shapes_and_provenance(
     ]
     assert len(lazy) == 3
 
-    patches = [compute_with_policy(da) for da in lazy]
+    patches = [compute_mosaic(da) for da in lazy]
 
     for arr in patches:
         assert arr.shape == (256, 256)
@@ -219,7 +219,7 @@ def test_overlapping_multi_aoi_computes_respect_shared_host_ceiling(
     fetcher = TileFetcher.for_policy(shared)
 
     with ThreadPoolExecutor(max_workers=n_patches) as pool:
-        futures = [pool.submit(compute_with_policy, da) for da in lazy]
+        futures = [pool.submit(compute_mosaic, da) for da in lazy]
         results = [future.result() for future in futures]
 
     assert len(results) == n_patches
@@ -252,11 +252,11 @@ def test_shared_cache_dir_reuses_overlapping_tile_bytes(
     bbox = _inset_tile_bbox(2048, 1361)
     config = _wmts_config(cache_dir=tmp_path)
 
-    first = compute_with_policy(
+    first = compute_mosaic(
         create_array(config, bbox, CRS.EPSG_4326, show_progress=False)
     )
     cold_hits = hits
-    second = compute_with_policy(
+    second = compute_mosaic(
         create_array(config, bbox, CRS.EPSG_4326, show_progress=False)
     )
 

@@ -7,7 +7,7 @@ Query the AOI in lon/lat; the mosaic is labelled **EPSG:3857** (native Web Merca
 ## Code
 
 ```python
-from tilearray import XYZConfig, compute_with_policy, create_array
+from tilearray import XYZConfig, compute_mosaic, create_array
 from tilearray.types import CRS, Format
 
 template = (
@@ -30,7 +30,7 @@ config = XYZConfig.from_url(
 
 bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
 da = create_array(config, bbox, CRS.EPSG_4326)
-arr = compute_with_policy(da)
+arr = compute_mosaic(da)
 print(arr.shape, arr.dims)  # expect (y, x, band) for RGB JPEG
 print(da.attrs["crs"], da.attrs["transform"])  # EPSG:3857 mosaic
 ```

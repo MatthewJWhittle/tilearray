@@ -7,7 +7,7 @@ This is discovery and validation, not automatic reprojection or a provider catal
 ## WCS — list coverages, then load
 
 ```python
-from tilearray import compute_with_policy, create_array, inspect_endpoint
+from tilearray import compute_mosaic, create_array, inspect_endpoint
 from tilearray.types import CRS
 
 url = (
@@ -31,7 +31,7 @@ da = create_array(
     bbox=(431900.0, 382700.0, 432700.0, 383500.0),
     bbox_crs=CRS.EPSG_27700,
 )
-elevation = compute_with_policy(da)
+elevation = compute_mosaic(da)
 ```
 
 `build_config` refuses unknown CoverageIds. If the host lists exactly one coverage (or one library format / CRS), that value can be filled in; otherwise you must choose. Compose politeness separately when you need it (`**ea_dsp_fetch_defaults()` on a `WCSConfig.from_url` you already trust).

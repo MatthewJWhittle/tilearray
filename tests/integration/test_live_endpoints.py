@@ -8,7 +8,7 @@ import pytest
 import xarray as xr
 
 from tilearray import array as array_module
-from tilearray import compute_with_policy, create_array
+from tilearray import compute_mosaic, create_array
 from tilearray.service.config import WCSConfig, WMTSConfig
 from tilearray.service.wcs import WCSService
 from tilearray.types import CRS, Format
@@ -137,7 +137,7 @@ def test_live_kartverket_wmts_oslo_smoke() -> None:
         bbox_crs=CRS.EPSG_4326,
         show_progress=False,
     )
-    arr = compute_with_policy(da)
+    arr = compute_mosaic(da)
 
     assert isinstance(arr, xr.DataArray)
     assert da.attrs["crs"] == "EPSG:25833"

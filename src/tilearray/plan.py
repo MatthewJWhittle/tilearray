@@ -1,7 +1,7 @@
 """AOI planning helpers and fetch summaries (#61).
 
 Read-only preflight for large mosaics: inspect the planned grid and
-concurrency ceiling before ``create_array`` / ``compute_with_policy``.
+concurrency ceiling before ``create_array`` / ``compute_mosaic``.
 Does not invent wall-clock time, provider cost, or a second compute path.
 
 Shared request / policy / grid / cache helpers live in
@@ -259,7 +259,7 @@ def plan_array(
     are not fetched unless ``probe_bands=True`` (opt-in band discovery).
 
     Use this to inspect grid size, concurrency ceiling, and cache warmth before
-    ``create_array`` → ``compute_with_policy``.
+    ``create_array`` → ``compute_mosaic``.
     """
 
     service_config = (

@@ -67,7 +67,7 @@ Contributor pages (`building-docs`, CONTRIBUTING, AGENTS) may keep maintainer de
 - [ ] Every section answers a **reader job** (install / fetch / understand / look up / fix).
 - [ ] No milestone, stage-gate, soft-exit, or agent/PR archaeology in user Start-here paths.
 - [ ] Current vs target is labelled where design is unfinished.
-- [ ] One primary compute habit (`create_array` → `compute_with_policy`); no competing “preferred” paths.
+- [ ] One primary compute habit (`create_array` → `compute_mosaic`); no competing “preferred” paths.
 - [ ] Visual guides / figures pipeline preserved; no rewrite onto another docs stack.
 - [ ] Research and internal plans stay out of the repo docs PR.
 - [ ] Prefer delete/condense; no version bump; no drive-by feature docs for unshipped work.

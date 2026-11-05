@@ -35,7 +35,7 @@ These are the SemVer spine for 1.0:
 |--------|------|
 | `create_array` | Primary entry — plan / bind / lazy mosaic |
 | `load_array` | Eager sugar (`create_array(..., compute=True)`); not a second habit |
-| `compute_with_policy` | Canonical compute helper (Dask workers ↔ fetch ceiling); process-local gate documented |
+| `compute_mosaic` | Canonical compute helper (Dask workers ↔ fetch ceiling); process-local gate documented |
 | `plan_array` / `ArrayPlan` | Preflight — request count, grid, concurrency, cache warm/cold, unknown band/byte counts where not knowable (#61 / #109) |
 | `recommend_grid_shape` | Pure AOI helper for resolution × chunk sizing (#61 / #109) |
 | `fetch_summary` / `FetchSummary` | Post-plan / post-compute progress & pressure counters (#61 / #109) |
@@ -102,8 +102,8 @@ Until 1.0, Alpha may change; still prefer additive changes and documented CHANGE
 At **1.0.0**, publish something equivalent to:
 
 1. **Compatible** (minor/patch): additive exports; new optional kwargs with safe defaults; new error subclasses under `TileArrayError`; docs/clarifications; bug fixes that restore documented behaviour.
-2. **Breaking** (major): remove/rename anything in `__all__` / API reference; change default fail / abort / soft-fill / band / CRS / politeness semantics; change meaning of `create_array` / config fields / `compute_with_policy` / `plan_array` / `inspect_endpoint` without a documented migration.
-3. **Spine that must not break silently:** `create_array`, protocol `*Config` + `from_url` compose path, `FetchPolicy` host-ceiling rules, error hierarchy at public boundaries, `compute_with_policy`, `plan_array` / `fetch_summary`, `inspect_endpoint` / `build_config`, documented soft-fail presets (`soft_fail_exhausted_tiles` / `on_tile_error` plan-time bind).
+2. **Breaking** (major): remove/rename anything in `__all__` / API reference; change default fail / abort / soft-fill / band / CRS / politeness semantics; change meaning of `create_array` / config fields / `compute_mosaic` / `plan_array` / `inspect_endpoint` without a documented migration.
+3. **Spine that must not break silently:** `create_array`, protocol `*Config` + `from_url` compose path, `FetchPolicy` host-ceiling rules, error hierarchy at public boundaries, `compute_mosaic`, `plan_array` / `fetch_summary`, `inspect_endpoint` / `build_config`, documented soft-fail presets (`soft_fail_exhausted_tiles` / `on_tile_error` plan-time bind).
 4. **Out of promise:** submodule internals, undocumented attrs, registry plugins beyond documented hooks, live-host availability.
 
 ---
