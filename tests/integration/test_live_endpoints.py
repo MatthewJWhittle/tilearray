@@ -7,9 +7,12 @@ from typing import Any
 import pytest
 import xarray as xr
 
+import numpy as np
+
 from tilearray import array as array_module
 from tilearray import compute_mosaic, create_array, inspect_endpoint, plan_array
-from tilearray.service.config import WCSConfig, WMTSConfig
+from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
+from tilearray.service.config import WCSConfig, WMTSConfig, XYZConfig
 from tilearray.service.wcs import WCSService
 from tilearray.types import CRS, Format, ServiceTypeEnum
 
@@ -154,6 +157,36 @@ def test_live_kartverket_inspect_opaque_url_smoke() -> None:
     )
     assert plan.request_count >= 1
     assert plan.crs in {"EPSG:25833", "25833"}
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.net
+def test_live_osm_plot_ready_smoke() -> None:
+    """Tiny OSM window with ``expand_palette=True`` stays plot-ready (uint8 RGB)."""
+
+    config = XYZConfig.from_url(
+        OSM_TILE_TEMPLATE,
+        zoom=15,
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+        **osm_fetch_defaults(),
+    )
+    # ~one tile over central London
+    da = create_array(
+        config,
+        bbox=(-0.128, 51.507, -0.126, 51.508),
+        bbox_crs=CRS.EPSG_4326,
+        expand_palette=True,
+        show_progress=False,
+    )
+    arr = compute_mosaic(da)
+    assert isinstance(arr, xr.DataArray)
+    assert "band" in arr.dims
+    assert arr.sizes["band"] >= 3
+    assert arr.dtype == np.uint8
+    assert arr.attrs.get("palette_mode") == "rgb"
+    assert arr.attrs.get("dtype_policy") == "plot_ready_uint8"
 
 
 @pytest.mark.integration
