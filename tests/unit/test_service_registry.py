@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from tilearray.errors import ConfigurationError
 from tilearray.service.base import detect_service_type, get_service
 from tilearray.service.wcs import WCSService
 from tilearray.service.wms import WMSService
@@ -23,8 +22,10 @@ pytestmark = pytest.mark.unit
         ("https://example.com/wmts", ServiceTypeEnum.WMTS),
         ("https://tiles.example/{z}/{x}/{y}.png", ServiceTypeEnum.XYZ),
     ],
+    ids=["query-wcs", "path-wcs", "path-wms", "path-wmts", "xyz-template"],
 )
 def test_detect_service_type(url: str, expected: ServiceTypeEnum) -> None:
+    """Didactic token/path/XYZ rows; opaque/query taxonomy lives in product contracts."""
     assert detect_service_type(url) == expected
 
 
@@ -33,11 +34,6 @@ def test_detect_service_type_uses_fallback() -> None:
         detect_service_type("https://example.com/data", fallback=ServiceTypeEnum.WCS)
         == ServiceTypeEnum.WCS
     )
-
-
-def test_detect_service_type_raises_when_unknown() -> None:
-    with pytest.raises(ConfigurationError, match="Unable to detect service type"):
-        detect_service_type("https://example.com/unknown-endpoint")
 
 
 def test_get_service_builds_registered_implementation() -> None:

@@ -20,14 +20,15 @@ tests/contract/
 └── wmts/
     ├── test_wmts_contract.py
     └── cassettes/
-        ├── TestKartverketWMTSContract.test_get_capabilities_utm33n_matrix.yaml
-        └── TestKartverketWMTSContract.test_plan_tiles_oslo_window_native_bounds.yaml
+        └── TestKartverketWMTSContract.get_capabilities_utm33n_matrix.yaml
+            # shared by get_capabilities + plan_tiles via vcr_cassette_name
 ```
 
 Keep cassettes small (CI enforces a per-file size budget via
 `scripts/check_cassettes.py`). Prefer tiny request windows when recording;
-multipart GeoTIFF bodies bloat YAML quickly. WMTS Kartverket cassettes are
-GetCapabilities-only (planning is offline against the recorded XML).
+multipart GeoTIFF bodies bloat YAML quickly. WMTS Kartverket contract methods
+share one GetCapabilities cassette (layer-order diffs are irrelevant to
+asserts); planning stays offline against that recorded XML / mocked PNG.
 
 ## Running
 
