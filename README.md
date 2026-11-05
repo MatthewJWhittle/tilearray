@@ -58,7 +58,7 @@ da = create_array(
 )
 arr = compute_with_policy(da)
 print(arr.shape, da.attrs["crs"], da.attrs["transform"])
-# Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — crs= is query only
+# Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — bbox_crs= is query only
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
