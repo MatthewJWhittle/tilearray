@@ -1,8 +1,9 @@
-"""Choose a WMTS TileMatrix from a target ground resolution (#123).
+"""Choose a WMTS TileMatrix from a target resolution in CRS units/pixel (#123).
 
 Pure helpers over matrix-level summaries — no HTTP, no silent pick inside
 ``create_array``, and no resampling. Callers pass the chosen matrix id into
-``WMTSConfig`` / ``create_array`` themselves.
+``WMTSConfig`` / ``create_array`` themselves. Values are CRS coordinate units
+per pixel (not “ground metres” on Web Mercator).
 """
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ class MatrixLevelSummary:
     identifier: str
     scale_denominator: float | None = None
     resolution: float | None = None
-    """Native ground sample distance in CRS units per pixel, when known."""
+    """Native sample distance in CRS units per pixel, when known."""
 
 
 @dataclass(frozen=True)
@@ -54,8 +55,9 @@ def choose_matrix_for_resolution(
 ) -> MatrixChoice:
     """Pick a TileMatrix whose native resolution matches ``target_resolution``.
 
-    ``target_resolution`` is ground sample distance in **CRS units per pixel**
-    (metres/pixel for projected matrices; degrees/pixel for geographic).
+    ``target_resolution`` is sample distance in **CRS units per pixel**
+    (linear units/pixel for projected matrices such as UTM metres; degrees/pixel
+    for geographic; Web Mercator uses its own CRS units — not ground metres).
     Policies:
 
     * ``nearest`` — smallest absolute difference to the target
@@ -104,7 +106,7 @@ def choose_matrix_for_resolution(
         raise ValidationError(
             "TileMatrix ScaleDenominator is missing for: "
             + ", ".join(missing_scale)
-            + ". Cannot choose a matrix from ground resolution without scales."
+            + ". Cannot choose a matrix from target resolution without scales."
         )
     if not resolved:
         raise ValidationError("No TileMatrix levels with usable scale/resolution")

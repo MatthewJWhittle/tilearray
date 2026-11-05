@@ -89,9 +89,9 @@ What to notice:
 - Coordinates are pixel centres on the tile grid; the returned extent may expand to whole tiles.
 - GetCapabilities is loaded automatically for this TileMatrixSet — no separate discovery step required for the copy-paste path.
 
-## Choose a TileMatrix from ground resolution
+## Choose a TileMatrix from a target resolution
 
-Callers often know metres-per-pixel, not the server's TileMatrix id. Use {py:func}`~tilearray.choose_matrix_for_resolution` on levels from {py:func}`~tilearray.inspect_endpoint` (or `MatrixSetSummary.levels`), then pass the chosen id into `WMTSConfig`. tilearray does **not** pick a matrix inside `create_array`, and it does **not** resample pixels to the target resolution — related: native-matrix planning (#93), plan-before-fetch (#61).
+Callers often know a target **CRS units per pixel**, not the server's TileMatrix id. Use {py:func}`~tilearray.choose_matrix_for_resolution` on levels from {py:func}`~tilearray.inspect_endpoint` (or `MatrixSetSummary.levels`), then pass the chosen id into `WMTSConfig`. Values are in the matrix CRS (for example metres/pixel in UTM); Web Mercator uses Mercator CRS units — not ground metres. tilearray does **not** pick a matrix inside `create_array`, and it does **not** resample pixels to the target resolution — related: native-matrix planning (#93), plan-before-fetch (#61).
 
 ```python
 from tilearray import (
@@ -107,7 +107,7 @@ inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
 matrix_set = next(m for m in inspection.matrix_sets if m.identifier == "utm33n")
 choice = choose_matrix_for_resolution(
     matrix_set.levels,
-    target_resolution=10.0,  # metres per pixel in the matrix CRS
+    target_resolution=10.0,  # CRS units per pixel in the matrix CRS (metres here)
     policy="coarser",  # or "nearest" / "finer"
     crs=matrix_set.crs,
 )
@@ -126,7 +126,7 @@ plan = plan_array(
     bbox_crs="EPSG:4326",
 )
 print(choice.identifier, choice.resolution)
-print(plan.matrix_id, plan.native_resolution, plan.crs, plan.bbox_crs)
+print(plan.matrix_id, plan.planned_pixel_size, plan.crs, plan.bbox_crs)
 # Then: create_array → compute_with_policy as usual. Same-grid trim (no
 # interpolation) is ordinary xarray slicing on the native mosaic — not a warp.
 ```

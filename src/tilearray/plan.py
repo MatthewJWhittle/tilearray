@@ -77,7 +77,7 @@ class ArrayPlan:
     chunk_size: tuple[int, int]
     grid_shape: tuple[int, int]
     resolution: tuple[float, float] | None
-    native_resolution: tuple[float, float] | None
+    planned_pixel_size: tuple[float, float] | None
     matrix_id: str | None
     pixel_height: int
     pixel_width: int
@@ -122,9 +122,9 @@ class ArrayPlan:
             lines.append(f"  bbox snap delta: {self.bbox_snap_delta}")
         if self.matrix_id is not None:
             lines.append(f"  matrix / zoom: {self.matrix_id}")
-        if self.native_resolution is not None:
+        if self.planned_pixel_size is not None:
             lines.append(
-                f"  native resolution (CRS units/px): {self.native_resolution}"
+                f"  planned pixel size (CRS units/px): {self.planned_pixel_size}"
             )
         if self.resolution is not None:
             lines.append(f"  resolution: {self.resolution}")
@@ -403,16 +403,17 @@ def plan_array(
     format_value = effective_format.value if effective_format is not None else None
 
     matrix_id = _matrix_or_zoom_id(service, _tile_options)
-    native_resolution = _native_resolution_from_plan(
+    planned_pixel_size = _planned_pixel_size_from_plan(
         planned_bbox=request.bbox,
         pixel_height=pixel_height,
         pixel_width=pixel_width,
     )
-    if native_resolution is not None:
+    if planned_pixel_size is not None:
         notes.append(
-            "native_resolution is derived from the planned mosaic extent ÷ "
-            "pixel shape (capabilities-confirmed when WMTS matrix metadata "
-            "drove the plan; estimated from the tile union otherwise)"
+            "planned_pixel_size is derived from the planned mosaic extent ÷ "
+            "pixel shape (CRS units per pixel; capabilities-confirmed when WMTS "
+            "matrix metadata drove the plan; estimated from the tile union "
+            "otherwise — not ground metres for Web Mercator)"
         )
 
     return ArrayPlan(
@@ -424,7 +425,7 @@ def plan_array(
         chunk_size=(chunk_width, chunk_height),
         grid_shape=request.grid_shape,
         resolution=request.resolution,
-        native_resolution=native_resolution,
+        planned_pixel_size=planned_pixel_size,
         matrix_id=matrix_id,
         pixel_height=pixel_height,
         pixel_width=pixel_width,
@@ -571,12 +572,14 @@ def _matrix_or_zoom_id(service: Any, tile_options: dict[str, Any]) -> str | None
     return None
 
 
-def _native_resolution_from_plan(
+def _planned_pixel_size_from_plan(
     *,
     planned_bbox: BoundingBox,
     pixel_height: int,
     pixel_width: int,
 ) -> tuple[float, float] | None:
+    """CRS units per pixel from planned extent ÷ mosaic shape (x, y)."""
+
     if pixel_height <= 0 or pixel_width <= 0:
         return None
     span_x = planned_bbox.max_x - planned_bbox.min_x

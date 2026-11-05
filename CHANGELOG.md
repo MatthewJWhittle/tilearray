@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Optional server-side **`output_crs=`** for WMS / WCS (`WMSConfig` / `WCSConfig` / create/plan named arg). WCS sends `outputCRS`; WMS uses it as the GetMap CRS. Mosaic `attrs["crs"]` matches. Unsupported values fail when the service advertises a supported-CRS list. **Rejected** on XYZ / WMTS (native grid only — never implies client reproject)
-- `choose_matrix_for_resolution` (+ `MatrixLevelSummary` / `MatrixChoice`): pure helper to pick a WMTS TileMatrix from a target ground resolution and policy (`coarser` / `nearest` / `finer`). Fails when ScaleDenominator is missing; does not choose inside `create_array` and does not resample. Inspect `MatrixSetSummary.levels` carries scale + native resolution. `ArrayPlan` gains `matrix_id` and `native_resolution`. Docs recipe on the WMTS guide (#123; related #93 / #61)
+- `choose_matrix_for_resolution` (+ `MatrixLevelSummary` / `MatrixChoice`): pure helper to pick a WMTS TileMatrix from a target resolution in **CRS units/pixel** and policy (`coarser` / `nearest` / `finer`). Fails when ScaleDenominator is missing; does not choose inside `create_array` and does not resample. Inspect `MatrixSetSummary.levels` carries scale + resolution. `ArrayPlan` gains `matrix_id` and `planned_pixel_size` (extent ÷ shape; CRS units/pixel — not ground metres for Web Mercator). Docs recipe on the WMTS guide (#123; related #93 / #61)
 
 ### Changed
 
