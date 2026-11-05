@@ -119,22 +119,14 @@ No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. Visu
 ### WMTS — Kartverket topo (EPSG:25833)
 
 ```python
-from tilearray import WMTSConfig, compute_mosaic, create_array
-from tilearray.types import Format
+from tilearray import compute_mosaic, create_array, inspect_endpoint
 
-config = WMTSConfig.from_url(
-    "https://cache.kartverket.no/v1/service",
+inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
+config = inspection.build_config(
     layer="topo",
     tile_matrix_set="utm33n",
-    tile_matrix=8,
+    target_resolution=10.0,  # metres / pixel in the matrix CRS
     style="default",
-    output_format=Format.PNG,
-    chunk_size=(256, 256),
-    max_concurrent_requests=2,
-    rate_limit_per_second=2.0,
-    headers={
-        "User-Agent": "tilearray/0.3 (+https://github.com/MatthewJWhittle/tilearray/issues)",
-    },
 )
 
 # Lon/lat AOI → native UTM33 mosaic (tile-aligned extent may expand)
@@ -153,7 +145,7 @@ arr.plot.imshow(rgb="band", add_colorbar=False)
 :width: 420px
 ```
 
-Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough: {doc}`guides/wmts`. Unknown hosts: {doc}`inspect-endpoint`.
+Name the service, layer, TileMatrixSet, and a familiar spacing — inspect attaches templates / matrix metadata. The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough: {doc}`guides/wmts`. Unknown hosts: {doc}`inspect-endpoint`.
 
 Many noncontiguous sample boxes (ML chips): {doc}`multi-aoi-ml-patches` — one `create_array` per bbox, not one mosaic over the union of all boxes.
 

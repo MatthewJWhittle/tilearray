@@ -36,24 +36,25 @@ elevation = compute_mosaic(da)
 
 `build_config` refuses unknown CoverageIds. If the host lists exactly one coverage (or one library format / CRS), that value can be filled in; otherwise you must choose. Compose politeness separately when you need it (`**ea_dsp_fetch_defaults()` on a `WCSConfig.from_url` you already trust).
 
-## WMTS — layer, matrix set, matrix
+## WMTS — layer, matrix set, resolution
 
 ```python
 from tilearray import inspect_endpoint
 
 # Any WMTS GetCapabilities URL your host documents
 inspection = inspect_endpoint("https://example.com/path/to/wmts")
-print(inspection)  # layers, TileMatrixSets, matrix ids, REST templates when present
+print(inspection)  # layers, TileMatrixSets, CRS — templates attached when present
 
 config = inspection.build_config(
     layer="blue_marble",
     tile_matrix_set="GoogleMapsCompatible",
-    tile_matrix=5,
+    target_resolution=10.0,  # CRS units / pixel in the matrix CRS
+    # or tile_matrix=5 when you already know the id
 )
 # create_array(config, bbox=…, bbox_crs=…) as usual
 ```
 
-Pass `layer`, `tile_matrix_set`, and `tile_matrix` unless only one option exists. Wrong ids raise {py:exc}`~tilearray.ValidationError` — tilearray does not rename or guess. Inspection does **not** warp pixels: for metadata-backed WMTS the mosaic stays on the matrix SupportedCRS (your `bbox_crs=` is only the query window); see {doc}`guides/wmts` and {doc}`design-principles`.
+Pass `layer` and `tile_matrix_set` unless only one option exists. Pick a TileMatrix with `target_resolution=` (familiar spacing) or `tile_matrix=` (explicit id) — not both. Wrong ids raise {py:exc}`~tilearray.ValidationError` — tilearray does not rename or guess a layer / matrix set. REST `url_template=` from GetCapabilities is attached when present; you do not paste it on the happy path. Inspection does **not** warp pixels: for metadata-backed WMTS the mosaic stays on the matrix SupportedCRS (your `bbox_crs=` is only the query window); see {doc}`guides/wmts` and {doc}`design-principles`.
 
 ## WMS and private hosts
 

@@ -87,7 +87,7 @@ elevation = compute_mosaic(da)
 print(elevation.shape, float(elevation.mean()), elevation.attrs["crs"])
 ```
 
-EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10**. WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (GIBS + Kartverket — mosaic CRS follows the TileMatrixSet, not necessarily your query `crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → choose ids → `build_config`.
+EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10**. WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (Kartverket — inspect → `target_resolution`; mosaic CRS follows the TileMatrixSet, not necessarily your query `bbox_crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → `build_config`.
 
 ## Development
 

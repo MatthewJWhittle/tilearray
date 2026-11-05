@@ -229,12 +229,12 @@ def _from_wmts_capabilities(
         _matrix_set_summary(tms) for tms in caps.tile_matrix_sets.values()
     )
     notes = [
-        "Choose layer + tile_matrix_set + tile_matrix explicitly unless only one "
-        "option exists.",
-        "Returned mosaics are labelled with the grid CRS you request — inspection "
-        "does not warp tiles into another CRS.",
-        "Non-Web-Mercator / native-matrix planning depth is still limited on some "
-        "hosts; see the WMTS roadmap notes if georef looks wrong.",
+        "Choose layer + tile_matrix_set unless only one option exists. Pick a "
+        "TileMatrix with tile_matrix= or target_resolution= (CRS units/pixel).",
+        "Returned mosaics stay on the matrix SupportedCRS — inspection does not "
+        "warp tiles into another CRS.",
+        "REST GetTile templates from GetCapabilities are attached by build_config "
+        "when present; you do not need to paste url_template= on the happy path.",
     ]
     warnings: list[str] = []
     if not resources:

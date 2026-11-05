@@ -16,11 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Optional server-side **`output_crs=`** for WMS / WCS (`WMSConfig` / `WCSConfig` / create/plan named arg). WCS sends `outputCRS`; WMS uses it as the GetMap CRS. Mosaic `attrs["crs"]` matches. Unsupported values fail when the service advertises a supported-CRS list. **Rejected** on XYZ / WMTS (native grid only — never implies client reproject)
 - `choose_matrix_for_resolution` (+ `MatrixLevelSummary` / `MatrixChoice`): pure helper to pick a WMTS TileMatrix from a target resolution in **CRS units/pixel** and policy (`coarser` / `nearest` / `finer`). Compares on `resolution`; ScaleDenominator is best-effort (resolution-only levels accepted; `MatrixChoice.scale_denominator` may be `None`). Does not choose inside `create_array` and does not resample. Inspect `MatrixSetSummary.levels` carries scale + resolution. `ArrayPlan` gains `matrix_id` and `planned_pixel_size` (extent ÷ shape; CRS units/pixel — not ground metres for Web Mercator). Docs recipe on the WMTS guide (#123; related #93 / #61)
+- `EndpointInspection.build_config` for WMTS accepts **`target_resolution=`** (+ optional `resolution_policy=`) as an alternative to `tile_matrix=` — wraps `choose_matrix_for_resolution` on the selected TileMatrixSet's levels and still attaches `url_template` from GetCapabilities when present
 
 ### Changed
 
 - Docs first-run path: install / quickstart / README / OSM London guide state that plotting needs a separate `matplotlib` install (not a core dependency; no `[plot]` extra). Primary OSM snippets use `expand_palette=True` for full-colour RGB and note that the default keeps palette indices; guide figure artifact script aligned
 - Docs usage guides / quickstart / multi-AOI: live-host mosaic figures for EA Vegetation Object Model (WMS) and three noncontiguous OSM patches; sibling guides gain `plot.imshow` after create/compute; quickstart embeds EA Lidar / WMS / Kartverket figures; artifact script gains `--only vom` / `--only multi-aoi`
+- WMTS happy path: `inspect_endpoint` → `build_config(..., target_resolution=...)` (optional `resolution_policy`) picks a TileMatrix and attaches REST templates from GetCapabilities — guides / quickstart / stage-gate lead with service + layer + matrix set + resolution + AOI/`bbox_crs`, not URL templates or matrix wire ids. Explicit `tile_matrix=` / `url_template=` remain advanced. Stage-gate notebook updated for `bbox_crs` / `compute_mosaic` / Kartverket WMTS knobs
 
 ## [0.3.0] - 2026-11-04
 

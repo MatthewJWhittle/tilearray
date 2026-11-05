@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from ..error_messages import redact_url
 from ..errors import ConfigurationError, ValidationError
@@ -399,19 +399,14 @@ class EndpointInspection:
                     "explicitly, or inspect a host that advertises "
                     "ScaleDenominator / native resolution."
                 )
-            if not isinstance(resolution_policy, str):
-                raise ValidationError(
-                    "resolution_policy must be 'coarser', 'nearest', or 'finer'."
-                )
-            policy = resolution_policy  # narrowed for type checkers
-            if policy not in {"coarser", "nearest", "finer"}:
+            if resolution_policy not in {"coarser", "nearest", "finer"}:
                 raise ValidationError(
                     "resolution_policy must be 'coarser', 'nearest', or 'finer'."
                 )
             choice = choose_matrix_for_resolution(
                 matrix_summary.levels,
                 float(target_resolution),
-                policy=policy,  # type: ignore[arg-type]
+                policy=cast(ResolutionPolicy, resolution_policy),
                 crs=matrix_crs,
             )
             tile_matrix = choice.identifier

@@ -123,6 +123,40 @@ def test_inspect_wmts_capabilities_and_unambiguous_layer() -> None:
         )
 
 
+def test_build_config_wmts_target_resolution_picks_matrix() -> None:
+    inspection = inspect_capabilities(
+        _read("wmts_get_capabilities.xml"),
+        service_type=ServiceTypeEnum.WMTS,
+        base_url="https://example.com/wmts",
+    )
+    # Fixture GoogleMapsCompatible levels ~156543 / ~78271 CRS units/pixel.
+    config = inspection.build_config(
+        layer="blue_marble",
+        tile_matrix_set="GoogleMapsCompatible",
+        target_resolution=100_000.0,
+        resolution_policy="nearest",
+    )
+    assert isinstance(config, WMTSConfig)
+    assert config.tile_matrix in {0, 1}
+    assert config.url_template is not None  # attached from caps; caller did not pass it
+
+    with pytest.raises(
+        ValidationError, match="either tile_matrix= or target_resolution"
+    ):
+        inspection.build_config(
+            layer="blue_marble",
+            tile_matrix_set="GoogleMapsCompatible",
+            tile_matrix=1,
+            target_resolution=100_000.0,
+        )
+
+    with pytest.raises(ValidationError, match="tile_matrix is required"):
+        inspection.build_config(
+            layer="blue_marble",
+            tile_matrix_set="GoogleMapsCompatible",
+        )
+
+
 def test_inspect_wms_capabilities_lists_layers() -> None:
     inspection = inspect_capabilities(
         _read("wms_get_capabilities.xml"),
