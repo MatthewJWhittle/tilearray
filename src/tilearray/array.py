@@ -334,7 +334,7 @@ def create_array(
     cache_dir: str | Path | None = None,
     compute: bool = False,
     compute_num_workers: int | None = None,
-    dtype: str | np.dtype[Any] = np.dtype("float32"),
+    dtype: str | np.dtype[Any] | None = None,
     band_policy: BandPolicy | None = None,
     expand_palette: bool = False,
     tile_decoder: TileDecoder | None = None,
@@ -386,9 +386,12 @@ def create_array(
     Raster fidelity: ``band_policy`` defaults to ``\"preserve\"`` (keep all
     bands; pass ``\"first_band\"`` to reduce explicitly). Palette PNGs stay as
     index arrays unless ``expand_palette=True``. GeoTIFF decode promotes to
-    float32 so nodata can be NaN; imagery decode keeps native dtype until the
-    ``dtype=`` cast. Clipped WCS GeoTIFF responses are placed by their tags
-    onto the requested grid and padded with NaN — never stretched.
+    float32 so nodata can be NaN. Imagery (PNG/JPEG) defaults to **uint8** so
+    ``DataArray.plot.imshow(rgb="band")`` works without an ``astype`` cast;
+    pass ``dtype="float32"`` explicitly when you need float mosaics (required
+    automatically when soft-fail needs NaN fill). Clipped WCS GeoTIFF
+    responses are placed by their tags onto the requested grid and padded
+    with NaN — never stretched.
 
     Parameters
     ----------
@@ -430,8 +433,9 @@ def create_array(
         Override Dask thread workers when ``compute=True``. Default sizes
         from the fetch-policy ceiling.
     dtype:
-        Array dtype after decode (default ``float32``). Imagery keeps native
-        dtype until this cast; GeoTIFF elevation promotes for NaN nodata.
+        Array dtype after decode. Default ``None`` selects **uint8** for
+        PNG/JPEG (plot-ready) and **float32** for GeoTIFF / soft-fail paths.
+        Pass an explicit numpy dtype / string to override.
     band_policy:
         ``\"preserve\"`` (default for PNG/JPEG/GeoTIFF) keeps all bands;
         ``\"first_band\"`` reduces explicitly. ``None`` uses the format
@@ -542,7 +546,11 @@ def create_array(
 
     cache_path = request.cache_path
     chunk_height, chunk_width = request.chunk_size
-    dtype_np = np.dtype(dtype)
+    dtype_np = _resolve_mosaic_dtype(
+        dtype,
+        effective_format=effective_format,
+        needs_nan_soft_fill=tile_error_handler is not None,
+    )
     progress_callback = resolve_on_progress(
         on_progress,
         total_tiles=len(tile_requests),
@@ -620,6 +628,7 @@ def create_array(
             output_format=effective_format,
             band_policy=resolved_band_policy,
             expand_palette=expand_palette,
+            mosaic_dtype=dtype_np,
         )
     )
     # Pixel centers from mosaic Affine; row 0 = north (_organize_tiles sorts by -max_y).
@@ -701,6 +710,27 @@ def _pixel_center_coords(
     return y_coords, x_coords
 
 
+def _resolve_mosaic_dtype(
+    dtype: str | np.dtype[Any] | None,
+    *,
+    effective_format: Format | None,
+    needs_nan_soft_fill: bool,
+) -> np.dtype[Any]:
+    """Pick mosaic dtype: uint8 for plot-ready imagery, float32 otherwise.
+
+    Soft-fail needs NaN fill, so imagery with soft-fail stays float32 unless
+    the caller passes an explicit dtype.
+    """
+
+    if dtype is not None:
+        return np.dtype(dtype)
+    if needs_nan_soft_fill:
+        return np.dtype("float32")
+    if effective_format in {Format.PNG, Format.JPEG}:
+        return np.dtype("uint8")
+    return np.dtype("float32")
+
+
 def _geospatial_attrs(
     *,
     bbox: BoundingBox,
@@ -709,6 +739,7 @@ def _geospatial_attrs(
     output_format: Format | None,
     band_policy: BandPolicy | None = None,
     expand_palette: bool = False,
+    mosaic_dtype: np.dtype[Any] | None = None,
 ) -> dict[str, Any]:
     """
     Analysis-ready CRS / transform / nodata / band-policy attrs for handoff.
@@ -733,7 +764,10 @@ def _geospatial_attrs(
             attrs["_FillValue"] = float("nan")
             attrs["dtype_policy"] = "float32_nodata_nan"
         elif output_format in {Format.PNG, Format.JPEG}:
-            attrs["dtype_policy"] = "native_then_array_dtype"
+            if mosaic_dtype is not None and mosaic_dtype == np.dtype("uint8"):
+                attrs["dtype_policy"] = "plot_ready_uint8"
+            else:
+                attrs["dtype_policy"] = "native_then_array_dtype"
     return attrs
 
 

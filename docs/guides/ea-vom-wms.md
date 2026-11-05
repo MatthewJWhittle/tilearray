@@ -32,8 +32,8 @@ img = compute_mosaic(da)
 
 print(img.shape, da.attrs["service_type"])  # often (y, x, band) with 4 bands
 print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])
-# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
-img.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
+# PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
+img.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 `bbox_crs=` is the query CRS. For WMS, mosaic `attrs["crs"]` matches that query (no client-side warp).

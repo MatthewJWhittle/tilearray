@@ -392,3 +392,163 @@ def test_soft_fail_docs_and_stage_gate_state_probe_phase() -> None:
     )
     assert "band_policy" in text and "first_band" in text
     assert "probe" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Mode D — plot / analysis-ready mosaic shape (offline palette fixture)
+# ---------------------------------------------------------------------------
+
+
+def _palette_png_bytes(*, expand_colors: bool = True) -> bytes:
+    """Real-shaped palette PNG (not a solid-color didactic tile)."""
+
+    from io import BytesIO
+
+    from PIL import Image
+
+    image = Image.new("P", (8, 8))
+    palette = [0] * 768
+    # Checkerboard of two non-gray RGB entries so imshow(rgb="band") is meaningful.
+    palette[0:3] = [200, 40, 40]
+    palette[3:6] = [40, 40, 200]
+    image.putpalette(palette)
+    pixels = image.load()
+    assert pixels is not None
+    for y in range(8):
+        for x in range(8):
+            pixels[x, y] = 0 if (x + y) % 2 == 0 else 1
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def test_expand_palette_mosaic_is_plot_ready_for_imshow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After expand_palette=True, dims/dtype suit ``xarray.plot.imshow(rgb="band")``."""
+
+    from tilearray import _planning as planning_module
+    from tilearray import array as array_module
+
+    raw = _palette_png_bytes()
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=8, max_y=8, crs=CRS.EPSG_3857)
+
+    class PaletteXYZ:
+        service_type = ServiceTypeEnum.XYZ
+        output_format = Format.PNG
+
+        def generate_tile_requests(
+            self, *args: Any, **kwargs: Any
+        ) -> list[TileRequest]:
+            del args, kwargs
+            return [
+                TileRequest(
+                    url="http://example.com/0/0/0.png",
+                    params={},
+                    output_format=Format.PNG,
+                    crs=CRS.EPSG_3857,
+                    bbox=bbox,
+                    width=8,
+                    height=8,
+                )
+            ]
+
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: PaletteXYZ())
+    monkeypatch.setattr(
+        array_module,
+        "fetch_tile",
+        lambda request, **kwargs: TileResponse(
+            data=raw,
+            content_type="image/png",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+        ),
+    )
+
+    result = create_array(
+        service_url="http://example.com/{z}/{x}/{y}.png",
+        bbox=bbox,
+        bbox_crs=CRS.EPSG_3857,
+        chunk_size=(8, 8),
+        output_format=Format.PNG,
+        expand_palette=True,
+        compute=True,
+        show_progress=False,
+    )
+
+    assert "band" in result.dims
+    assert result.sizes["band"] >= 3
+    assert result.dtype == np.uint8 or (
+        np.issubdtype(result.dtype, np.floating)
+        and float(result.max()) <= 1.0 + 1e-6
+    ), (
+        "plot-ready RGB must be uint8 or float in [0, 1] — "
+        f"got dtype={result.dtype}, max={float(result.max())}"
+    )
+    assert result.attrs.get("palette_mode") == "rgb"
+    # Not a sparse index field that imshow(rgb="band") turns into cyan speckles.
+    assert float(result.values[..., 0].max()) >= 40
+
+
+def test_default_palette_indices_stay_single_band_gray(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default indices path remains single-band (documented gray / index plot)."""
+
+    from tilearray import _planning as planning_module
+    from tilearray import array as array_module
+
+    raw = _palette_png_bytes()
+    bbox = BoundingBox(min_x=0, min_y=0, max_x=8, max_y=8, crs=CRS.EPSG_3857)
+
+    class PaletteXYZ:
+        service_type = ServiceTypeEnum.XYZ
+        output_format = Format.PNG
+
+        def generate_tile_requests(
+            self, *args: Any, **kwargs: Any
+        ) -> list[TileRequest]:
+            del args, kwargs
+            return [
+                TileRequest(
+                    url="http://example.com/0/0/0.png",
+                    params={},
+                    output_format=Format.PNG,
+                    crs=CRS.EPSG_3857,
+                    bbox=bbox,
+                    width=8,
+                    height=8,
+                )
+            ]
+
+    monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: PaletteXYZ())
+    monkeypatch.setattr(
+        array_module,
+        "fetch_tile",
+        lambda request, **kwargs: TileResponse(
+            data=raw,
+            content_type="image/png",
+            status_code=200,
+            headers={},
+            url=request.url,
+            success=True,
+        ),
+    )
+
+    result = create_array(
+        service_url="http://example.com/{z}/{x}/{y}.png",
+        bbox=bbox,
+        bbox_crs=CRS.EPSG_3857,
+        chunk_size=(8, 8),
+        output_format=Format.PNG,
+        expand_palette=False,
+        compute=True,
+        show_progress=False,
+    )
+
+    assert result.ndim == 2 or (
+        "band" in result.dims and result.sizes.get("band", 1) == 1
+    )
+    assert result.attrs.get("palette_mode") == "indices"
