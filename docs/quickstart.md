@@ -4,7 +4,7 @@ Five minutes from install to a plotted, georeferenced mosaic. Prefer {py:func}`t
 
 ## First run — OpenStreetMap XYZ
 
-Install ({doc}`install`), then fetch a tiny central-London window:
+Install ({doc}`install`), including **matplotlib** for the plot step (`pip install matplotlib` or conda — not part of core `tilearray`), then fetch a tiny central-London window:
 
 ```python
 from tilearray import XYZConfig, compute_with_policy, create_array
@@ -18,10 +18,11 @@ da = create_array(
     config,
     bbox=(-0.005, 51.495, 0.005, 51.505),
     crs=CRS.EPSG_4326,
+    expand_palette=True,  # full-colour RGB; omit for single-band palette indices
 )
 arr = compute_with_policy(da)
 
-print(arr.shape)  # palette PNGs → single-band; ~ (1024, 512) for this window
+print(arr.shape)  # ~ (1024, 512, 3) for this window
 print(da.attrs["crs"], da.attrs["transform"])
 print(
     float(arr.x.min()),
@@ -29,10 +30,10 @@ print(
     float(arr.x.max()),
     float(arr.y.max()),
 )  # mosaic extent in metres
-arr.plot.imshow(cmap="gray", add_colorbar=False)
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-`crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat. Pixels are not client-warped.
+`crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat. Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
 
 ```{image} _static/guides/osm-london.png
 :alt: OpenStreetMap mosaic over a small central London bbox

@@ -5,7 +5,7 @@ Load a small slippy-map window, compute it, plot the mosaic, and read CRS / tran
 Uses `XYZConfig.from_url(OSM_TILE_TEMPLATE, …, **osm_fetch_defaults())` (identifiable User-Agent, max 2 in-flight, ~2 req/s). Include **© OpenStreetMap contributors** when displaying the imagery.
 
 ```{note}
-OSM raster tiles are often **palette PNGs**, so the mosaic may be single-band index values unless you pass `expand_palette=True`. For a full-colour RGB XYZ example see {doc}`gibs-bluemarble`.
+OSM raster tiles are often **palette PNGs**. Pass `expand_palette=True` (as below) for full-colour RGB; without it the mosaic stays single-band palette indices. For another truecolor RGB XYZ path see {doc}`gibs-bluemarble`. Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dependency); see {doc}`../install`.
 ```
 
 ## Code
@@ -24,7 +24,7 @@ config = XYZConfig.from_url(
 )
 
 bbox = (-0.005, 51.495, 0.005, 51.505)  # query lon/lat near central London
-da = create_array(config, bbox, CRS.EPSG_4326)
+da = create_array(config, bbox, CRS.EPSG_4326, expand_palette=True)
 arr = compute_with_policy(da)
 
 print(arr.shape, arr.dims, da.attrs["service_type"])
@@ -36,7 +36,7 @@ print(
     float(arr.y.max()),
 )
 # Query crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
-arr.plot.imshow(cmap="gray", add_colorbar=False)
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ## Result
@@ -48,4 +48,4 @@ arr.plot.imshow(cmap="gray", add_colorbar=False)
 
 Map data © OpenStreetMap contributors.
 
-Example shape for this window: about `(1024, 512)` (tile alignment can change that). Axis units on the figure are **EPSG:3857 metres**, not degrees. Stay within OSMF tile policy — prefer the preset; do not raise concurrency past its caps.
+Example shape for this window with `expand_palette=True`: about `(1024, 512, 3)` (tile alignment can change that). Axis units on the figure are **EPSG:3857 metres**, not degrees. Stay within OSMF tile policy — prefer the preset; do not raise concurrency past its caps.

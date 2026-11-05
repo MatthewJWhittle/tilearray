@@ -92,14 +92,28 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
         config,
         OSM_LONDON_BBOX,
         CRS.EPSG_4326,
+        expand_palette=True,
     )
     arr = compute_with_policy(da)
     elapsed = time.perf_counter() - start
 
-    # OSM raster tiles are often palette PNGs → single-band after decode today.
-    # Coords / extent are native EPSG:3857 (query crs= was lon/lat only).
+    # expand_palette=True → RGB; coords / extent are native EPSG:3857
+    # (query crs= was lon/lat only). Default without the flag keeps indices.
     fig, ax = plt.subplots(figsize=(5.5, 5.5))
-    arr.plot.imshow(ax=ax, cmap="gray", add_colorbar=False)
+    if arr.ndim == 3 and "band" in arr.dims and arr.sizes["band"] >= 3:
+        rgb = np.clip(np.asarray(arr.values[..., :3]) / 255.0, 0, 1)
+        ax.imshow(
+            rgb,
+            extent=[
+                float(arr.x.min()),
+                float(arr.x.max()),
+                float(arr.y.min()),
+                float(arr.y.max()),
+            ],
+            origin="upper",
+        )
+    else:
+        arr.plot.imshow(ax=ax, cmap="gray", add_colorbar=False)
     ax.set_title("OpenStreetMap XYZ — central London")
     ax.set_xlabel("easting (EPSG:3857)")
     ax.set_ylabel("northing (EPSG:3857)")
@@ -133,13 +147,14 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
         "zoom": OSM_ZOOM,
         "shape": list(arr.shape),
         "dims": list(arr.dims),
+        "palette_mode": da.attrs.get("palette_mode"),
         "elapsed_s": round(elapsed, 3),
         "mean": float(np.nanmean(arr.values)),
         "figure": png.name,
         "attribution": "© OpenStreetMap contributors",
         "note": (
-            "OSM PNGs are often palette mode; decoded mosaic is single-band today. "
-            "Query crs= is lon/lat; mosaic attrs are native EPSG:3857."
+            "Generated with expand_palette=True (RGB). Default without it keeps "
+            "palette indices. Query crs= is lon/lat; mosaic attrs are native EPSG:3857."
         ),
     }
     _write_json(out_dir / "osm-london.json", stats)

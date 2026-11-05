@@ -81,7 +81,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 ## OpenStreetMap XYZ
 
 - Stay on `XYZConfig.from_url(OSM_TILE_TEMPLATE, …, **osm_fetch_defaults())` (identifiable User-Agent, max 2 in-flight, ~2 req/s).
-- Palette PNGs often decode as **single-band palette indices**, not RGB (pass `expand_palette=True` for RGB). A small London window at z16 is about `(1024, 512)`, not `(256, 256)`.
+- Palette PNGs decode as **single-band palette indices** by default (not RGB). Pass `expand_palette=True` for colour — a small London window at z16 is about `(1024, 512, 3)`, or `(1024, 512)` without expansion.
 - Attribute © OpenStreetMap contributors when displaying imagery.
 
 ## NASA GIBS XYZ
