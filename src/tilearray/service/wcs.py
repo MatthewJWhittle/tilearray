@@ -610,9 +610,7 @@ class WCSService(BaseService):
             tile.bbox, requested_crs, metadata
         )
         output_raw = options.get("output_crs")
-        result_crs = (
-            CRS.parse(output_raw) if output_raw is not None else subset_crs
-        )
+        result_crs = CRS.parse(output_raw) if output_raw is not None else subset_crs
         subset_tile = TileGeometry(
             bbox=subset_bbox,
             width=tile.width,

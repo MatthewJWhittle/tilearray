@@ -51,6 +51,15 @@ def reset_fetcher_instances() -> Any:
     TileFetcher.reset_instances()
 
 
+@pytest.fixture(autouse=True)
+def preserve_decoder_registry() -> Any:
+    original = dict(decode_module._DECODER_REGISTRY)
+    try:
+        yield
+    finally:
+        decode_module._DECODER_REGISTRY = original
+
+
 @pytest.fixture
 def png_tile_bytes() -> bytes:
     array = np.full((256, 256), 128, dtype=np.uint8)
@@ -477,7 +486,10 @@ def test_wcs_query_differs_from_output_crs_sends_outputCRS(
 
     requests = service.generate_tile_requests(
         BoundingBox(
-            min_x=-5565.0, min_y=6_698_000.0, max_x=5565.0, max_y=6_710_000.0,
+            min_x=-5565.0,
+            min_y=6_698_000.0,
+            max_x=5565.0,
+            max_y=6_710_000.0,
             crs=CRS.EPSG_3857,
         ),
         (8, 4),
