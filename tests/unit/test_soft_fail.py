@@ -517,10 +517,15 @@ def test_decode_error_does_not_silent_nan_with_preset() -> None:
     assert progress.soft_failed == 0
 
 
-def test_probe_ignores_soft_fail_handler(
+def test_probe_phase_hard_fails_despite_soft_fail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Failing first probe tile must still raise before the graph is built."""
+    """Implementation pin for soft-fail phase 1 (see product-contract phase table).
+
+    Failing first probe tile must still raise before the graph is built — soft_fail
+    is not bound yet. Prefer the Mode C product-contract tests for the user-facing
+    phase table; this keeps the planning/probe wiring locked.
+    """
 
     rows, cols = 1, 2
 

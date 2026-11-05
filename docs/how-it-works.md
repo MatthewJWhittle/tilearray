@@ -69,6 +69,7 @@ Fetching uses **synchronous HTTP** (`httpx.Client`) with a concurrency gate:
 - **AIMD** when enabled: ramp under `max_concurrent`, back off on pressure (403/408/429/5xx and known OGC transient responses).
 - Optional **circuit breaker** (EA DSP preset): a burst of pressure freezes concurrency at the floor for a cooldown.
 - Retries with `Retry-After` support; hard failure raises `NetworkError` by default (no silent NaN holes). Opt-in `on_tile_error` / `soft_fail=True` can soft-fill exhausted tile-local failures after retries without aborting siblings.
+- **Soft-fail phases** (product contract): (1) **pre-graph band probe** stays hard — formats that must discover band count (`preserve` GeoTIFF / PNG / JPEG) ignore `soft_fail` on the sample tile; use `band_policy="first_band"` when you need an all-404 soft-fail demo. (2) **post-graph** exhausted 404 / 5xx / transport soft-fill after retries and record `attrs["tilearray_tile_errors"]`. (3) **auth 401** and exhausted **429** still abort.
 
 WCS/WMTS **GetCapabilities** / **DescribeCoverage** (and direct `WCSService.get_coverage`) use the same sync httpx stack: library User-Agent by default, `ServiceConfig.fetch_timeout` (default 30s), and config `headers`/`params` so private-server credentials apply at plan time as well as on tiles.
 
