@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- `create_array` / `plan_array` / `load_array` take **`bbox_crs=`** as the query CRS (third positional argument). The overloaded `crs=` argument on those entry points is **removed** — use `bbox_crs=` (service config `crs=` for request defaults is unchanged). `attrs["bbox_crs"]` records the query CRS; `attrs["crs"]` remains the mosaic / output CRS (native grid for XYZ / WMTS; query CRS for WCS / WMS). `ArrayPlan.bbox_crs` mirrors the query. `recommend_grid_shape(..., bbox_crs=)` matches. No client-side warp. Docs: design-principles, how-it-works, API, quickstart, troubleshooting
+- `create_array` / `plan_array` / `load_array` take **`bbox_crs=`** as the query CRS (third positional argument). The overloaded `crs=` argument on those entry points is **removed** — use `bbox_crs=` (service config `crs=` for request defaults is unchanged). A `BoundingBox` whose CRS conflicts with `bbox_crs=` raises `ValidationError` (no silent reproject of conflicting declarations). `attrs["bbox_crs"]` records the query CRS; `attrs["crs"]` is the **actual** mosaic / output CRS. No client-side warp. Docs: design-principles, how-it-works, API, quickstart, troubleshooting
+
+### Added
+
+- Optional server-side **`output_crs=`** for WMS / WCS (`WMSConfig` / `WCSConfig` / create/plan named arg). WCS sends `outputCRS`; WMS uses it as the GetMap CRS. Mosaic `attrs["crs"]` matches. Unsupported values fail when the service advertises a supported-CRS list. **Rejected** on XYZ / WMTS (native grid only — never implies client reproject)
 
 ### Changed
 

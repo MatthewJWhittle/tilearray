@@ -232,14 +232,15 @@ def plan_array(
     cache_dir: str | Path | None = None,
     dtype: str | np.dtype[Any] = np.dtype("float32"),
     probe_bands: bool = False,
+    output_crs: CRS | str | int | None = None,
     **service_options: Any,
 ) -> ArrayPlan:
     """Plan tile requests without building a mosaic or fetching pixels.
 
     Mirrors the planning inputs of :func:`~tilearray.create_array`
-    (including ``bbox_crs``). Capabilities / DescribeCoverage may still run
-    for WCS (same as today). Mosaic tile bytes are not fetched unless
-    ``probe_bands=True`` (opt-in band discovery).
+    (including ``bbox_crs`` and optional WMS/WCS ``output_crs``). Capabilities /
+    DescribeCoverage may still run for WCS (same as today). Mosaic tile bytes
+    are not fetched unless ``probe_bands=True`` (opt-in band discovery).
 
     Use this to inspect grid size, concurrency ceiling, and cache warmth before
     ``create_array`` → ``compute_with_policy``.
@@ -265,6 +266,12 @@ def plan_array(
             "plan_array no longer accepts crs=; pass bbox_crs= for the query "
             "CRS (service config crs= for request defaults is unchanged)."
         )
+    if output_crs is not None:
+        if "output_crs" in options:
+            raise ValidationError(
+                "pass output_crs= once (named argument or service option, not both)"
+            )
+        options["output_crs"] = output_crs
     fetch_policy = resolve_fetch_policy(service_config, options)
 
     request = ArrayRequest.from_inputs(

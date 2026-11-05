@@ -251,9 +251,87 @@ def coerce_array_origin(value: object) -> tuple[float, float]:
     raise ValidationError("origin must be a tuple of two numbers")
 
 
+def _crs_in_supported(crs: CRS, supported: Sequence[CRS | str]) -> bool:
+    target = CRS.parse(crs).value
+    for item in supported:
+        try:
+            if CRS.parse(item).value == target:
+                return True
+        except ValidationError:
+            continue
+    return False
+
+
+def _validate_supported_output_crs(
+    service: BaseService,
+    mosaic_crs: CRS,
+    tile_options: dict[str, Any],
+) -> None:
+    """Reject ``output_crs`` values the service metadata marks as unsupported."""
+
+    explicit = tile_options.get("supported_crs")
+    supported: list[CRS | str] = []
+    if isinstance(explicit, (list, tuple)):
+        supported.extend(explicit)
+
+    if service.service_type == ServiceTypeEnum.WCS:
+        coverage = tile_options.get("coverage_id") or getattr(
+            service, "coverage_id", None
+        )
+        meta = None
+        if hasattr(service, "coverage_metadata"):
+            meta = service.coverage_metadata(coverage)
+        if meta is not None:
+            supported.extend(getattr(meta, "supported_crs", []) or [])
+            native = getattr(meta, "native_crs", None)
+            if native is not None:
+                supported.append(native)
+
+    if service.service_type == ServiceTypeEnum.WMS and hasattr(
+        service, "supported_crs"
+    ):
+        layer_crs = getattr(service, "supported_crs", None)
+        if isinstance(layer_crs, (list, tuple)):
+            supported.extend(layer_crs)
+
+    # De-dupe while preserving order for the error message.
+    unique: list[CRS | str] = []
+    seen: set[str] = set()
+    for item in supported:
+        try:
+            key = CRS.parse(item).value
+        except ValidationError:
+            key = str(item)
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+
+    if unique and not _crs_in_supported(mosaic_crs, unique):
+        labels: list[str] = []
+        for item in unique[:12]:
+            try:
+                labels.append(CRS.parse(item).value)
+            except ValidationError:
+                labels.append(str(item))
+        raise ValidationError(
+            f"output_crs={mosaic_crs.value} is not supported by this "
+            f"{service.service_type.value} service. Supported CRS values include: "
+            f"{', '.join(labels)}."
+        )
+
+
 def normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
     if isinstance(bbox, BoundingBox):
-        return bbox if bbox.crs == crs else bbox.to_crs(crs)
+        bbox_crs = CRS.parse(bbox.crs)
+        target = CRS.parse(crs)
+        if bbox_crs != target:
+            raise ValidationError(
+                f"BoundingBox CRS ({bbox_crs.value}) conflicts with bbox_crs="
+                f"({target.value}); they must match. Transform the bbox to "
+                f"{target.value} yourself, or pass a coordinate tuple with "
+                f"bbox_crs=."
+            )
+        return bbox
     return BoundingBox.from_tuple(bbox, crs)
 
 
@@ -305,8 +383,7 @@ def recommend_grid_shape(
         if bbox_crs is None:
             normalized = bbox
         else:
-            target_crs = CRS.parse(bbox_crs)
-            normalized = bbox if bbox.crs == target_crs else bbox.to_crs(target_crs)
+            normalized = normalize_bbox(bbox, CRS.parse(bbox_crs))
     else:
         if bbox_crs is None:
             raise ValidationError(
@@ -523,7 +600,7 @@ class ArrayRequest(BaseModel):
         if self.service_config is not None:
             options.update(self.service_config.tile_kwargs())
         options.update(self.service_options)
-        options.setdefault("crs", self.target_crs)
+        options.setdefault("crs", self.bbox_crs)
         if self.output_format is not None:
             options.setdefault("output_format", self.output_format)
         options["grid_shape"] = self.grid_shape
@@ -531,10 +608,66 @@ class ArrayRequest(BaseModel):
             options.setdefault("resolution", self.resolution)
         return options
 
+    def _prepare_crs_roles(
+        self, service: BaseService, tile_options: dict[str, Any]
+    ) -> None:
+        """Resolve query / request / output CRS before generating tile requests.
+
+        WMS/WCS may use an explicit server-side ``output_crs`` (never a client
+        warp). XYZ/WMTS reject ``output_crs`` — mosaics stay on the native grid.
+        """
+
+        output_raw = tile_options.get("output_crs")
+        service_type = service.service_type
+
+        if service_type in {ServiceTypeEnum.XYZ, ServiceTypeEnum.WMTS}:
+            if output_raw is not None:
+                raise ValidationError(
+                    "output_crs= is only for WMS/WCS server-side reprojection; "
+                    "XYZ/WMTS mosaics stay on the native tile grid "
+                    "(no client-side warp)."
+                )
+            return
+
+        if service_type not in {ServiceTypeEnum.WMS, ServiceTypeEnum.WCS}:
+            if output_raw is not None:
+                raise ValidationError(
+                    "output_crs= is only supported for WMS and WCS services"
+                )
+            return
+
+        request_crs = CRS.parse(tile_options.get("crs") or self.bbox_crs)
+        tile_options["crs"] = request_crs
+
+        if output_raw is None:
+            mosaic_crs = request_crs
+        else:
+            mosaic_crs = CRS.parse(output_raw)
+            tile_options["output_crs"] = mosaic_crs
+            if service_type == ServiceTypeEnum.WMS:
+                # GetMap has one CRS for BBOX and rendered pixels.
+                tile_options["crs"] = mosaic_crs
+                request_crs = mosaic_crs
+
+        _validate_supported_output_crs(service, mosaic_crs, tile_options)
+
+        if self.requested_bbox is None:
+            self.requested_bbox = self.bbox
+        if self.bbox.crs != mosaic_crs:
+            try:
+                self.bbox = self.bbox.to_crs(mosaic_crs)
+            except (ValidationError, ValueError, RuntimeError) as exc:
+                raise ValidationError(
+                    f"Cannot transform query bbox from {self.bbox.crs.value} to "
+                    f"output CRS {mosaic_crs.value}: {exc}"
+                ) from exc
+        self.target_crs = mosaic_crs
+
     def plan_tile_requests(
         self, service: BaseService
     ) -> tuple[list[TileRequest], dict[str, Any]]:
         tile_options = self.tile_options()
+        self._prepare_crs_roles(service, tile_options)
         tile_requests_iter = service.generate_tile_requests(
             self.bbox,
             self.chunk_pixels,
@@ -552,7 +685,7 @@ class ArrayRequest(BaseModel):
 
         # Fixed grids (metadata WMTS + XYZ / slippy WMTS): mosaic extent/CRS
         # follow the planned native tile union, not the caller's query bbox /
-        # crs= label (#93; XYZ/slippy native 3857).
+        # query CRS label (#93; XYZ/slippy native 3857).
         inferred_bbox = getattr(service, "inferred_mosaic_bbox", None)
         if isinstance(inferred_bbox, BoundingBox):
             if self.requested_bbox is None:
