@@ -127,8 +127,7 @@ def choose_matrix_for_resolution(
             else ""
         )
         raise ValidationError(
-            "No TileMatrix levels with usable resolution (CRS units/pixel)."
-            + detail
+            "No TileMatrix levels with usable resolution (CRS units/pixel)." + detail
         )
 
     if policy == "nearest":
