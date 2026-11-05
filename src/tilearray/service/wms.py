@@ -211,6 +211,17 @@ class WMSService(BaseService):
             or tile.crs
             or self.native_crs
         )
+        # Tile bbox must already be in the GetMap CRS — we never reproject here.
+        # A mismatch previously swapped axes for geographic CRS and sent metres
+        # as lat/lon. Planning (create_array) reprojects before this call.
+        bbox_crs = tile.bbox.crs
+        if bbox_crs is not None and CRS.parse(bbox_crs) != crs:
+            raise ValidationError(
+                f"WMS GetMap crs={crs.value} does not match tile bbox CRS "
+                f"{CRS.parse(bbox_crs).value}. Reproject the AOI to the GetMap "
+                "CRS before build_tile_request (create_array / plan_array do this "
+                "when output_crs= is set), or omit output_crs=."
+            )
 
         params: dict[str, Any] = {
             "service": "WMS",

@@ -77,6 +77,66 @@ def looks_like_html(
     return text_sample.startswith(("<!doctype html", "<html"))
 
 
+def looks_like_ogc_exception_report(body: str | bytes | None) -> bool:
+    """True when a body is an OGC ExceptionReport / ServiceExceptionReport."""
+
+    if body is None:
+        return False
+    if isinstance(body, bytes):
+        sample = body[:4000].decode("utf-8", errors="replace")
+    else:
+        sample = body[:4000]
+    lowered = sample.lower()
+    return (
+        "exceptionreport" in lowered
+        or "serviceexceptionreport" in lowered
+        or ("<exception" in lowered and "exceptiontext" in lowered)
+    )
+
+
+def ogc_exception_report_message(
+    body: str | bytes,
+    *,
+    protocol: str,
+    url: str,
+) -> str:
+    """Human-readable ParseError / ServiceError text for an OGC exception body."""
+
+    if isinstance(body, bytes):
+        text = body.decode("utf-8", errors="replace")
+    else:
+        text = body
+    detail: str | None = None
+    # Prefer ExceptionText / ServiceException body content when present.
+    for marker in ("ExceptionText", "ServiceException"):
+        start = text.find(f"<{marker}")
+        if start < 0:
+            start = text.find(f"<{marker.lower()}")
+        if start < 0:
+            continue
+        gt = text.find(">", start)
+        end = text.find(f"</{marker}", gt)
+        if end < 0:
+            end = text.find(f"</{marker.lower()}", gt)
+        if gt >= 0 and end > gt:
+            detail = text[gt + 1 : end].strip()
+            if detail:
+                break
+    safe = redact_url(url)
+    lines = [
+        f"{protocol} GetCapabilities returned an OGC ExceptionReport for {safe}, "
+        "not a capabilities document.",
+    ]
+    if detail:
+        lines.append(f"  Server message: {detail}")
+    else:
+        lines.append(
+            "  Hint: check layer/coverage identifiers, credentials "
+            "(params=/headers=), and base_url."
+        )
+    return "\n".join(lines)
+
+
 def format_values_for_message(formats: Iterable[Format | str] | None) -> str | None:
     """Join format values for an error line, or ``None`` when empty."""
 
