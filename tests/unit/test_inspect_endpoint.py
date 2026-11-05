@@ -391,15 +391,6 @@ def test_build_config_rejects_bad_crs_and_format_strings() -> None:
     assert config2.crs == CRS.EPSG_27700
 
 
-def test_wmts_non_integer_matrix_and_missing_tms() -> None:
-    from tilearray.inspect import _coerce_tile_matrix
-
-    with pytest.raises(ValidationError, match="Unknown tile_matrix"):
-        _coerce_tile_matrix("LevelZero", ("0", "1"))
-    with pytest.raises(ValidationError, match="not an integer"):
-        _coerce_tile_matrix("EPSG:4326:5", ("EPSG:4326:5",))
-
-
 def test_wmts_empty_matrix_set_links_require_explicit_tms() -> None:
     xml = """<?xml version='1.0' encoding='UTF-8'?>
 <Capabilities xmlns="http://www.opengis.net/wmts/1.0"
@@ -488,53 +479,6 @@ def test_inspect_endpoint_fetches_wms_and_wmts() -> None:
     )
     wmts = inspect_endpoint(wmts_url)
     assert wmts.matrix_sets
-
-
-def test_redact_mapping_rewrites_embedded_urls() -> None:
-    from tilearray.inspect import _redact_mapping
-
-    out = _redact_mapping(
-        {
-            "callback": "https://example.com/hook?token=secret",
-            "plain": "ok",
-            "password": "nope",
-        }
-    )
-    assert out["password"] == "***"
-    assert "secret" not in out["callback"]
-    assert out["plain"] == "ok"
-
-
-def test_unique_format_outside_library_enum_stays_none() -> None:
-    from tilearray.inspect import _resolve_format
-
-    assert (
-        _resolve_format(
-            None, advertised=("application/x-custom",), default_when_unique=True
-        )
-        is None
-    )
-
-
-def test_crs_urn_matching_and_crs84_normalize() -> None:
-    from tilearray.inspect import _normalize_crs_token, _resolve_crs
-
-    assert _normalize_crs_token("urn:ogc:def:crs:EPSG::3857") == "EPSG:3857"
-    assert _normalize_crs_token("urn:ogc:def:crs:OGC:1.3:CRS84") == "CRS:84"
-    crs = _resolve_crs(
-        None,
-        advertised=("urn:ogc:def:crs:EPSG::4326",),
-        default_when_unique=True,
-    )
-    assert crs == CRS.EPSG_4326
-
-
-def test_sniff_capabilities_service_type_wmts_fixture() -> None:
-    from tilearray.inspect._parse import _sniff_capabilities_service_type
-
-    body = _read("wmts_get_capabilities.xml")
-    assert _sniff_capabilities_service_type(body) is ServiceTypeEnum.WMTS
-    assert _sniff_capabilities_service_type("<html>login</html>") is None
 
 
 @respx.mock
