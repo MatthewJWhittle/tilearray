@@ -527,3 +527,31 @@ def test_crs_urn_matching_and_crs84_normalize() -> None:
         default_when_unique=True,
     )
     assert crs == CRS.EPSG_4326
+
+
+def test_sniff_capabilities_service_type_wmts_fixture() -> None:
+    from tilearray.inspect._parse import _sniff_capabilities_service_type
+
+    body = _read("wmts_get_capabilities.xml")
+    assert _sniff_capabilities_service_type(body) is ServiceTypeEnum.WMTS
+    assert _sniff_capabilities_service_type("<html>login</html>") is None
+
+
+@respx.mock
+def test_inspect_endpoint_probes_opaque_kartverket_style_url() -> None:
+    """URLs without a wmts/wms/wcs path token still inspect via GetCapabilities probe."""
+
+    url = "https://cache.kartverket.no/v1/service"
+    respx.get(url).mock(
+        return_value=httpx.Response(200, text=_read("wmts_get_capabilities.xml"))
+    )
+    inspection = inspect_endpoint(url)
+    assert inspection.service_type is ServiceTypeEnum.WMTS
+    assert inspection.matrix_sets
+    config = inspection.build_config(
+        layer="blue_marble",
+        tile_matrix_set="GoogleMapsCompatible",
+        target_resolution=100_000.0,
+    )
+    assert isinstance(config, WMTSConfig)
+    assert config.url_template is not None

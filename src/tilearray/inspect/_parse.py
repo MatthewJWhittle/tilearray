@@ -8,8 +8,13 @@ from urllib.parse import urlparse
 
 import httpx
 
-from ..error_messages import format_http_failure, redact_url
-from ..errors import NetworkError, ValidationError
+from ..error_messages import (
+    format_http_failure,
+    looks_like_html,
+    redact_url,
+    undetectable_service_type_message,
+)
+from ..errors import ConfigurationError, NetworkError, ValidationError
 from ..matrix_resolution import MatrixLevelSummary
 from ..service.base import detect_service_type
 from ..service.http import (
@@ -27,6 +32,13 @@ from ..service.wmts import (
 from ..types import CRS, Format, ServiceCapabilities, ServiceTypeEnum
 from ._models import EndpointInspection, MatrixSetSummary, ResourceSummary
 from ._resolve import _XYZ_PLACEHOLDERS, _formats_from_template
+
+# Opaque OGC URLs (no wcs/wms/wmts path token) — probe GetCapabilities in this order.
+_OGC_PROBE_ORDER: tuple[ServiceTypeEnum, ...] = (
+    ServiceTypeEnum.WMTS,
+    ServiceTypeEnum.WMS,
+    ServiceTypeEnum.WCS,
+)
 
 
 def _matrix_set_summary(tms: WMTSTileMatrixSet) -> MatrixSetSummary:
@@ -73,6 +85,66 @@ def _coerce_service_type(
             f"Unknown service_type={service_type!r}; expected one of "
             f"{[item.value for item in ServiceTypeEnum]}."
         ) from exc
+
+
+def _sniff_capabilities_service_type(body: str) -> ServiceTypeEnum | None:
+    """Infer OGC protocol from a GetCapabilities XML body (no network)."""
+
+    if not body or looks_like_html(body):
+        return None
+    sample = body[:8000].lower()
+    # WMTS: TileMatrixSet / GetTile are distinctive.
+    if "tilematrixset" in sample or ("wmts" in sample and "gettile" in sample):
+        return ServiceTypeEnum.WMTS
+    if "coveragesummary" in sample or "describecoverage" in sample:
+        return ServiceTypeEnum.WCS
+    if "wcs:capabilities" in sample or "xmlns:wcs=" in sample:
+        return ServiceTypeEnum.WCS
+    if "getmap" in sample or "<wms:" in sample or "ogc:wms" in sample:
+        return ServiceTypeEnum.WMS
+    if "<capability" in sample and "request" in sample:
+        return ServiceTypeEnum.WMS
+    return None
+
+
+def _probe_service_type_via_capabilities(
+    url: str,
+    *,
+    config: Mapping[str, Any],
+    client: httpx.Client | None,
+) -> tuple[ServiceTypeEnum, str]:
+    """Probe GetCapabilities when the URL path does not encode the protocol.
+
+    Tries WMTS → WMS → WCS with ``service=`` / ``request=GetCapabilities`` and
+    sniffs the XML. Returns ``(service_type, body)`` so the caller can reuse the
+    successful response. Used by :func:`inspect_endpoint` for hosts like
+    Kartverket (``/v1/service`` with no ``wmts`` token). Callers may still pass
+    ``service_type=`` to skip the probe.
+    """
+
+    failures: list[str] = []
+    for candidate in _OGC_PROBE_ORDER:
+        try:
+            body = _fetch_capabilities(
+                url,
+                service_type=candidate,
+                config=config,
+                client=client,
+            )
+        except NetworkError as exc:
+            failures.append(f"{candidate.value}: {exc}")
+            continue
+        sniffed = _sniff_capabilities_service_type(body)
+        if sniffed is not None:
+            return sniffed, body
+        failures.append(f"{candidate.value}: response was not recognisable OGC XML")
+
+    detail = "; ".join(failures) if failures else "no probe attempts succeeded"
+    raise ConfigurationError(
+        undetectable_service_type_message(url)
+        + f"\n  GetCapabilities probe also failed ({detail})."
+        + " Pass service_type='wmts' (or wms/wcs) to skip probing."
+    )
 
 
 def _fetch_capabilities(

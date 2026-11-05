@@ -36,7 +36,8 @@ print(
     float(arr.y.max()),
 )
 # Query bbox_crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
-arr.plot.imshow(rgb="band", add_colorbar=False)
+# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
+arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ## Result

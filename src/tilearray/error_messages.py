@@ -344,7 +344,9 @@ def undetectable_service_type_message(url: str) -> str:
     return (
         f"Unable to detect service type from URL: {safe_url}\n"
         "  Hint: pass an explicit WCSConfig / WMSConfig / WMTSConfig / XYZConfig, "
-        "or include a service path (wcs/wms/wmts) or XYZ '{z}/{x}/{y}' placeholders."
+        "or include a service path (wcs/wms/wmts) or XYZ '{z}/{x}/{y}' placeholders. "
+        "For inspect_endpoint on opaque OGC URLs, pass service_type='wmts' "
+        "(or wms/wcs) — or let inspect probe GetCapabilities."
     )
 
 

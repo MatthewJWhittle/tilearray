@@ -15,6 +15,7 @@ import httpx
 from ..error_messages import looks_like_html, redact_url
 from ..errors import ConfigurationError, ParseError
 from ..matrix_resolution import MatrixLevelSummary
+from ..service.base import detect_service_type
 from ..service.wcs import WCSParser
 from ..service.wms import WMSParser
 from ..service.wmts import WMTSParser
@@ -27,6 +28,7 @@ from ._parse import (
     _from_wms_capabilities,
     _from_wmts_capabilities,
     _inspect_xyz,
+    _probe_service_type_via_capabilities,
 )
 from ._resolve import (
     _coerce_crs_value,
@@ -63,7 +65,11 @@ def inspect_endpoint(
     url:
         Service base URL, or an XYZ template containing ``{z}``, ``{x}``, ``{y}``.
     service_type:
-        Optional override when the URL does not encode the protocol.
+        Optional override when the URL does not encode the protocol. When
+        omitted and the path has no ``wcs`` / ``wms`` / ``wmts`` token,
+        tilearray probes GetCapabilities (WMTS → WMS → WCS) and sniffs the
+        XML — so hosts like Kartverket ``/v1/service`` work without forcing
+        callers to know the enum.
     headers, params:
         Same auth route as tile fetches / plan-time caps GETs.
     timeout:
@@ -72,7 +78,6 @@ def inspect_endpoint(
         Optional shared ``httpx.Client`` (tests / callers that own a session).
     """
 
-    resolved_type = _coerce_service_type(service_type, url)
     header_map = dict(headers or {})
     param_map = dict(params or {})
     config_bag: dict[str, Any] = {}
@@ -83,10 +88,23 @@ def inspect_endpoint(
     if timeout is not None:
         config_bag["fetch_timeout"] = timeout
 
+    probed_body: str | None = None
+    if service_type is not None:
+        resolved_type = _coerce_service_type(service_type, url)
+    else:
+        try:
+            resolved_type = detect_service_type(url)
+        except ConfigurationError:
+            resolved_type, probed_body = _probe_service_type_via_capabilities(
+                url,
+                config=config_bag,
+                client=client,
+            )
+
     if resolved_type is ServiceTypeEnum.XYZ:
         return _inspect_xyz(url, headers=header_map, params=param_map)
 
-    body = _fetch_capabilities(
+    body = probed_body or _fetch_capabilities(
         url,
         service_type=resolved_type,
         config=config_bag,

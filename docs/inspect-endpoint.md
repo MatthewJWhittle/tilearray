@@ -41,15 +41,17 @@ elevation = compute_mosaic(da)
 ```python
 from tilearray import inspect_endpoint
 
-# Any WMTS GetCapabilities URL your host documents
-inspection = inspect_endpoint("https://example.com/path/to/wmts")
+# Opaque OGC URLs (no "wmts" in the path) are fine — inspect probes GetCapabilities.
+# Pass service_type="wmts" to skip the probe when you already know the protocol.
+inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
 print(inspection)  # layers, TileMatrixSets, CRS — templates attached when present
 
 config = inspection.build_config(
-    layer="blue_marble",
-    tile_matrix_set="GoogleMapsCompatible",
+    layer="topo",
+    tile_matrix_set="utm33n",
     target_resolution=10.0,  # CRS units / pixel in the matrix CRS
-    # or tile_matrix=5 when you already know the id
+    # or tile_matrix=8 when you already know the id
+    style="default",
 )
 # create_array(config, bbox=…, bbox_crs=…) as usual
 ```
