@@ -59,7 +59,7 @@ Exported today; decide keep / demote / document before freeze:
 
 | Symbol | Note |
 |--------|------|
-| `CRS`, `Format`, `BoundingBox`, `BBoxTuple` | Caller-facing; `CRS` accepts any pyproj-valid projected/geographic CRS (#92 / #105). One public `crs=` interprets the bbox; WCS/WMS still label with it; XYZ/slippy label `EPSG:3857` tile-union; metadata-backed WMTS labels with matrix SupportedCRS (target: separate public `bbox_crs=` — see {doc}`design-principles`) |
+| `CRS`, `Format`, `BoundingBox`, `BBoxTuple` | Caller-facing; `CRS` accepts any pyproj-valid projected/geographic CRS (#92 / #105). Prefer public `bbox_crs=` for the query CRS; `bbox_crs=` is required during alpha. WCS/WMS label mosaics with the query CRS; XYZ/slippy label `EPSG:3857` tile-union; metadata-backed WMTS labels with matrix SupportedCRS (`attrs["bbox_crs"]` records the query) — see {doc}`design-principles` |
 | `TileRequest`, `TileResponse`, `TileGeometry` | Useful for advanced callers; candidates to keep thin or document as “supported advanced” |
 | `CoverageDescription`, `ServiceCapabilities`, `SpatialExtent`, `TemporalExtent`, `WCSResponse`, `ServiceTypeEnum` | Capability / parse shapes — prefer not growing these as a second API |
 | `detect_service_type`, `get_service`, `register_service` | Registry hooks; keep for extension, avoid teaching as the happy path |
@@ -80,7 +80,7 @@ These landed on `main` during the post-0.2.0 uniqueness / DX queue. They are **A
 
 | PR | Issue | What shipped |
 |----|-------|--------------|
-| [#105](https://github.com/MatthewJWhittle/tilearray/pull/105) | [#92](https://github.com/MatthewJWhittle/tilearray/issues/92) | Wider `CRS` acceptance (pyproj / any valid EPSG); same `create_array(..., crs=)` path |
+| [#105](https://github.com/MatthewJWhittle/tilearray/pull/105) | [#92](https://github.com/MatthewJWhittle/tilearray/issues/92) | Wider `CRS` acceptance (pyproj / any valid EPSG); same `create_array(..., bbox_crs=)` path |
 | [#106](https://github.com/MatthewJWhittle/tilearray/pull/106) | [#94](https://github.com/MatthewJWhittle/tilearray/issues/94) / [#95](https://github.com/MatthewJWhittle/tilearray/issues/95) | Clipped WCS GeoTIFF placement; default `band_policy="preserve"` / palette / dtype contract |
 | [#107](https://github.com/MatthewJWhittle/tilearray/pull/107) | [#93](https://github.com/MatthewJWhittle/tilearray/issues/93) | Native TileMatrixSet planning / mosaic CRS labelling |
 | [#110](https://github.com/MatthewJWhittle/tilearray/pull/110) | [#60](https://github.com/MatthewJWhittle/tilearray/issues/60) | WMTS host guide + Kartverket contract tests; auto-load caps for non-slippy matrices |

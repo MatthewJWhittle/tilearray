@@ -65,6 +65,7 @@ class ArrayPlan:
     planned_bbox: BoundingBox
     bbox_snap_delta: dict[str, float] | None
     crs: str
+    bbox_crs: str
     chunk_size: tuple[int, int]
     grid_shape: tuple[int, int]
     resolution: tuple[float, float] | None
@@ -94,7 +95,8 @@ class ArrayPlan:
                 f"  service: {self.service_type}"
                 + (f"  format: {self.output_format}" if self.output_format else "")
             ),
-            f"  crs: {self.crs}",
+            f"  bbox_crs (query): {self.bbox_crs}",
+            f"  crs (output): {self.crs}",
             (
                 "  requested bbox: "
                 f"({self.requested_bbox.min_x}, {self.requested_bbox.min_y}, "
@@ -221,7 +223,7 @@ class FetchSummary:
 def plan_array(
     service_url: str | ServiceConfigModel,
     bbox: BoundingBox | BBoxTuple,
-    crs: CRS | str | int,
+    bbox_crs: CRS | str | int,
     *,
     service_type: ServiceTypeEnum | None = None,
     chunk_size: tuple[int, int] | None = None,
@@ -230,12 +232,14 @@ def plan_array(
     cache_dir: str | Path | None = None,
     dtype: str | np.dtype[Any] = np.dtype("float32"),
     probe_bands: bool = False,
+    output_crs: CRS | str | int | None = None,
     **service_options: Any,
 ) -> ArrayPlan:
     """Plan tile requests without building a mosaic or fetching pixels.
 
-    Mirrors the planning inputs of :func:`~tilearray.create_array`. Capabilities
-    / DescribeCoverage may still run for WCS (same as today). Mosaic tile bytes
+    Mirrors the planning inputs of :func:`~tilearray.create_array`
+    (including ``bbox_crs`` and optional WMS/WCS ``output_crs``). Capabilities /
+    DescribeCoverage may still run for WCS (same as today). Mosaic tile bytes
     are not fetched unless ``probe_bands=True`` (opt-in band discovery).
 
     Use this to inspect grid size, concurrency ceiling, and cache warmth before
@@ -257,13 +261,24 @@ def plan_array(
         )
 
     options = dict(service_options)
+    if "crs" in options:
+        raise ValidationError(
+            "plan_array no longer accepts crs=; pass bbox_crs= for the query "
+            "CRS (service config crs= for request defaults is unchanged)."
+        )
+    if output_crs is not None:
+        if "output_crs" in options:
+            raise ValidationError(
+                "pass output_crs= once (named argument or service option, not both)"
+            )
+        options["output_crs"] = output_crs
     fetch_policy = resolve_fetch_policy(service_config, options)
 
     request = ArrayRequest.from_inputs(
         service_url=base_service_url,
         service_config=service_config,
         bbox_input=bbox,
-        crs_input=crs,
+        bbox_crs_input=bbox_crs,
         chunk_size_input=chunk_size,
         grid_shape_input=grid_shape,
         output_format_input=output_format,
@@ -376,6 +391,7 @@ def plan_array(
         planned_bbox=request.bbox,
         bbox_snap_delta=request.bbox_snap_delta,
         crs=request.target_crs.value,
+        bbox_crs=request.bbox_crs.value,
         chunk_size=(chunk_width, chunk_height),
         grid_shape=request.grid_shape,
         resolution=request.resolution,

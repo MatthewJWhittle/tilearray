@@ -42,11 +42,17 @@ Keep these concepts separate in types, docs, and tests:
 
 ### Current alpha behaviour
 
-Today `create_array(..., crs=)` is a **single** public CRS argument that interprets the bbox. It accepts any pyproj-valid CRS (presets or EPSG strings such as `EPSG:25833`), not a fixed four-value enum. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS.
+`create_array(..., bbox_crs=)` is the **query** CRS (how the bbox is described). The old overloaded `crs=` argument on `create_array` / `plan_array` was removed. Any pyproj-valid CRS is accepted (presets or EPSG strings such as `EPSG:25833`). A `BoundingBox` whose CRS conflicts with `bbox_crs=` fails loud — no silent reproject of conflicting declarations. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS. `attrs["bbox_crs"]` always records the query CRS; `attrs["crs"]` is the **actual** pixel-grid CRS.
 
-**Labelling today:** for WCS / WMS, `attrs["crs"]` is that same caller `crs=`. For **XYZ and slippy WMTS** (no TileMatrixSet metadata), mosaics are labelled `EPSG:3857` with a tile-union extent — `crs=` interprets the query bbox only (`bbox_requested` keeps the caller's window); pixels are not client-warped. For **WMTS with TileMatrixSet metadata**, the mosaic is labelled with the matrix SupportedCRS and a tile-aligned extent (query bbox may differ). A separate public `bbox_crs=` for every protocol remains **planned** — do not treat the full three-role API as already shipped, but do not document native fixed-grid output CRS (WMTS matrices / XYZ·slippy 3857) as unshipped either.
+**Labelling today:**
 
-Prefer a clean documented contract over preserving an ambiguous `crs` forever; any migration will be explicit during alpha.
+| Protocol | Request / service CRS | Output / `attrs["crs"]` |
+|----------|----------------------|-------------------------|
+| **WCS / WMS** | Config `crs=` (defaults to `bbox_crs`) drives subsetting / GetMap BBOX | Optional server-side `output_crs=` (WCS `outputCRS` / WMS GetMap CRS). When omitted, equals the request CRS. Unsupported values fail. |
+| **XYZ / slippy WMTS** | N/A (query only) | Always `EPSG:3857` tile-union extent; `bbox_requested` keeps the caller's window. `output_crs=` is **rejected**. |
+| **WMTS with TileMatrixSet** | Matrix SupportedCRS | Native matrix CRS + tile-aligned extent; query may differ. `output_crs=` is **rejected**. |
+
+Service config `crs=` remains the request-default field — not the create/plan query argument.
 
 ### Imagery vs numerical coverages
 

@@ -61,7 +61,7 @@ class TestRealServiceIntegration:
         result = array_module.create_array(
             service_url=config,
             bbox=bbox,
-            crs=CRS.EPSG_27700,
+            bbox_crs=CRS.EPSG_27700,
         )
         data: Any = result.compute()  # type: ignore[call-arg]
 
@@ -95,7 +95,7 @@ class TestRealServiceIntegration:
         result = array_module.create_array(
             service_url=config,
             bbox=bbox,
-            crs=CRS.EPSG_27700,
+            bbox_crs=CRS.EPSG_27700,
         )
 
         assert result.data.chunks == (chunk_size, chunk_size)
@@ -134,7 +134,7 @@ def test_live_kartverket_wmts_oslo_smoke() -> None:
     da = create_array(
         config,
         bbox=(10.6, 59.85, 10.8, 59.95),
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         show_progress=False,
     )
     arr = compute_with_policy(da)

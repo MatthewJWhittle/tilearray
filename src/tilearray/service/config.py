@@ -240,6 +240,13 @@ class WCSConfig(ServiceConfig):
 
     coverage_id: str = Field(..., description="Coverage identifier to request")
     version: str = Field(default="2.0.1", description="WCS protocol version")
+    output_crs: CRS | None = Field(
+        default=None,
+        description=(
+            "Optional server-side GetCoverage outputCRS. When set, mosaic "
+            "attrs['crs'] matches this CRS. Not a client-side warp."
+        ),
+    )
     service_type: ServiceTypeEnum = Field(
         default=ServiceTypeEnum.WCS, init=False, description="Service type constant"
     )
@@ -295,6 +302,8 @@ class WCSConfig(ServiceConfig):
     def tile_kwargs(self) -> dict[str, Any]:
         kwargs = super().tile_kwargs()
         kwargs["coverage_id"] = self.coverage_id
+        if self.output_crs is not None:
+            kwargs["output_crs"] = self.output_crs
         return kwargs
 
 
@@ -342,6 +351,14 @@ class WMSConfig(ServiceConfig):
     layers: str = Field(..., description="Comma-separated WMS layer names")
     version: str = Field(default="1.3.0", description="WMS protocol version")
     styles: str = Field(default="", description="WMS style names")
+    output_crs: CRS | None = Field(
+        default=None,
+        description=(
+            "Optional GetMap CRS when the server should render pixels in a CRS "
+            "other than the query. GetMap has one CRS for BBOX and image — "
+            "not a client-side warp."
+        ),
+    )
     service_type: ServiceTypeEnum = Field(
         default=ServiceTypeEnum.WMS, init=False, description="Service type constant"
     )
@@ -374,6 +391,8 @@ class WMSConfig(ServiceConfig):
         kwargs = super().tile_kwargs()
         kwargs["layers"] = self.layers
         kwargs["styles"] = self.styles
+        if self.output_crs is not None:
+            kwargs["output_crs"] = self.output_crs
         return kwargs
 
 

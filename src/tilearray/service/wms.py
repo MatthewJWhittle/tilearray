@@ -203,7 +203,14 @@ class WMSService(BaseService):
             options.get("styles") if options.get("styles") is not None else self.styles
         )
         fmt = self._coerce_format(options.get("output_format") or self.output_format)
-        crs = CRS.parse(options.get("crs") or tile.crs or self.native_crs)
+        # GetMap has one CRS for BBOX and rendered pixels. Prefer explicit
+        # server-side output_crs when set (never a client-side warp).
+        crs = CRS.parse(
+            options.get("output_crs")
+            or options.get("crs")
+            or tile.crs
+            or self.native_crs
+        )
 
         params: dict[str, Any] = {
             "service": "WMS",
@@ -222,7 +229,16 @@ class WMSService(BaseService):
         passthrough = {
             key: value
             for key, value in options.items()
-            if key not in {"output_format", "crs", "layers", "styles", "version"}
+            if key
+            not in {
+                "output_format",
+                "crs",
+                "output_crs",
+                "supported_crs",
+                "layers",
+                "styles",
+                "version",
+            }
         }
         return self.compose_tile_request(
             tile,

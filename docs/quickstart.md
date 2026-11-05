@@ -17,13 +17,13 @@ config = XYZConfig.from_url(OSM_TILE_TEMPLATE, zoom=16, **osm_fetch_defaults())
 da = create_array(
     config,
     bbox=(-0.005, 51.495, 0.005, 51.505),
-    crs=CRS.EPSG_4326,
+    bbox_crs=CRS.EPSG_4326,
     expand_palette=True,  # full-colour RGB; omit for single-band palette indices
 )
 arr = compute_with_policy(da)
 
 print(arr.shape)  # ~ (1024, 512, 3) for this window
-print(da.attrs["crs"], da.attrs["transform"])
+print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])
 print(
     float(arr.x.min()),
     float(arr.y.min()),
@@ -33,7 +33,7 @@ print(
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-`crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat. Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
+`bbox_crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat (`attrs["bbox_crs"]` keeps the query). Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
 
 ```{image} _static/guides/osm-london.png
 :alt: OpenStreetMap mosaic over a small central London bbox
@@ -78,7 +78,7 @@ print(elevation.shape, float(elevation.mean()))
 print(elevation.attrs["crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
 ```
 
-The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["crs"]` matches the `crs=` you passed. Visual walkthrough: {doc}`guides/ea-lidar`.
+The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["crs"]` matches `bbox_crs=`. Visual walkthrough: {doc}`guides/ea-lidar`.
 
 ### WMS — Environment Agency Vegetation Object Model
 
@@ -127,7 +127,7 @@ config = WMTSConfig.from_url(
 )
 
 # Lon/lat AOI → native UTM33 mosaic (tile-aligned extent may expand)
-da = create_array(config, bbox=(10.6, 59.85, 10.8, 59.95), crs="EPSG:4326")
+da = create_array(config, bbox=(10.6, 59.85, 10.8, 59.95), bbox_bbox_crs="EPSG:4326")
 arr = compute_with_policy(da)
 print(arr.shape, da.attrs["crs"])  # mosaic CRS is EPSG:25833, not the query CRS
 ```
@@ -153,7 +153,7 @@ config = WCSConfig.from_url(
     "https://environment.data.gov.uk/spatialdata/"
     "lidar-composite-digital-terrain-model-dtm-1m/wcs",
     "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
-    crs=CRS.EPSG_27700,
+    bbox_crs=CRS.EPSG_27700,
     output_format=Format.GEOTIFF,
     chunk_size=(128, 128),
     resolution=(1.0, 1.0),

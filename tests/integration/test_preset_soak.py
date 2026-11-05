@@ -254,7 +254,7 @@ def test_multi_tile_fail_loud_aborts_under_pressure(
         create_array(
             service_url="https://example.com",
             bbox=bbox,
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             service_type=ServiceTypeEnum.XYZ,
             chunk_size=(4, 4),
             grid_shape=(rows, cols),

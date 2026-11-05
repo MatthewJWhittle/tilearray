@@ -213,7 +213,7 @@ def test_create_array_multiband_geotiff_mosaic(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_3857,
+        bbox_crs=CRS.EPSG_3857,
         chunk_size=(4, 4),
         output_format=Format.GEOTIFF,
         compute=True,
@@ -278,7 +278,7 @@ def test_create_array_expand_palette_png(
     result = array_module.create_array(
         service_url="http://example.com/{z}/{x}/{y}.png",
         bbox=bbox,
-        crs=CRS.EPSG_3857,
+        bbox_crs=CRS.EPSG_3857,
         chunk_size=(4, 4),
         output_format=Format.PNG,
         expand_palette=True,

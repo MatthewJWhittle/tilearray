@@ -94,7 +94,7 @@ def test_array_request_from_inputs_applies_defaults() -> None:
         service_url=config.base_url,
         service_config=config,
         bbox_input=bbox,
-        crs_input=CRS.EPSG_4326,
+        bbox_crs_input=CRS.EPSG_4326,
         chunk_size_input=None,
         grid_shape_input=None,
         output_format_input=None,
@@ -116,7 +116,7 @@ def test_array_request_infers_grid_from_resolution() -> None:
         service_url="http://example.com/wcs",
         service_config=None,
         bbox_input=bbox,
-        crs_input=CRS.EPSG_4326,
+        bbox_crs_input=CRS.EPSG_4326,
         chunk_size_input=(256, 256),
         grid_shape_input=None,
         output_format_input=Format.PNG,
@@ -137,7 +137,7 @@ def test_array_request_snaps_resolution_bbox_outward() -> None:
         service_url="http://example.com/wcs",
         service_config=None,
         bbox_input=bbox,
-        crs_input=CRS.EPSG_27700,
+        bbox_crs_input=CRS.EPSG_27700,
         chunk_size_input=(1024, 512),
         grid_shape_input=None,
         output_format_input=Format.GEOTIFF,
@@ -169,7 +169,7 @@ def test_array_request_rejects_invalid_origin() -> None:
             service_url="http://example.com/wcs",
             service_config=None,
             bbox_input=(0.0, 0.0, 10.0, 10.0),
-            crs_input=CRS.EPSG_4326,
+            bbox_crs_input=CRS.EPSG_4326,
             chunk_size_input=(8, 8),
             grid_shape_input=None,
             output_format_input=None,
@@ -185,6 +185,7 @@ def test_array_request_rejects_nonpositive_sizes() -> None:
             service_url="http://example.com/wcs",
             bbox=bbox,
             target_crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             chunk_size=(0, 8),
             grid_shape=(1, 1),
         )
@@ -193,6 +194,7 @@ def test_array_request_rejects_nonpositive_sizes() -> None:
             service_url="http://example.com/wcs",
             bbox=bbox,
             target_crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             chunk_size=(8, 8),
             grid_shape=(1, 0),
         )
@@ -201,6 +203,7 @@ def test_array_request_rejects_nonpositive_sizes() -> None:
             service_url="http://example.com/wcs",
             bbox=bbox,
             target_crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             chunk_size=(8, 8),
             grid_shape=(1, 1),
             resolution=(-1.0, 1.0),
@@ -243,7 +246,7 @@ def test_create_array_with_custom_decoder(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(8, 8),
         cache_dir=tmp_path,
     )
@@ -270,7 +273,7 @@ def test_create_array_without_decoder_raises(monkeypatch: MonkeyPatch) -> None:
         array_module.create_array(
             service_url="http://example.com/wcs",
             bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326),
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
         )
 
 
@@ -316,7 +319,7 @@ def test_create_array_with_service_config(
     result = array_module.create_array(
         service_url=config,
         bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326),
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
     )
 
     assert result.shape == (4, 4)
@@ -362,7 +365,7 @@ def test_create_array_infers_decoder_from_service(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=(-1.0, 50.0, -0.5, 50.5),
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(4, 4),
         cache_dir=tmp_path,
     )
@@ -427,7 +430,7 @@ def test_builtin_png_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     result = array_module.create_array(
         service_url="http://example.com/png",
         bbox=(-1.0, 50.0, -0.5, 50.5),
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(2, 2),
         cache_dir=tmp_path,
     )
@@ -520,7 +523,7 @@ def test_create_array_multi_tile_rgb_jpeg_mosaic(
     result = array_module.create_array(
         service_url="http://example.com",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         service_type=ServiceTypeEnum.XYZ,
         chunk_size=(tile_width, tile_height),
         grid_shape=(rows, cols),
@@ -630,7 +633,7 @@ def test_create_array_y_coords_north_at_row_zero(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(chunk, chunk),
         grid_shape=(rows, cols),
     )
@@ -683,7 +686,7 @@ def test_create_array_single_tile_pixel_center_coords(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(4, 4),
     )
 
@@ -711,11 +714,11 @@ def test_create_array_single_tile_pixel_center_coords(
 def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """Design contract (#98): mosaic attrs CRS is the request crs=; no silent retag.
+    """Design contract (#98): WCS/WMS mosaic attrs CRS matches the query CRS.
 
-    Alpha uses one ``crs=`` for bbox interpretation and mosaic labelling. Pixel
+    Prefer ``bbox_crs=``; ``crs=`` alone still labels WCS/WMS mosaics. Pixel
     values are not client-warped onto another CRS; GeoTIFF tags must not replace
-    ``attrs["crs"]``. Separate ``bbox_crs`` / output CRS is target design only.
+    ``attrs["crs"]``. Fixed-grid XYZ/WMTS label with the native grid CRS.
     """
 
     bbox = BoundingBox(
@@ -751,7 +754,7 @@ def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_27700,
+        bbox_crs=CRS.EPSG_27700,
         chunk_size=(8, 4),
         output_format=Format.GEOTIFF,
     )
@@ -807,7 +810,7 @@ def test_create_array_accepts_provider_crs_string(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs="EPSG:25833",
+        bbox_crs="EPSG:25833",
         chunk_size=(8, 4),
         output_format=Format.GEOTIFF,
     )
@@ -855,7 +858,7 @@ def test_geotiff_elevation_attrs_crs_transform_nodata(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_27700,
+        bbox_crs=CRS.EPSG_27700,
         # DummyService treats chunk_size as (width, height).
         chunk_size=(8, 4),
         output_format=Format.GEOTIFF,
@@ -938,7 +941,7 @@ def test_rgb_jpeg_attrs_preserve_bands_no_nodata(
     result = array_module.create_array(
         service_url="http://example.com",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         service_type=ServiceTypeEnum.XYZ,
         chunk_size=(4, 4),
         output_format=Format.JPEG,
@@ -1014,7 +1017,7 @@ def test_rgba_png_attrs_four_bands_no_nodata(
     result = array_module.create_array(
         service_url="http://example.com/wms",
         bbox=(-1.0, 50.0, -0.5, 50.5),
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(2, 2),
         output_format=Format.PNG,
         compute=True,
@@ -1185,7 +1188,7 @@ def test_create_array_resamples_native_resolution_wcs_tile(
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_27700,
+        bbox_crs=CRS.EPSG_27700,
         chunk_size=(64, 64),
         resolution=(5.0, 5.0),
     )
@@ -1236,7 +1239,7 @@ def test_create_array_on_progress_callback(monkeypatch: MonkeyPatch) -> None:
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(4, 4),
         compute=True,
         on_progress=on_progress,
@@ -1280,7 +1283,7 @@ def test_load_array_raises_when_tile_fetch_fails_after_retries(
         array_module.load_array(
             service_url="http://example.com/wcs",
             bbox=bbox,
-            crs=CRS.EPSG_4326,
+            bbox_crs=CRS.EPSG_4326,
             chunk_size=(4, 4),
             fetch_retries=0,
             rate_limit_per_second=None,
@@ -1317,7 +1320,7 @@ def test_create_array_downsamples_oversized_tiles(monkeypatch: MonkeyPatch) -> N
     result = array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(256, 256),
     )
 
@@ -1444,7 +1447,7 @@ def test_create_array_compute_exceeds_cpu_count_inflight(
     array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(2, 2),
         grid_shape=(rows, cols),
         compute=True,

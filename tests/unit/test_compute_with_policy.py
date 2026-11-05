@@ -93,7 +93,7 @@ def _lazy_array(monkeypatch: MonkeyPatch) -> Any:
     return array_module.create_array(
         service_url="http://example.com/wcs",
         bbox=bbox,
-        crs=CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         chunk_size=(2, 2),
         output_format=Format.GEOTIFF,
         max_concurrent_requests=32,

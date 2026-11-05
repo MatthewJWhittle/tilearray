@@ -555,6 +555,7 @@ class WCSService(BaseService):
         subset_crs, subset_bbox, subset_parts = self._resolve_subset(
             bbox, crs or self.subsetting_crs, metadata
         )
+        output_raw = params.pop("output_crs", None)
 
         request_params = {
             "service": "WCS",
@@ -567,6 +568,8 @@ class WCSService(BaseService):
             "height": str(height),
             "subsettingCRS": subset_crs.value,
         }
+        if output_raw is not None:
+            request_params["outputCRS"] = CRS.parse(output_raw).value
 
         try:
             response = self._service_get(request_params, extra_params=params or None)
@@ -606,6 +609,8 @@ class WCSService(BaseService):
         subset_crs, subset_bbox, subset_parts = self._resolve_subset(
             tile.bbox, requested_crs, metadata
         )
+        output_raw = options.get("output_crs")
+        result_crs = CRS.parse(output_raw) if output_raw is not None else subset_crs
         subset_tile = TileGeometry(
             bbox=subset_bbox,
             width=tile.width,
@@ -627,18 +632,20 @@ class WCSService(BaseService):
             "height": str(tile.height),
             "subsettingCRS": subset_crs.value,
         }
+        if output_raw is not None:
+            params["outputCRS"] = result_crs.value
 
         passthrough = {
             key: value
             for key, value in options.items()
-            if key not in {"output_format", "crs"}
+            if key not in {"output_format", "crs", "output_crs", "supported_crs"}
         }
         return self.compose_tile_request(
             subset_tile,
             url=self.base_url,
             params=params,
             output_format=fmt,
-            crs=subset_crs,
+            crs=result_crs,
             **passthrough,
         )
 
