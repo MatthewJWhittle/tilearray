@@ -2,7 +2,7 @@
 
 These examples group common geo-data jobs (georeferenced mosaic, WCS edges, CRS mistakes, polite multi-tile fetch) so you can try them against public hosts.
 
-Prefer the interactive notebook `notebooks/community_worked_examples.ipynb` in this repository (`uv sync --dev` then Jupyter). Published host guides with figures: {doc}`osm-london`, {doc}`gibs-bluemarble`, {doc}`ea-lidar`, {doc}`wmts`.
+Prefer the interactive notebook `notebooks/community_worked_examples.ipynb` in this repository (`uv sync --dev` then Jupyter). Published host guides with figures: {doc}`osm-london`, {doc}`gibs-bluemarble`, {doc}`ea-lidar`, {doc}`ea-vom-wms`, {doc}`wmts`.
 
 Stay polite: modest bboxes, fetch presets where they exist, no bulk OSM scrape. Attribution where the host requires it.
 

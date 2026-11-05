@@ -1,0 +1,72 @@
+{
+  "attribution": "\u00a9 OpenStreetMap contributors",
+  "crs_query": "EPSG:4326",
+  "elapsed_s": 6.533,
+  "figure": "multi-aoi-osm-patches.png",
+  "host": "openstreetmap",
+  "note": "Three noncontiguous create_array \u2192 compute_mosaic calls with expand_palette=True. Do not union the boxes into one mosaic.",
+  "patches": [
+    {
+      "bbox_query": [
+        -0.14,
+        51.5,
+        -0.12,
+        51.51
+      ],
+      "crs_mosaic": "EPSG:3857",
+      "dims": [
+        "y",
+        "x",
+        "band"
+      ],
+      "label": "London",
+      "shape": [
+        512,
+        512,
+        3
+      ]
+    },
+    {
+      "bbox_query": [
+        -1.55,
+        53.38,
+        -1.53,
+        53.39
+      ],
+      "crs_mosaic": "EPSG:3857",
+      "dims": [
+        "y",
+        "x",
+        "band"
+      ],
+      "label": "Sheffield",
+      "shape": [
+        512,
+        512,
+        3
+      ]
+    },
+    {
+      "bbox_query": [
+        -3.2,
+        55.94,
+        -3.18,
+        55.95
+      ],
+      "crs_mosaic": "EPSG:3857",
+      "dims": [
+        "y",
+        "x",
+        "band"
+      ],
+      "label": "Edinburgh",
+      "shape": [
+        512,
+        512,
+        3
+      ]
+    }
+  ],
+  "service": "XYZ",
+  "zoom": 14
+}

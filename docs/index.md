@@ -20,7 +20,7 @@ The API may change.
 2. {doc}`quickstart` — five-minute first run (OSM plot + CRS), then other protocols
 3. {doc}`inspect-endpoint` — discover layers and build a config from an unknown WMS/WMTS/WCS URL
 4. {doc}`how-it-works` — plan, fetch, lazy mosaic (short mental model)
-5. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar, WMTS)
+5. {doc}`guides/index` — visual examples (OSM, NASA GIBS, EA Lidar / WMS, WMTS)
 6. {doc}`troubleshooting` — when fetches fail or shapes look wrong
 7. {doc}`api/index` — public API reference
 

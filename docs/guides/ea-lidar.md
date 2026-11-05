@@ -36,9 +36,11 @@ bbox = (431900.0, 382700.0, 432156.0, 382956.0)
 da = create_array(config, bbox, CRS.EPSG_27700)  # or "EPSG:27700"
 elevation = compute_mosaic(da)  # match Dask workers to fetch ceiling
 print(elevation.shape, float(elevation.mean()))
+print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])
+elevation.plot.imshow(cmap="terrain", add_colorbar=True)
 ```
 
-`create_array` stays lazy until compute. For multi-tile mosaics, prefer {py:func}`tilearray.compute_mosaic` over plain `.compute()`.
+`create_array` stays lazy until compute. For multi-tile mosaics, prefer {py:func}`tilearray.compute_mosaic` over plain `.compute()`. Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dependency); see {doc}`../install`.
 
 ## Result
 

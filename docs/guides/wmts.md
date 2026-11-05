@@ -36,6 +36,7 @@ bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
 da = create_array(config, bbox, CRS.EPSG_4326)
 arr = compute_mosaic(da)
 print(arr.shape, arr.dims, da.attrs["crs"])  # mosaic CRS is EPSG:3857
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ```{image} ../_static/guides/gibs-bluemarble.png
@@ -43,7 +44,7 @@ print(arr.shape, arr.dims, da.attrs["crs"])  # mosaic CRS is EPSG:3857
 :width: 520px
 ```
 
-Imagery: NASA GIBS / BlueMarble_NextGeneration. Slippy / GoogleMapsCompatible mosaics are labelled **EPSG:3857** over the tile union — `crs=` is query-only. The XYZ guide {doc}`gibs-bluemarble` uses the same host via an `{z}/{y}/{x}` template — this path uses {py:class}`~tilearray.WMTSConfig` instead.
+Imagery: NASA GIBS / BlueMarble_NextGeneration. Slippy / GoogleMapsCompatible mosaics are labelled **EPSG:3857** over the tile union — `bbox_crs=` is query-only. The XYZ guide {doc}`gibs-bluemarble` uses the same host via an `{z}/{y}/{x}` template — this path uses {py:class}`~tilearray.WMTSConfig` instead.
 
 ## Projected — Kartverket topo (EPSG:25833)
 
@@ -74,6 +75,7 @@ da = create_array(config, bbox, "EPSG:4326", show_progress=False)
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"], da.attrs.get("bbox_requested"))
 print(float(arr.x.min()), float(arr.x.max()), float(arr.y.min()), float(arr.y.max()))
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ```{image} ../_static/guides/wmts-kartverket-oslo.png

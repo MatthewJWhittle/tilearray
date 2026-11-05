@@ -24,27 +24,25 @@ Planning twenty graphs is cheap. HTTP cost appears at compute. Prefer **compute 
 
 ---
 
-## Example — noncontiguous WMTS patches
+## Example — noncontiguous OSM patches
 
-Same habit as XYZ/WMS: shared config + per-bbox `create_array` then `compute_mosaic`. Below uses three separated Web Mercator windows at one matrix level (swap host / layer / matrix for your service).
+Same habit as WMTS/WMS: shared config + per-bbox `create_array` then `compute_mosaic`. Below uses three separated UK windows at one XYZ zoom (swap host / zoom for your service).
 
 ```python
 from pathlib import Path
 
-from tilearray import WMTSConfig, compute_mosaic, create_array
+from tilearray import XYZConfig, compute_mosaic, create_array
+from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
 from tilearray.types import CRS, Format
 
 # Shared host identity + politeness (same FetchPolicy / process gate)
-config = WMTSConfig.from_url(
-    "https://example.com/wmts",
-    layer="example_layer",
-    tile_matrix_set="EPSG:3857",
-    tile_matrix=12,
+config = XYZConfig.from_url(
+    OSM_TILE_TEMPLATE,
+    zoom=14,
     output_format=Format.PNG,
     chunk_size=(256, 256),
-    max_concurrent_requests=2,  # host ceiling — do not raise “because 20 jobs”
-    rate_limit_per_second=2.0,
     cache_dir=Path("tile-cache"),  # optional: reuse tiles across overlapping revisits
+    **osm_fetch_defaults(),  # host ceiling — do not raise “because 20 jobs”
 )
 
 # Noncontiguous sample boxes (EPSG:4326). Do NOT replace with their union bbox.
@@ -58,23 +56,34 @@ out_dir = Path("patches")
 out_dir.mkdir(exist_ok=True)
 
 lazy = [
-    create_array(config, bbox, CRS.EPSG_4326, show_progress=False)
+    create_array(
+        config,
+        bbox,
+        CRS.EPSG_4326,
+        expand_palette=True,
+        show_progress=False,
+    )
     for bbox in boxes
 ]
 
 for i, da in enumerate(lazy):
     arr = compute_mosaic(da)
-    # Predictable handoff: slippy mosaics label native EPSG:3857 (query crs= still
+    # Predictable handoff: slippy mosaics label native EPSG:3857 (query bbox_crs=
     # interprets the bbox); mosaic Affine, pixel centres, service provenance
     assert arr.attrs["crs"] == CRS.EPSG_3857.value
     assert arr.attrs["transform_source"] == "mosaic_bbox"
-    assert arr.attrs["service_type"] == "wmts"
+    assert arr.attrs["service_type"] == "xyz"
     # Optional: arr.rio.write_crs / write_transform — see how-it-works
     arr.to_netcdf(out_dir / f"patch_{i:02d}.nc")  # or your ML writer
     del arr
 ```
 
-For a live XYZ walkthrough of the same compute habit, see {doc}`guides/osm-london`. WCS elevation patches use the same loop with `WCSConfig` + a numerical coverage (NaN `nodata` on elevation GeoTIFF — imagery JPEG/PNG usually omits nodata).
+```{image} _static/guides/multi-aoi-osm-patches.png
+:alt: Three noncontiguous OSM mosaics (London, Sheffield, Edinburgh) — one mosaic per bbox
+:width: 720px
+```
+
+Map data © OpenStreetMap contributors. Each panel is its own `create_array` → `compute_mosaic` — not one mosaic over the union of the three boxes. Single-AOI walkthrough: {doc}`guides/osm-london`. WCS elevation patches use the same loop with `WCSConfig` + a numerical coverage (NaN `nodata` on elevation GeoTIFF — imagery JPEG/PNG usually omits nodata).
 
 ---
 
@@ -137,4 +146,4 @@ Symptom table: {doc}`troubleshooting`.
 
 - {doc}`how-it-works` — plan, polite fetch, lazy mosaic; concurrency name map and scaling without overwhelming the host
 - {doc}`troubleshooting` — hung compute, politeness mix-ups, CRS handoff
-- {doc}`guides/index` — live-host visual guides (single AOI)
+- {doc}`guides/index` — live-host visual guides (single AOI); this page’s figure shows three OSM patches

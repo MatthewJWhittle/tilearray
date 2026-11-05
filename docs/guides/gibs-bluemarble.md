@@ -32,7 +32,13 @@ bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
 da = create_array(config, bbox, CRS.EPSG_4326)
 arr = compute_mosaic(da)
 print(arr.shape, arr.dims)  # expect (y, x, band) for RGB JPEG
-print(da.attrs["crs"], da.attrs["transform"])  # EPSG:3857 mosaic
+print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])  # EPSG:3857 mosaic
+# Query bbox_crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
+arr.plot.imshow(rgb="band", add_colorbar=False)
+```
+
+```{note}
+Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dependency); see {doc}`../install`.
 ```
 
 ## Result

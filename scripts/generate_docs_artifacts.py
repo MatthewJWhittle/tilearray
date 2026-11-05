@@ -12,6 +12,8 @@ Direct invoke (live mosaics only):
 
     uv run --extra docs python scripts/generate_docs_artifacts.py
     uv run --extra docs python scripts/generate_docs_artifacts.py --only osm
+    uv run --extra docs python scripts/generate_docs_artifacts.py --only vom
+    uv run --extra docs python scripts/generate_docs_artifacts.py --only multi-aoi
 
 Outputs land in docs/_static/guides/. Commit those files so ``make docs`` stays offline.
 """
@@ -35,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from tilearray import XYZConfig, compute_mosaic, create_array  # noqa: E402
+from tilearray import WMSConfig, XYZConfig, compute_mosaic, create_array  # noqa: E402
 from tilearray.fetch_presets import (  # noqa: E402
     EA_LIDAR_BENCH_BBOX,
     EA_LIDAR_COVERAGE_ID,
@@ -73,9 +75,53 @@ KARTVERKET_WMTS_URL = "https://cache.kartverket.no/v1/service"
 KARTVERKET_BBOX = (10.6, 59.85, 10.8, 59.95)
 KARTVERKET_MATRIX = 8
 
+# EA Vegetation Object Model WMS — small OSGB window (RGBA GetMap PNG).
+EA_VOM_WMS_URL = (
+    "https://environment.data.gov.uk/spatialdata/vegetation-object-model/wms"
+)
+EA_VOM_LAYER = "Vegetation_Object_Model_2022"
+EA_VOM_BBOX = (430000.0, 380000.0, 430512.0, 380512.0)
+EA_VOM_CHUNK = (512, 512)
+
+# Multi-AOI / ML patches — three separated UK windows at one OSM zoom.
+MULTI_AOI_ZOOM = 14
+MULTI_AOI_PATCHES: list[tuple[str, tuple[float, float, float, float]]] = [
+    ("London", (-0.14, 51.50, -0.12, 51.51)),
+    ("Sheffield", (-1.55, 53.38, -1.53, 53.39)),
+    ("Edinburgh", (-3.20, 55.94, -3.18, 55.95)),
+]
+
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def _imshow_rgb_or_gray(ax: Any, arr: Any) -> None:
+    """Plot mosaic pixels with geographic extent (RGB or single-band)."""
+
+    extent = [
+        float(arr.x.min()),
+        float(arr.x.max()),
+        float(arr.y.min()),
+        float(arr.y.max()),
+    ]
+    if arr.ndim == 3 and "band" in arr.dims and arr.sizes["band"] >= 3:
+        rgb = np.clip(np.asarray(arr.values[..., :3]) / 255.0, 0, 1)
+        ax.imshow(rgb, extent=extent, origin="upper")
+        return
+    if arr.ndim == 3 and "band" in arr.dims and arr.sizes["band"] == 1:
+        ax.imshow(
+            np.asarray(arr.values[..., 0]),
+            extent=extent,
+            origin="upper",
+            cmap="gray",
+        )
+        return
+    values = np.asarray(arr.values)
+    if values.ndim == 2:
+        ax.imshow(values, extent=extent, origin="upper", cmap="gray")
+        return
+    arr.plot.imshow(ax=ax, add_colorbar=False)
 
 
 def generate_osm(out_dir: Path) -> dict[str, Any]:
@@ -402,11 +448,162 @@ def generate_kartverket(out_dir: Path) -> dict[str, Any]:
     return stats
 
 
+def generate_ea_vom(out_dir: Path) -> dict[str, Any]:
+    print("EA Vegetation Object Model WMS: fetching small OSGB window...")
+    config = WMSConfig.from_url(
+        EA_VOM_WMS_URL,
+        layers=EA_VOM_LAYER,
+        output_format=Format.PNG,
+        chunk_size=EA_VOM_CHUNK,
+        grid_shape=(1, 1),
+        max_concurrent_requests=2,
+        rate_limit_per_second=2.0,
+        headers={
+            "User-Agent": "tilearray-docs/0.3 (+https://github.com/MatthewJWhittle/tilearray/issues)",
+        },
+    )
+    start = time.perf_counter()
+    da = create_array(config, EA_VOM_BBOX, CRS.EPSG_27700, show_progress=False)
+    arr = compute_mosaic(da)
+    elapsed = time.perf_counter() - start
+
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    _imshow_rgb_or_gray(ax, arr)
+    ax.set_title("EA Vegetation Object Model (WMS)")
+    ax.set_xlabel("easting (EPSG:27700)")
+    ax.set_ylabel("northing (EPSG:27700)")
+    ax.set_aspect("equal")
+    fig.text(
+        0.5,
+        0.01,
+        "Contains public sector information licensed under the Open Government Licence v3.0",
+        ha="center",
+        fontsize=7,
+        style="italic",
+    )
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    png = out_dir / "ea-vom-wms.png"
+    fig.savefig(png, dpi=120)
+    plt.close(fig)
+
+    stats = {
+        "host": "environment-agency-dsp",
+        "service": "WMS",
+        "layers": EA_VOM_LAYER,
+        "bbox": list(EA_VOM_BBOX),
+        "crs_query": "EPSG:27700",
+        "crs_mosaic": da.attrs.get("crs"),
+        "shape": list(arr.shape),
+        "dims": list(arr.dims),
+        "elapsed_s": round(elapsed, 3),
+        "figure": png.name,
+        "note": (
+            "Transparent GetMap PNG often returns RGBA (4 bands). "
+            "Confirm year-suffixed layer id via GetCapabilities."
+        ),
+    }
+    _write_json(out_dir / "ea-vom-wms.json", stats)
+    print(f"  wrote {png.name} shape={arr.shape} in {elapsed:.1f}s")
+    return stats
+
+
+def generate_multi_aoi(out_dir: Path) -> dict[str, Any]:
+    print("Multi-AOI OSM XYZ: fetching three separated UK patches...")
+    config = XYZConfig.from_url(
+        OSM_TILE_TEMPLATE,
+        zoom=MULTI_AOI_ZOOM,
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+        **osm_fetch_defaults(),
+    )
+
+    start = time.perf_counter()
+    mosaics: list[tuple[str, Any, Any]] = []
+    for label, bbox in MULTI_AOI_PATCHES:
+        da = create_array(
+            config,
+            bbox,
+            CRS.EPSG_4326,
+            expand_palette=True,
+            show_progress=False,
+        )
+        arr = compute_mosaic(da)
+        mosaics.append((label, da, arr))
+    elapsed = time.perf_counter() - start
+
+    fig, axes = plt.subplots(1, 3, figsize=(11.0, 4.2))
+    for ax, (label, da, arr) in zip(axes, mosaics, strict=True):
+        _imshow_rgb_or_gray(ax, arr)
+        ax.set_title(label)
+        ax.set_xlabel("easting (EPSG:3857)")
+        ax.set_ylabel("northing (EPSG:3857)")
+        ax.set_aspect("equal")
+        ax.tick_params(labelsize=7)
+
+    fig.suptitle(
+        "Multi-AOI OSM patches — one mosaic per bbox (not a union)",
+        fontsize=11,
+    )
+    fig.text(
+        0.5,
+        0.01,
+        "Map data © OpenStreetMap contributors",
+        ha="center",
+        fontsize=8,
+        style="italic",
+    )
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    png = out_dir / "multi-aoi-osm-patches.png"
+    fig.savefig(png, dpi=120)
+    plt.close(fig)
+
+    patch_stats = []
+    for label, da, arr in mosaics:
+        patch_stats.append(
+            {
+                "label": label,
+                "bbox_query": list(
+                    next(b for name, b in MULTI_AOI_PATCHES if name == label)
+                ),
+                "crs_mosaic": da.attrs.get("crs"),
+                "shape": list(arr.shape),
+                "dims": list(arr.dims),
+            }
+        )
+
+    stats = {
+        "host": "openstreetmap",
+        "service": "XYZ",
+        "zoom": MULTI_AOI_ZOOM,
+        "crs_query": "EPSG:4326",
+        "patches": patch_stats,
+        "elapsed_s": round(elapsed, 3),
+        "figure": png.name,
+        "attribution": "© OpenStreetMap contributors",
+        "note": (
+            "Three noncontiguous create_array → compute_mosaic calls with "
+            "expand_palette=True. Do not union the boxes into one mosaic."
+        ),
+    }
+    _write_json(out_dir / "multi-aoi-osm-patches.json", stats)
+    shapes = [p["shape"] for p in patch_stats]
+    print(f"  wrote {png.name} shapes={shapes} in {elapsed:.1f}s")
+    return stats
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--only",
-        choices=("osm", "ea", "gibs", "kartverket", "all"),
+        choices=(
+            "osm",
+            "ea",
+            "gibs",
+            "kartverket",
+            "vom",
+            "multi-aoi",
+            "all",
+        ),
         default="all",
         help="Which artifact set to regenerate (default: all)",
     )
@@ -439,6 +636,10 @@ def main(argv: list[str] | None = None) -> int:
         results["ea"] = generate_ea(out_dir)
     if args.only in ("kartverket", "all"):
         results["kartverket"] = generate_kartverket(out_dir)
+    if args.only in ("vom", "all"):
+        results["vom"] = generate_ea_vom(out_dir)
+    if args.only in ("multi-aoi", "all"):
+        results["multi_aoi"] = generate_multi_aoi(out_dir)
 
     manifest = {
         "generated_by": "scripts/generate_docs_artifacts.py",

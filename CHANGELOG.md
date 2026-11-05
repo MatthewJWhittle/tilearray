@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Docs first-run path: install / quickstart / README / OSM London guide state that plotting needs a separate `matplotlib` install (not a core dependency; no `[plot]` extra). Primary OSM snippets use `expand_palette=True` for full-colour RGB and note that the default keeps palette indices; guide figure artifact script aligned
+- Docs usage guides / quickstart / multi-AOI: live-host mosaic figures for EA Vegetation Object Model (WMS) and three noncontiguous OSM patches; sibling guides gain `plot.imshow` after create/compute; quickstart embeds EA Lidar / WMS / Kartverket figures; artifact script gains `--only vom` / `--only multi-aoi`
 
 ## [0.3.0] - 2026-11-04
 
