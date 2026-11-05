@@ -14,6 +14,7 @@ import httpx
 
 from ..error_messages import looks_like_html, redact_url
 from ..errors import ConfigurationError, ParseError
+from ..matrix_resolution import MatrixLevelSummary
 from ..service.wcs import WCSParser
 from ..service.wms import WMSParser
 from ..service.wmts import WMTSParser
@@ -38,6 +39,7 @@ from ._resolve import (
 
 __all__ = [
     "EndpointInspection",
+    "MatrixLevelSummary",
     "MatrixSetSummary",
     "ResourceSummary",
     "inspect_capabilities",

@@ -7,6 +7,7 @@ from typing import Any
 
 from ..error_messages import redact_url
 from ..errors import ConfigurationError, ValidationError
+from ..matrix_resolution import MatrixLevelSummary
 from ..service.config import (
     ServiceConfig,
     WCSConfig,
@@ -48,6 +49,8 @@ class MatrixSetSummary:
     identifier: str
     crs: str | None = None
     matrices: tuple[str, ...] = ()
+    levels: tuple[MatrixLevelSummary, ...] = ()
+    """Matrix ids with ScaleDenominator / native resolution when advertised."""
 
 
 @dataclass
@@ -108,11 +111,22 @@ class EndpointInspection:
             lines.append(f"Tile matrix sets ({len(self.matrix_sets)}):")
             for matrix_set in self.matrix_sets:
                 crs_bit = f", CRS {matrix_set.crs}" if matrix_set.crs else ""
-                matrices = (
-                    ", ".join(matrix_set.matrices)
-                    if matrix_set.matrices
-                    else "(none listed)"
-                )
+                if matrix_set.levels:
+                    matrices = ", ".join(
+                        (
+                            f"{level.identifier}"
+                            + (
+                                f"@{level.resolution:.6g}"
+                                if level.resolution is not None
+                                else ""
+                            )
+                        )
+                        for level in matrix_set.levels
+                    )
+                elif matrix_set.matrices:
+                    matrices = ", ".join(matrix_set.matrices)
+                else:
+                    matrices = "(none listed)"
                 lines.append(
                     f"  - {matrix_set.identifier}{crs_bit}; matrices: {matrices}"
                 )

@@ -35,6 +35,11 @@ from ._planning import (
 from .decode import default_band_count_for_format
 from .errors import ValidationError
 from .fetch import FetchProgress, TileFetcher
+from .matrix_resolution import (
+    MatrixChoice,
+    MatrixLevelSummary,
+    choose_matrix_for_resolution,
+)
 from .service.config import ServiceConfig as ServiceConfigModel
 from .types import (
     CRS,
@@ -49,6 +54,9 @@ from .types import (
 __all__ = [
     "ArrayPlan",
     "FetchSummary",
+    "MatrixChoice",
+    "MatrixLevelSummary",
+    "choose_matrix_for_resolution",
     "fetch_summary",
     "plan_array",
     "recommend_grid_shape",
@@ -69,6 +77,8 @@ class ArrayPlan:
     chunk_size: tuple[int, int]
     grid_shape: tuple[int, int]
     resolution: tuple[float, float] | None
+    planned_pixel_size: tuple[float, float] | None
+    matrix_id: str | None
     pixel_height: int
     pixel_width: int
     request_count: int
@@ -110,6 +120,12 @@ class ArrayPlan:
         ]
         if self.bbox_snap_delta is not None:
             lines.append(f"  bbox snap delta: {self.bbox_snap_delta}")
+        if self.matrix_id is not None:
+            lines.append(f"  matrix / zoom: {self.matrix_id}")
+        if self.planned_pixel_size is not None:
+            lines.append(
+                f"  planned pixel size (CRS units/px): {self.planned_pixel_size}"
+            )
         if self.resolution is not None:
             lines.append(f"  resolution: {self.resolution}")
         lines.extend(
@@ -386,6 +402,20 @@ def plan_array(
 
     format_value = effective_format.value if effective_format is not None else None
 
+    matrix_id = _matrix_or_zoom_id(service, _tile_options)
+    planned_pixel_size = _planned_pixel_size_from_plan(
+        planned_bbox=request.bbox,
+        pixel_height=pixel_height,
+        pixel_width=pixel_width,
+    )
+    if planned_pixel_size is not None:
+        notes.append(
+            "planned_pixel_size is derived from the planned mosaic extent ÷ "
+            "pixel shape (CRS units per pixel; capabilities-confirmed when WMTS "
+            "matrix metadata drove the plan; estimated from the tile union "
+            "otherwise — not ground metres for Web Mercator)"
+        )
+
     return ArrayPlan(
         requested_bbox=requested,
         planned_bbox=request.bbox,
@@ -395,6 +425,8 @@ def plan_array(
         chunk_size=(chunk_width, chunk_height),
         grid_shape=request.grid_shape,
         resolution=request.resolution,
+        planned_pixel_size=planned_pixel_size,
+        matrix_id=matrix_id,
         pixel_height=pixel_height,
         pixel_width=pixel_width,
         request_count=len(tile_requests),
@@ -525,3 +557,33 @@ def _bands_phrase(bands: int | None, source: BandsSource) -> str:
     if source == "probe":
         return f"{bands} band(s) from probe"
     return f"{bands} band(s)"
+
+
+def _matrix_or_zoom_id(service: Any, tile_options: dict[str, Any]) -> str | None:
+    """WMTS TileMatrix id or XYZ zoom when the service exposes one."""
+
+    for key in ("tile_matrix", "zoom"):
+        if key in tile_options and tile_options[key] is not None:
+            return str(tile_options[key])
+    for attr in ("tile_matrix", "zoom"):
+        value = getattr(service, attr, None)
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _planned_pixel_size_from_plan(
+    *,
+    planned_bbox: BoundingBox,
+    pixel_height: int,
+    pixel_width: int,
+) -> tuple[float, float] | None:
+    """CRS units per pixel from planned extent ÷ mosaic shape (x, y)."""
+
+    if pixel_height <= 0 or pixel_width <= 0:
+        return None
+    span_x = planned_bbox.max_x - planned_bbox.min_x
+    span_y = planned_bbox.max_y - planned_bbox.min_y
+    if span_x <= 0 or span_y <= 0:
+        return None
+    return (span_x / pixel_width, span_y / pixel_height)

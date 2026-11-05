@@ -10,6 +10,7 @@ import httpx
 
 from ..error_messages import format_http_failure, redact_url
 from ..errors import NetworkError, ValidationError
+from ..matrix_resolution import MatrixLevelSummary
 from ..service.base import detect_service_type
 from ..service.http import (
     compose_http_headers,
@@ -18,10 +19,44 @@ from ..service.http import (
     resolve_timeout,
 )
 from ..service.wms import WMSCapabilities
-from ..service.wmts import WMTSCapabilities
+from ..service.wmts import (
+    WMTSCapabilities,
+    WMTSTileMatrixSet,
+    pixel_size_from_scale_denominator,
+)
 from ..types import CRS, Format, ServiceCapabilities, ServiceTypeEnum
 from ._models import EndpointInspection, MatrixSetSummary, ResourceSummary
 from ._resolve import _XYZ_PLACEHOLDERS, _formats_from_template
+
+
+def _matrix_set_summary(tms: WMTSTileMatrixSet) -> MatrixSetSummary:
+    crs_value = (
+        tms.supported_crs.value
+        if isinstance(tms.supported_crs, CRS)
+        else str(tms.supported_crs)
+    )
+    levels: list[MatrixLevelSummary] = []
+    for matrix in tms.matrices.values():
+        resolution: float | None
+        try:
+            resolution = pixel_size_from_scale_denominator(
+                matrix.scale_denominator, tms.supported_crs
+            )
+        except ValidationError:
+            resolution = None
+        levels.append(
+            MatrixLevelSummary(
+                identifier=matrix.identifier,
+                scale_denominator=matrix.scale_denominator,
+                resolution=resolution,
+            )
+        )
+    return MatrixSetSummary(
+        identifier=tms.identifier,
+        crs=crs_value,
+        matrices=tuple(tms.matrices.keys()),
+        levels=tuple(levels),
+    )
 
 
 def _coerce_service_type(
@@ -191,14 +226,7 @@ def _from_wmts_capabilities(
         for layer in caps.layers.values()
     )
     matrix_sets = tuple(
-        MatrixSetSummary(
-            identifier=tms.identifier,
-            crs=tms.supported_crs.value
-            if isinstance(tms.supported_crs, CRS)
-            else str(tms.supported_crs),
-            matrices=tuple(tms.matrices.keys()),
-        )
-        for tms in caps.tile_matrix_sets.values()
+        _matrix_set_summary(tms) for tms in caps.tile_matrix_sets.values()
     )
     notes = [
         "Choose layer + tile_matrix_set + tile_matrix explicitly unless only one "

@@ -803,11 +803,17 @@ def _lookup_matrix(tms: WMTSTileMatrixSet, tile_matrix: str) -> WMTSTileMatrix |
     return None
 
 
-def _pixel_size_in_crs_units(scale_denominator: float, crs: CRS) -> float:
+def pixel_size_from_scale_denominator(scale_denominator: float, crs: CRS) -> float:
     """Convert OGC ScaleDenominator to CRS coordinate units per pixel."""
 
     meters_per_unit = _meters_per_crs_unit(crs)
     return scale_denominator * _OGC_PIXEL_SIZE_METRES / meters_per_unit
+
+
+def _pixel_size_in_crs_units(scale_denominator: float, crs: CRS) -> float:
+    """Convert OGC ScaleDenominator to CRS coordinate units per pixel."""
+
+    return pixel_size_from_scale_denominator(scale_denominator, crs)
 
 
 def _meters_per_crs_unit(crs: CRS) -> float:
