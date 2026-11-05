@@ -8,10 +8,10 @@ import pytest
 import xarray as xr
 
 from tilearray import array as array_module
-from tilearray import compute_mosaic, create_array
+from tilearray import compute_mosaic, create_array, inspect_endpoint, plan_array
 from tilearray.service.config import WCSConfig, WMTSConfig
 from tilearray.service.wcs import WCSService
-from tilearray.types import CRS, Format
+from tilearray.types import CRS, Format, ServiceTypeEnum
 
 
 @pytest.mark.integration
@@ -108,6 +108,54 @@ class TestRealServiceIntegration:
         assert data.isnull().sum() == 0
 
 
+_KARTVERKET_WMTS_URL = "https://cache.kartverket.no/v1/service"
+_KARTVERKET_UA = {
+    "User-Agent": (
+        "tilearray-integration/0.2 "
+        "(+https://github.com/MatthewJWhittle/tilearray)"
+    ),
+}
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.net
+def test_live_kartverket_inspect_opaque_url_smoke() -> None:
+    """Discovery path: opaque ``/v1/service`` → inspect → build_config → tiny plan.
+
+    Typed ``WMTSConfig.from_url`` smoke below does **not** cover this front door.
+    """
+
+    inspection = inspect_endpoint(
+        _KARTVERKET_WMTS_URL,
+        headers=_KARTVERKET_UA,
+    )
+    assert inspection.service_type is ServiceTypeEnum.WMTS
+    assert any(r.identifier == "topo" for r in inspection.resources)
+
+    config = inspection.build_config(
+        layer="topo",
+        tile_matrix_set="utm33n",
+        target_resolution=50.0,
+        style="default",
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+        max_concurrent_requests=2,
+        rate_limit_per_second=2.0,
+        headers=_KARTVERKET_UA,
+    )
+    assert isinstance(config, WMTSConfig)
+    assert config.tile_matrix is not None
+
+    plan = plan_array(
+        config,
+        bbox=(10.72, 59.90, 10.73, 59.91),
+        bbox_crs=CRS.EPSG_4326,
+    )
+    assert plan.request_count >= 1
+    assert plan.crs in {"EPSG:25833", "25833"}
+
+
 @pytest.mark.integration
 @pytest.mark.slow
 @pytest.mark.net
@@ -115,7 +163,7 @@ def test_live_kartverket_wmts_oslo_smoke() -> None:
     """Tiny live smoke: Kartverket topo / utm33n → EPSG:25833 mosaic."""
 
     config = WMTSConfig.from_url(
-        "https://cache.kartverket.no/v1/service",
+        _KARTVERKET_WMTS_URL,
         layer="topo",
         tile_matrix_set="utm33n",
         tile_matrix=8,
@@ -124,12 +172,7 @@ def test_live_kartverket_wmts_oslo_smoke() -> None:
         chunk_size=(256, 256),
         max_concurrent_requests=2,
         rate_limit_per_second=2.0,
-        headers={
-            "User-Agent": (
-                "tilearray-integration/0.2 "
-                "(+https://github.com/MatthewJWhittle/tilearray)"
-            ),
-        },
+        headers=_KARTVERKET_UA,
     )
     da = create_array(
         config,
