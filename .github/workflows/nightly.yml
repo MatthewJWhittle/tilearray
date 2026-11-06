@@ -2,7 +2,7 @@ name: Nightly
 
 on:
   schedule:
-    # 05:17 UTC daily — off-peak, avoids top-of-hour congestion
+    # 05:17 UTC daily
     - cron: "17 5 * * *"
   workflow_dispatch:
 
@@ -26,14 +26,8 @@ jobs:
 
     - name: Offline docs-journey smoke
       run: |
-        # Mode E stand-in: opaque inspect + palette plot-contract without Jupyter.
         uv run python scripts/docs_journey_smoke.py
 
     - name: Run net/slow tests
       run: |
-        # Override default addopts marker/timeout/coverage gate: this job is live/slow only.
-        # Live matrix: EA WCS, Kartverket opaque inspect + typed WMTS, OSM plot-ready,
-        # plus @soak preset politeness (EA + OSM multi-tile cold mosaics).
-        # Large county-/valley-scale soaks stay in scripts/soak_large_aoi_presets.py.
-        # EA VOM WMS stays faithful-mock / docs-artifacts only (host not nightly-gated).
         uv run pytest -m "net or slow" --timeout=300 --cov-fail-under=0
