@@ -4,10 +4,9 @@
 
 from typing import Any
 
+import numpy as np
 import pytest
 import xarray as xr
-
-import numpy as np
 
 from tilearray import array as array_module
 from tilearray import compute_mosaic, create_array, inspect_endpoint, plan_array
@@ -114,8 +113,7 @@ class TestRealServiceIntegration:
 _KARTVERKET_WMTS_URL = "https://cache.kartverket.no/v1/service"
 _KARTVERKET_UA = {
     "User-Agent": (
-        "tilearray-integration/0.2 "
-        "(+https://github.com/MatthewJWhittle/tilearray)"
+        "tilearray-integration/0.2 (+https://github.com/MatthewJWhittle/tilearray)"
     ),
 }
 

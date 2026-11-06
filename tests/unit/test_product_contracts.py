@@ -387,9 +387,7 @@ def test_soft_fail_docs_and_stage_gate_state_probe_phase() -> None:
     nb = json.loads(
         (ROOT / "notebooks" / "stage_gate_0_2.ipynb").read_text(encoding="utf-8")
     )
-    text = "\n".join(
-        "".join(cell.get("source", [])) for cell in nb.get("cells", [])
-    )
+    text = "\n".join("".join(cell.get("source", [])) for cell in nb.get("cells", []))
     assert "band_policy" in text and "first_band" in text
     assert "probe" in text.lower()
 
@@ -481,8 +479,7 @@ def test_expand_palette_mosaic_is_plot_ready_for_imshow(
     assert "band" in result.dims
     assert result.sizes["band"] >= 3
     assert result.dtype == np.uint8 or (
-        np.issubdtype(result.dtype, np.floating)
-        and float(result.max()) <= 1.0 + 1e-6
+        np.issubdtype(result.dtype, np.floating) and float(result.max()) <= 1.0 + 1e-6
     ), (
         "plot-ready RGB must be uint8 or float in [0, 1] — "
         f"got dtype={result.dtype}, max={float(result.max())}"
