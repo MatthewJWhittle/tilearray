@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from ..error_messages import redact_url
 from ..errors import ConfigurationError, ValidationError
-from ..matrix_resolution import MatrixLevelSummary
+from ..matrix_resolution import (
+    MatrixLevelSummary,
+    ResolutionPolicy,
+    choose_matrix_for_resolution,
+)
 from ..service.config import (
     ServiceConfig,
     WCSConfig,
@@ -153,8 +157,15 @@ class EndpointInspection:
         """Validate *choices* against this inspection and return a service config.
 
         Auto-fills a field only when the inspection lists exactly one unambiguous
-        value. Never silently picks among multiple layers, coverages, matrices,
-        CRS values, or formats.
+        value. Never silently picks among multiple layers, coverages, matrix
+        sets, CRS values, or formats.
+
+        For WMTS, pass either ``tile_matrix=`` or ``target_resolution=`` (CRS
+        units per pixel in the matrix CRS, with optional ``resolution_policy``).
+        ``target_resolution`` uses :func:`~tilearray.choose_matrix_for_resolution`
+        on the selected TileMatrixSet's levels — no ScaleDenominator or URL
+        template required from the caller. REST templates from GetCapabilities
+        are attached when present.
         """
 
         if self.service_type is ServiceTypeEnum.WCS:
@@ -352,35 +363,60 @@ class EndpointInspection:
             )
 
         tile_matrix = choices.pop("tile_matrix", None)
-        matrix_ids: tuple[str, ...] = ()
-        for matrix_set in self.matrix_sets:
-            if matrix_set.identifier == tile_matrix_set:
-                matrix_ids = matrix_set.matrices
-                break
-        if tile_matrix is None:
+        target_resolution = choices.pop("target_resolution", None)
+        resolution_policy = choices.pop("resolution_policy", "nearest")
+        matrix_summary = next(
+            (item for item in self.matrix_sets if item.identifier == tile_matrix_set),
+            None,
+        )
+        matrix_ids: tuple[str, ...] = (
+            matrix_summary.matrices if matrix_summary is not None else ()
+        )
+        matrix_crs = matrix_summary.crs if matrix_summary is not None else None
+
+        if tile_matrix is not None and target_resolution is not None:
+            raise ValidationError(
+                "Pass either tile_matrix= or target_resolution=, not both. "
+                "target_resolution picks a TileMatrix from the matrix set levels; "
+                "tile_matrix= sets the id explicitly."
+            )
+        if tile_matrix is None and target_resolution is None:
             if len(matrix_ids) == 1:
                 tile_matrix = matrix_ids[0]
             else:
                 known = list(matrix_ids) if matrix_ids else "(unknown)"
                 raise ValidationError(
                     "WMTS tile_matrix is required when multiple matrices are "
-                    f"advertised for {tile_matrix_set!r}: {known}. "
-                    "Pass tile_matrix= explicitly; tilearray will not guess."
+                    f"advertised for {tile_matrix_set!r}: {known}. Pass "
+                    "tile_matrix= or target_resolution= (CRS units/pixel); "
+                    "tilearray will not guess a zoom level."
                 )
+        elif target_resolution is not None:
+            if matrix_summary is None or not matrix_summary.levels:
+                raise ValidationError(
+                    f"No matrix levels with resolution metadata for "
+                    f"tile_matrix_set={tile_matrix_set!r}. Pass tile_matrix= "
+                    "explicitly, or inspect a host that advertises "
+                    "ScaleDenominator / native resolution."
+                )
+            if resolution_policy not in {"coarser", "nearest", "finer"}:
+                raise ValidationError(
+                    "resolution_policy must be 'coarser', 'nearest', or 'finer'."
+                )
+            choice = choose_matrix_for_resolution(
+                matrix_summary.levels,
+                float(target_resolution),
+                policy=cast(ResolutionPolicy, resolution_policy),
+                crs=matrix_crs,
+            )
+            tile_matrix = choice.identifier
+
         tile_matrix_int = _coerce_tile_matrix(tile_matrix, matrix_ids)
 
         output_format = _resolve_format(
             choices.pop("output_format", None),
             advertised=resource.formats or self.formats,
             default_when_unique=True,
-        )
-        matrix_crs = next(
-            (
-                item.crs
-                for item in self.matrix_sets
-                if item.identifier == tile_matrix_set
-            ),
-            None,
         )
         crs = _resolve_crs(
             choices.pop("crs", None),

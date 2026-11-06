@@ -30,7 +30,8 @@ print(
     float(arr.x.max()),
     float(arr.y.max()),
 )  # mosaic extent in metres
-arr.plot.imshow(rgb="band", add_colorbar=False)
+# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
+arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 `bbox_crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat (`attrs["bbox_crs"]` keeps the query). Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
@@ -106,7 +107,7 @@ da = create_array(config, bbox, CRS.EPSG_27700)
 img = compute_mosaic(da)
 # Transparent GetMap PNG → RGBA (4 bands)
 print(img.shape, da.attrs["service_type"])
-img.plot.imshow(rgb="band", add_colorbar=False)
+img.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ```{image} _static/guides/ea-vom-wms.png
@@ -119,22 +120,14 @@ No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. Visu
 ### WMTS — Kartverket topo (EPSG:25833)
 
 ```python
-from tilearray import WMTSConfig, compute_mosaic, create_array
-from tilearray.types import Format
+from tilearray import compute_mosaic, create_array, inspect_endpoint
 
-config = WMTSConfig.from_url(
-    "https://cache.kartverket.no/v1/service",
+inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
+config = inspection.build_config(
     layer="topo",
     tile_matrix_set="utm33n",
-    tile_matrix=8,
+    target_resolution=10.0,  # metres / pixel in the matrix CRS
     style="default",
-    output_format=Format.PNG,
-    chunk_size=(256, 256),
-    max_concurrent_requests=2,
-    rate_limit_per_second=2.0,
-    headers={
-        "User-Agent": "tilearray/0.3 (+https://github.com/MatthewJWhittle/tilearray/issues)",
-    },
 )
 
 # Lon/lat AOI → native UTM33 mosaic (tile-aligned extent may expand)
@@ -145,7 +138,7 @@ da = create_array(
 )
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"])  # mosaic CRS is EPSG:25833, not the query CRS
-arr.plot.imshow(rgb="band", add_colorbar=False)
+arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ```{image} _static/guides/wmts-kartverket-oslo.png
@@ -153,7 +146,7 @@ arr.plot.imshow(rgb="band", add_colorbar=False)
 :width: 420px
 ```
 
-Non–Web-Mercator TileMatrixSets load GetCapabilities automatically (or accept an explicit `matrix=`). The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough: {doc}`guides/wmts`. Unknown hosts: {doc}`inspect-endpoint`.
+Name the service, layer, TileMatrixSet, and a familiar spacing — inspect attaches templates / matrix metadata. The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough: {doc}`guides/wmts`. Unknown hosts: {doc}`inspect-endpoint`.
 
 Many noncontiguous sample boxes (ML chips): {doc}`multi-aoi-ml-patches` — one `create_array` per bbox, not one mosaic over the union of all boxes.
 

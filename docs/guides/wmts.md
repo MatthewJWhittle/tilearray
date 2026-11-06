@@ -1,82 +1,41 @@
-# WMTS — GIBS glance and Kartverket UTM33
+# WMTS — Kartverket topo (EPSG:25833)
 
-WMTS is the same habit as XYZ/WCS: config → {py:func}`~tilearray.create_array` → {py:func}`~tilearray.compute_mosaic`. You name the layer, TileMatrixSet, and TileMatrix from GetCapabilities; tilearray plans tiles on that grid and returns a georeferenced lazy mosaic. You do **not** hand-compute tile rows/columns or reproject the downloaded rasters.
+Load a small Oslo window from the Norwegian Mapping Authority WMTS cache: name the **service**, **layer**, **TileMatrixSet** (product / native CRS), and a familiar **ground spacing**. tilearray inspects GetCapabilities, picks a TileMatrix for that resolution, attaches any REST template the host advertises, and returns a georeferenced lazy mosaic on the **native** matrix grid. You do **not** hand-write URL templates, ScaleDenominator, or tile row/column maths — and tiles are not client-side reprojected.
 
-Two copy-paste paths below: a simple Web Mercator host, then a projected EPSG:25833 matrix (the awkward case that usually breaks “download tiles, hope for georef” workflows).
-
-## Simple — NASA GIBS Blue Marble (Web Mercator)
-
-GIBS publishes a REST GetTile template. For common GoogleMapsCompatible matrix names, planning works from the numeric TileMatrix without fetching the large GetCapabilities document.
-
-```python
-from tilearray import WMTSConfig, compute_mosaic, create_array
-from tilearray.types import CRS, Format
-
-config = WMTSConfig.from_url(
-    "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/wmts.cgi",
-    layer="BlueMarble_NextGeneration",
-    tile_matrix_set="GoogleMapsCompatible_Level8",
-    tile_matrix=3,
-    style="default",
-    url_template=(
-        "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/"
-        "BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/"
-        "{TileMatrix}/{TileRow}/{TileCol}.jpeg"
-    ),
-    output_format=Format.JPEG,
-    chunk_size=(256, 256),
-    max_concurrent_requests=2,
-    rate_limit_per_second=2.0,
-    headers={
-        "User-Agent": "tilearray/0.3 (+https://github.com/MatthewJWhittle/tilearray/issues)",
-    },
-)
-
-bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
-da = create_array(config, bbox, CRS.EPSG_4326)
-arr = compute_mosaic(da)
-print(arr.shape, arr.dims, da.attrs["crs"])  # mosaic CRS is EPSG:3857
-arr.plot.imshow(rgb="band", add_colorbar=False)
+```{note}
+Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dependency); see {doc}`../install`.
 ```
 
-```{image} ../_static/guides/gibs-bluemarble.png
-:alt: NASA GIBS Blue Marble RGB mosaic over a mid-Atlantic bbox (Web Mercator axes)
-:width: 520px
-```
-
-Imagery: NASA GIBS / BlueMarble_NextGeneration. Slippy / GoogleMapsCompatible mosaics are labelled **EPSG:3857** over the tile union — `bbox_crs=` is query-only. The XYZ guide {doc}`gibs-bluemarble` uses the same host via an `{z}/{y}/{x}` template — this path uses {py:class}`~tilearray.WMTSConfig` instead.
-
-## Projected — Kartverket topo (EPSG:25833)
-
-Norwegian Mapping Authority cache: layer `topo`, TileMatrixSet `utm33n` (EPSG:25833). Pass a lon/lat bbox; the mosaic comes back on the **native** UTM33 grid with tile-aligned extent (often slightly larger than the query window).
+## Code
 
 ```python
-from tilearray import WMTSConfig, compute_mosaic, create_array
-from tilearray.types import Format
+from tilearray import compute_mosaic, create_array, inspect_endpoint, plan_array
 
-config = WMTSConfig.from_url(
-    "https://cache.kartverket.no/v1/service",
+# Service URL from the host docs (KVP / GetCapabilities entry point)
+inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
+print(inspection)  # layers, TileMatrixSets, CRS — confirm ids before hard-coding
+
+config = inspection.build_config(
     layer="topo",
-    tile_matrix_set="utm33n",
-    tile_matrix=8,  # capabilities id is "08"; numeric 8 is fine
-    style="default",
-    output_format=Format.PNG,
-    chunk_size=(256, 256),
-    max_concurrent_requests=2,
-    rate_limit_per_second=2.0,
-    headers={
-        "User-Agent": "tilearray/0.3 (+https://github.com/MatthewJWhittle/tilearray/issues)",
-    },
+    tile_matrix_set="utm33n",  # native EPSG:25833 product
+    target_resolution=10.0,  # metres / pixel in the matrix CRS
+    resolution_policy="coarser",  # never oversample; or "nearest" / "finer"
+    style="default",  # this host requires a named style
 )
 
-# Small Oslo-area window in lon/lat — mosaic CRS becomes EPSG:25833
-bbox = (10.6, 59.85, 10.8, 59.95)
-da = create_array(config, bbox, "EPSG:4326", show_progress=False)
+bbox = (10.6, 59.85, 10.8, 59.95)  # query lon/lat near Oslo
+plan = plan_array(config, bbox, bbox_crs="EPSG:4326")
+print(plan.matrix_id, plan.planned_pixel_size, plan.crs, plan.bbox_crs)
+
+da = create_array(config, bbox, bbox_crs="EPSG:4326", show_progress=False)
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"], da.attrs.get("bbox_requested"))
 print(float(arr.x.min()), float(arr.x.max()), float(arr.y.min()), float(arr.y.max()))
-arr.plot.imshow(rgb="band", add_colorbar=False)
+# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
+arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
 ```
+
+## Result
 
 ```{image} ../_static/guides/wmts-kartverket-oslo.png
 :alt: Kartverket topo WMTS mosaic over a small Oslo-area bbox in EPSG:25833
@@ -87,64 +46,38 @@ Map data © Kartverket (CC BY 4.0). Keep crawls modest. This host often returns 
 
 What to notice:
 
-- Output `attrs["crs"]` is **EPSG:25833** (matrix SupportedCRS), not the query CRS.
+- You stated **job terms**: service, layer, matrix set, ~10 m spacing, AOI + `bbox_crs=`. Wire details (REST template, ScaleDenominator, matrix id `08`) stay inside inspect / `build_config`.
+- Output `attrs["crs"]` is **EPSG:25833** (matrix SupportedCRS), not the query CRS. `attrs["bbox_crs"]` keeps the lon/lat query.
 - Coordinates are pixel centres on the tile grid; the returned extent may expand to whole tiles.
-- GetCapabilities is loaded automatically for this TileMatrixSet — no separate discovery step required for the copy-paste path.
+- `target_resolution` selects a native TileMatrix — tilearray does **not** resample pixels to that spacing. Same-grid trim is ordinary xarray slicing.
 
-## Choose a TileMatrix from a target resolution
+## Advanced — explicit matrix id or custom template
 
-Callers often know a familiar spacing (for example ~10 m in a metre CRS) as **CRS units per pixel**, not the server's TileMatrix id or OGC ScaleDenominator. Use {py:func}`~tilearray.choose_matrix_for_resolution` on levels from {py:func}`~tilearray.inspect_endpoint` (or `MatrixSetSummary.levels`), then pass the chosen id into `WMTSConfig`. Comparison is on resolution; ScaleDenominator is best-effort when present (levels with only `resolution` are accepted). Web Mercator uses Mercator CRS units — not ground metres. tilearray does **not** pick a matrix inside `create_array`, and it does **not** resample pixels to the target resolution — related: native-matrix planning (#93), plan-before-fetch (#61).
+When you already know the TileMatrix id (or the host has no usable resolution metadata), pass `tile_matrix=` instead of `target_resolution=`:
 
 ```python
-from tilearray import (
-    WMTSConfig,
-    choose_matrix_for_resolution,
-    create_array,
-    inspect_endpoint,
-    plan_array,
-)
-from tilearray.types import Format
-
-inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
-matrix_set = next(m for m in inspection.matrix_sets if m.identifier == "utm33n")
-choice = choose_matrix_for_resolution(
-    matrix_set.levels,
-    target_resolution=10.0,  # CRS units per pixel in the matrix CRS (metres here)
-    policy="coarser",  # or "nearest" / "finer"
-    crs=matrix_set.crs,
-)
-
-config = WMTSConfig.from_url(
-    "https://cache.kartverket.no/v1/service",
+config = inspection.build_config(
     layer="topo",
     tile_matrix_set="utm33n",
-    tile_matrix=choice.identifier,
-    output_format=Format.PNG,
-    chunk_size=(256, 256),
+    tile_matrix=8,  # capabilities id "08"; numeric 8 is fine
+    style="default",
 )
-plan = plan_array(
-    config,
-    bbox=(10.6, 59.85, 10.8, 59.95),
-    bbox_crs="EPSG:4326",
-)
-print(choice.identifier, choice.resolution)
-print(plan.matrix_id, plan.planned_pixel_size, plan.crs, plan.bbox_crs)
-# Then: create_array → compute_mosaic as usual. Same-grid trim (no
-# interpolation) is ordinary xarray slicing on the native mosaic — not a warp.
 ```
 
-Levels need a usable `resolution` (or a ScaleDenominator plus `crs=` to derive one). Levels with neither are skipped; if none remain, {py:exc}`~tilearray.ValidationError` is raised.
+Or skip inspect and construct {py:class}`~tilearray.WMTSConfig` directly (`from_url` still auto-loads GetCapabilities for non–Web-Mercator matrices). Pass `url_template=` only when you must override the ResourceURL from capabilities (unusual). For a Web Mercator glance at the same GIBS imagery without WMTS discovery, prefer the XYZ guide {doc}`gibs-bluemarble`.
+
+Low-level helper {py:func}`~tilearray.choose_matrix_for_resolution` still works on `MatrixSetSummary.levels` if you want the choice object without `build_config`. Fetch politeness (`max_concurrent_requests`, User-Agent, …) is progressive disclosure on the config — compose presets when a host needs them.
 
 ## What this documents vs what is untested
 
 | Path | Evidence |
 |------|----------|
-| GIBS GoogleMapsCompatible via `WMTSConfig` + REST template | Live figure; same host as the XYZ guide |
-| Kartverket `topo` / `utm33n` / EPSG:25833 | Offline caps + planning contract with independent bounds; live smoke optional |
+| Kartverket `topo` / `utm33n` via inspect → `target_resolution` → mosaic | Live figure; offline caps + planning contract |
+| Explicit `tile_matrix=` / optional `url_template=` | Same adapter; advanced path above |
 | Other Kartverket matrices (`utm32n`, `utm35n`, `webmercator`) | Same adapter; not separately cassette-locked here |
 | Arbitrary WMTS hosts / exotic matrix axis quirks | Supported when GetCapabilities supplies SupportedCRS, ScaleDenominator, TopLeftCorner; verify against the host before relying on it |
 
-{doc}`../inspect-endpoint` lists layers/matrices from an unknown URL, but still leaves **you** to choose identifiers — tilearray will not silently pick a layer or CRS among many. Wrong ids raise {py:exc}`~tilearray.ValidationError`.
+{doc}`../inspect-endpoint` lists layers / matrix sets from an unknown URL. tilearray will not silently pick a layer or TileMatrixSet among many — wrong ids raise {py:exc}`~tilearray.ValidationError`.
 
 ## Related
 
@@ -152,4 +85,4 @@ Levels need a usable `resolution` (or a ScaleDenominator plus `crs=` to derive o
 - {doc}`../quickstart` — short WMTS recipe
 - {doc}`../inspect-endpoint` — discover layers / matrices before hard-coding
 - {doc}`../how-it-works` — native-grid CRS / snapped extent
-- {doc}`gibs-bluemarble` — same GIBS imagery via XYZ
+- {doc}`gibs-bluemarble` — same GIBS imagery via XYZ (no WMTS discovery)

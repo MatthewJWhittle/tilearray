@@ -34,7 +34,8 @@ arr = compute_mosaic(da)
 print(arr.shape, arr.dims)  # expect (y, x, band) for RGB JPEG
 print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])  # EPSG:3857 mosaic
 # Query bbox_crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
-arr.plot.imshow(rgb="band", add_colorbar=False)
+# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
+arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ```{note}

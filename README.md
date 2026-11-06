@@ -59,7 +59,8 @@ da = create_array(
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"], da.attrs["transform"])
 # Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — bbox_crs= is query only
-arr.plot.imshow(rgb="band", add_colorbar=False)
+# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
+arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 OSM tiles are often palette PNGs: `expand_palette=True` expands to RGB; the default keeps indices. Include © OpenStreetMap contributors when displaying map imagery. Full plotted walkthrough: [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html) / [OSM guide](https://matthewjwhittle.github.io/tilearray/guides/osm-london.html).
@@ -87,7 +88,7 @@ elevation = compute_mosaic(da)
 print(elevation.shape, float(elevation.mean()), elevation.attrs["crs"])
 ```
 
-EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10**. WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (GIBS + Kartverket — mosaic CRS follows the TileMatrixSet, not necessarily your query `crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → choose ids → `build_config`.
+EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10**. WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (Kartverket — inspect → `target_resolution`; mosaic CRS follows the TileMatrixSet, not necessarily your query `bbox_crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → `build_config`.
 
 ## Development
 

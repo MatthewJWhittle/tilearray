@@ -22,6 +22,6 @@ uv sync --dev
 uv run jupyter lab
 ```
 
-[`stage_gate_0_3.ipynb`](stage_gate_0_3.ipynb) is the 0.3 checkout pad: five-minute OSM path with editable knobs, `plan_array` / `fetch_summary`, and EPSG:3857 georef checks. [`stage_gate_0_2.ipynb`](stage_gate_0_2.ipynb) is the broader multi-layer pad (OSM, EA Lidar, GIBS, EA VOM). Neither is always-on CI.
+[`stage_gate_0_3.ipynb`](stage_gate_0_3.ipynb) is the checkout pad: OSM five-minute path plus simplified Kartverket WMTS (`inspect_endpoint` → `target_resolution`, no URL templates), editable knobs, `plan_array` / `fetch_summary`, and georef checks. Plotting needs a separate `matplotlib` install. [`stage_gate_0_2.ipynb`](stage_gate_0_2.ipynb) is the broader multi-layer pad (OSM, EA Lidar, GIBS, EA VOM). Neither is always-on CI.
 
 Example stubs under [`examples/`](examples/) point at the Sphinx guides.

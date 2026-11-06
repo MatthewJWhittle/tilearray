@@ -21,7 +21,7 @@ Public endpoints and thin fetch presets for testing host quirks — **not** a pr
 
 - XYZ template: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg`
 - Path is `{z}/{y}/{x}` (row before col), not OSM `{z}/{x}/{y}`.
-- Use `XYZConfig.from_url` with that template, or {py:class}`~tilearray.WMTSConfig` with TileMatrixSet `GoogleMapsCompatible_Level8` and the REST `{TileMatrix}/{TileRow}/{TileCol}` template — see {doc}`guides/wmts`.
+- Prefer `XYZConfig.from_url` with that template — see {doc}`guides/gibs-bluemarble`. WMTS discovery is available but XYZ is the simpler GIBS glance.
 - JPEG colour mosaics keep RGB bands `(y, x, band)`.
 - Public; coordinate if you exceed roughly 1M tiles / 24h. Layer is hardcoded in the path — another GIBS product needs its own template from GetCapabilities.
 
@@ -30,7 +30,7 @@ Public endpoints and thin fetch presets for testing host quirks — **not** a pr
 - KVP endpoint: `https://cache.kartverket.no/v1/service`
 - GetCapabilities: `https://cache.kartverket.no/v1/wmts/1.0.0/WMTSCapabilities.xml`
 - Layer `topo`, TileMatrixSet `utm33n` (SupportedCRS EPSG:25833); also `utm32n` / `utm35n` / `webmercator`.
-- Prefer `WMTSConfig.from_url(..., layer="topo", tile_matrix_set="utm33n", tile_matrix=8, style="default")`. Numeric `tile_matrix=8` matches capabilities id `08`.
+- Happy path: `inspect_endpoint` → `build_config(layer="topo", tile_matrix_set="utm33n", target_resolution=10.0, style="default")`. Explicit `tile_matrix=8` (caps id `08`) still works when you already know the id.
 - Query bbox may be lon/lat; the mosaic is labelled EPSG:25833 with tile-aligned extent. Attribution: © Kartverket (CC BY 4.0). Stay polite — small windows, identifiable User-Agent. Guide: {doc}`guides/wmts`.
 
 ## USGS 3DEP elevation (WCS)

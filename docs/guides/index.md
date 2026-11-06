@@ -19,5 +19,5 @@ worked-examples
 | {doc}`gibs-bluemarble` | NASA GIBS XYZ · mid-Atlantic | RGB Blue Marble |
 | {doc}`ea-lidar` | EA Lidar WCS · OSGB window | Elevation map + histogram |
 | {doc}`ea-vom-wms` | EA Vegetation Object Model WMS · OSGB | RGBA vegetation mosaic |
-| {doc}`wmts` | GIBS WMTS + Kartverket topo · Oslo | Web Mercator + EPSG:25833 mosaics |
+| {doc}`wmts` | Kartverket topo WMTS · Oslo | Native EPSG:25833 mosaic (~10 m) |
 | {doc}`worked-examples` | Common jobs · GIBS / EA / offline CRS | Georef, WCS edges, CRS mistakes, polite fetch |
