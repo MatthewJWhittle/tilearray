@@ -27,7 +27,7 @@ make docs-artifacts  # regenerate committed figures (network for live guides)
 | Gate | Command | Covers |
 |------|---------|--------|
 | **PR / `make test`** | `uv run pytest -m "not slow and not net"` | Unit + VCR contract + **product contracts** (`tests/unit/test_product_contracts.py`: URL taxonomy, opaque inspect journey, soft-fail phases, plot-ready dims). Coverage floor ≥ 85%. |
-| **Nightly / dispatch** | `uv run pytest -m "net or slow"` (+ `scripts/docs_journey_smoke.py`) | Live smoke: EA WCS, Kartverket opaque `inspect_endpoint`, OSM plot-ready mosaic, preset soaks. |
+| **Nightly / dispatch** | `uv run pytest -m "net or slow"` | Live smoke: EA WCS, Kartverket opaque `inspect_endpoint`, OSM plot-ready mosaic, preset soaks. |
 | **Not gated** | Stage-gate notebooks, full `docs-artifacts` | Human product feel; do not treat PR green as “stage-gate would pass.” |
 
 Product-contract tests stay **unmarked** `net`/`slow` so they are PR-required. Add a new URL-shape row or phase assert there before teaching it in docs.
