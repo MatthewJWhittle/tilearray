@@ -31,8 +31,8 @@ da = create_array(config, bbox, bbox_crs="EPSG:4326", show_progress=False)
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"], da.attrs.get("bbox_requested"))
 print(float(arr.x.min()), float(arr.x.max()), float(arr.y.min()), float(arr.y.max()))
-# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
-arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
+# PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ## Result

@@ -102,6 +102,12 @@ Bad inputs and setup mistakes raise other {py:exc}`tilearray.TileArrayError` sub
 
 Opt in to visible soft-fill with plan-time ``on_tile_error=soft_fail_exhausted_tiles`` (or ``soft_fail=True``). Soft-fill runs **only after** fetcher retries finish, never calls ``FetchProgress.abort``, and records failures in ``progress.errors`` / ``attrs["tilearray_tile_errors"]``. Auth (401), exhausted 429, and decode/library errors still hard-abort under the preset; a soft-fail fraction above ``soft_fail_max_fraction`` (default ``0.1``) also aborts.
 
+| Phase | When | Soft-fail? |
+|-------|------|------------|
+| Pre-graph band probe | `create_array` discovers band count for `preserve` formats | **Hard** — probe ignores soft-fail; pass `band_policy="first_band"` to skip the probe |
+| Post-graph tile load | Mosaic tiles after the Dask graph exists | Soft-fill exhausted tile-local 404 / 5xx / transport |
+| Auth / rate-limit | HTTP 401 or exhausted 429 | **Hard abort** (siblings stop) |
+
 ## Format / URL / coverage mistakes
 
 These fail **before** a useful mosaic exists. Exception text names what was wrong, what was tried, and what to check next.

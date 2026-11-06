@@ -1,8 +1,26 @@
 # Contract tests (recorded HTTP)
 
 Contract tests replay **VCR cassettes** (YAML files) instead of calling live
-services. They lock in WCS request/response behaviour for the public EA Lidar
-DTM endpoint while keeping default CI network-free.
+services. They lock in WCS / WMTS request/response behaviour for public hosts
+while keeping default CI network-free.
+
+## What green means (testing layers)
+
+| Layer | Where | PR? | Role |
+|-------|-------|-----|------|
+| Unit | `tests/unit/` | Yes | Logic under mocks |
+| **Product contracts** | `tests/unit/test_product_contracts.py` | **Yes** | Opaque URL / inspect journey, soft-fail **phases**, plot-ready dims — Modes A–D |
+| Contract (VCR) | `tests/contract/` | Yes | Recorded caps / plan locks |
+| Live / soak | `tests/integration/` (`@net` / `@slow`) | Nightly only | Real hosts; discovery + plot-ready smoke |
+| Docs journey | `scripts/docs_journey_smoke.py` | Nightly step | Opaque inspect + palette decode without Jupyter |
+
+**PR green ≠ stage-gate notebooks pass.** Coverage ≥ 85% is a floor, not the definition of product readiness.
+
+### Adding a URL-shape row
+
+1. Prefer a taxonomy case in `test_product_contracts.py` (opaque path, `SERVICE=` query, token path, XYZ, unknowable → message) over a host-named test.
+2. For inspect journeys, feed **real-shaped caps XML** under an opaque `base_url` via respx — typed `WMTSConfig.from_url` live smoke does **not** cover discovery.
+3. Record a VCR cassette only when locking live HTTP shapes; share one GetCapabilities cassette across methods when bodies are equivalent for asserts.
 
 ## Layout
 
@@ -20,14 +38,15 @@ tests/contract/
 └── wmts/
     ├── test_wmts_contract.py
     └── cassettes/
-        ├── TestKartverketWMTSContract.test_get_capabilities_utm33n_matrix.yaml
-        └── TestKartverketWMTSContract.test_plan_tiles_oslo_window_native_bounds.yaml
+        └── TestKartverketWMTSContract.get_capabilities_utm33n_matrix.yaml
+            # shared by get_capabilities + plan_tiles via vcr_cassette_name
 ```
 
 Keep cassettes small (CI enforces a per-file size budget via
 `scripts/check_cassettes.py`). Prefer tiny request windows when recording;
-multipart GeoTIFF bodies bloat YAML quickly. WMTS Kartverket cassettes are
-GetCapabilities-only (planning is offline against the recorded XML).
+multipart GeoTIFF bodies bloat YAML quickly. WMTS Kartverket contract methods
+share one GetCapabilities cassette (layer-order diffs are irrelevant to
+asserts); planning stays offline against that recorded XML / mocked PNG.
 
 ## Running
 

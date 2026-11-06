@@ -69,6 +69,7 @@ Fetching uses **synchronous HTTP** (`httpx.Client`) with a concurrency gate:
 - **AIMD** when enabled: ramp under `max_concurrent`, back off on pressure (403/408/429/5xx and known OGC transient responses).
 - Optional **circuit breaker** (EA DSP preset): a burst of pressure freezes concurrency at the floor for a cooldown.
 - Retries with `Retry-After` support; hard failure raises `NetworkError` by default (no silent NaN holes). Opt-in `on_tile_error` / `soft_fail=True` can soft-fill exhausted tile-local failures after retries without aborting siblings.
+- **Soft-fail phases** (product contract): (1) **pre-graph band probe** stays hard — formats that must discover band count (`preserve` GeoTIFF / PNG / JPEG) ignore `soft_fail` on the sample tile; use `band_policy="first_band"` when you need an all-404 soft-fail demo. (2) **post-graph** exhausted 404 / 5xx / transport soft-fill after retries and record `attrs["tilearray_tile_errors"]`. (3) **auth 401** and exhausted **429** still abort.
 
 WCS/WMTS **GetCapabilities** / **DescribeCoverage** (and direct `WCSService.get_coverage`) use the same sync httpx stack: library User-Agent by default, `ServiceConfig.fetch_timeout` (default 30s), and config `headers`/`params` so private-server credentials apply at plan time as well as on tiles.
 
@@ -147,7 +148,7 @@ Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xa
 
 **Clipped WCS responses:** when a GeoTIFF comes back smaller than the requested tile (common at coverage edges), tilearray reads `ModelPixelScale` / `ModelTiepoint` and places those pixels on the requested grid, padding the rest with NaN. Matching resolution and integer offsets are required; mismatched CRS/resolution/rotation fails loudly instead of stretching. That pad is **coverage nodata**, not soft-fail fill of a failed fetch.
 
-**Bands / dtype / palette:** default `band_policy` is `preserve` (all bands kept; pass `band_policy="first_band"` to reduce explicitly). GeoTIFF decode uses float32 so nodata can be NaN (`attrs["dtype_policy"]="float32_nodata_nan"`). PNG/JPEG keep native dtype until the `create_array(..., dtype=)` cast. Palette PNGs stay as index arrays unless `expand_palette=True` (then RGB; `attrs["palette_mode"]` records which).
+**Bands / dtype / palette:** default `band_policy` is `preserve` (all bands kept; pass `band_policy="first_band"` to reduce explicitly). GeoTIFF decode uses float32 so nodata can be NaN (`attrs["dtype_policy"]="float32_nodata_nan"`). PNG/JPEG mosaics default to **uint8** (`attrs["dtype_policy"]="plot_ready_uint8"`) so `plot.imshow(rgb="band")` works without an `astype` cast; pass `dtype="float32"` when you need float (soft-fail auto-selects float32 for NaN fill). Palette PNGs stay as index arrays unless `expand_palette=True` (then RGB; `attrs["palette_mode"]` records which).
 
 ### CRS roles — query vs service vs output
 

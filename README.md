@@ -59,8 +59,8 @@ da = create_array(
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"], da.attrs["transform"])
 # Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — bbox_crs= is query only
-# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
-arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
+# PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 OSM tiles are often palette PNGs: `expand_palette=True` expands to RGB; the default keeps indices. Include © OpenStreetMap contributors when displaying map imagery. Full plotted walkthrough: [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html) / [OSM guide](https://matthewjwhittle.github.io/tilearray/guides/osm-london.html).

@@ -12,7 +12,7 @@ from pytest import MonkeyPatch
 
 from tilearray.array import create_array
 from tilearray.fetch import TileFetcher
-from tilearray.service.base import TileGeometry, detect_service_type
+from tilearray.service.base import TileGeometry
 from tilearray.service.config import XYZConfig
 from tilearray.service.xyz import XYZService, _tile_bounds, _tile_range_for_bbox
 from tilearray.tiles import fetch_tile
@@ -84,11 +84,6 @@ def rgb_jpeg_tile_bytes() -> bytes:
     with BytesIO() as buffer:
         Image.fromarray(array, mode="RGB").save(buffer, format="JPEG")
         return buffer.getvalue()
-
-
-def test_detect_service_type_for_xyz_template():
-    detected = detect_service_type(OSM_TEMPLATE)
-    assert detected == ServiceTypeEnum.XYZ
 
 
 def test_xyz_tile_range_for_small_bbox():

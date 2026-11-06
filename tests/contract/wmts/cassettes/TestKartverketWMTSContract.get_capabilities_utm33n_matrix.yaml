@@ -50,19 +50,8 @@ interactions:
         \               <ows:Value>KVP</ows:Value>\n              </ows:AllowedValues>\n
         \           </ows:Constraint>\n          </ows:Get>\n        </ows:HTTP>\n
         \     </ows:DCP>\n    </ows:Operation>\n  </ows:OperationsMetadata>\n  <Contents>\n
-        \   <Layer>\n      <ows:Title>Sjokartraster</ows:Title>\n      <ows:Abstract></ows:Abstract>\n
-        \     <ows:WGS84BoundingBox>\n        <ows:LowerCorner>-14.6549203419443 53.7516440972804</ows:LowerCorner>\n
-        \       <ows:UpperCorner>44.2455481164346 81.7781254712694</ows:UpperCorner>\n
-        \     </ows:WGS84BoundingBox>\n      <ows:Identifier>sjokartraster</ows:Identifier>\n
-        \     <Style isDefault=\"true\">\n        <ows:Identifier>default</ows:Identifier>\n
-        \     </Style>\n      <Format>image/png</Format>\n      <TileMatrixSetLink>\n
-        \       <TileMatrixSet>utm32n</TileMatrixSet>\n      </TileMatrixSetLink>\n
-        \     <TileMatrixSetLink>\n        <TileMatrixSet>utm33n</TileMatrixSet>\n
-        \     </TileMatrixSetLink>\n      <TileMatrixSetLink>\n        <TileMatrixSet>utm35n</TileMatrixSet>\n
-        \     </TileMatrixSetLink>\n      <TileMatrixSetLink>\n        <TileMatrixSet>webmercator</TileMatrixSet>\n
-        \     </TileMatrixSetLink>\n    </Layer>\n    <Layer>\n      <ows:Title>Topo
-        (Gr\xE5tone)</ows:Title>\n      <ows:Abstract></ows:Abstract>\n      <ows:WGS84BoundingBox>\n
-        \       <ows:LowerCorner>3.776518008640693 57.64113238016523</ows:LowerCorner>\n
+        \   <Layer>\n      <ows:Title>Topo (Gr\xE5tone)</ows:Title>\n      <ows:Abstract></ows:Abstract>\n
+        \     <ows:WGS84BoundingBox>\n        <ows:LowerCorner>3.776518008640693 57.64113238016523</ows:LowerCorner>\n
         \       <ows:UpperCorner>31.986654106477204 71.56636757017091</ows:UpperCorner>\n
         \     </ows:WGS84BoundingBox>\n      <ows:Identifier>topograatone</ows:Identifier>\n
         \     <Style isDefault=\"true\">\n        <ows:Identifier>default</ows:Identifier>\n
@@ -71,10 +60,10 @@ interactions:
         \     <TileMatrixSetLink>\n        <TileMatrixSet>utm33n</TileMatrixSet>\n
         \     </TileMatrixSetLink>\n      <TileMatrixSetLink>\n        <TileMatrixSet>utm35n</TileMatrixSet>\n
         \     </TileMatrixSetLink>\n      <TileMatrixSetLink>\n        <TileMatrixSet>webmercator</TileMatrixSet>\n
-        \     </TileMatrixSetLink>\n    </Layer>\n    <Layer>\n      <ows:Title>Topo</ows:Title>\n
-        \     <ows:Abstract></ows:Abstract>\n      <ows:WGS84BoundingBox>\n        <ows:LowerCorner>3.776518008640693
-        57.64113238016523</ows:LowerCorner>\n        <ows:UpperCorner>31.986654106477204
-        71.56636757017091</ows:UpperCorner>\n      </ows:WGS84BoundingBox>\n      <ows:Identifier>topo</ows:Identifier>\n
+        \     </TileMatrixSetLink>\n    </Layer>\n    <Layer>\n      <ows:Title>Sjokartraster</ows:Title>\n
+        \     <ows:Abstract></ows:Abstract>\n      <ows:WGS84BoundingBox>\n        <ows:LowerCorner>-14.6549203419443
+        53.7516440972804</ows:LowerCorner>\n        <ows:UpperCorner>44.2455481164346
+        81.7781254712694</ows:UpperCorner>\n      </ows:WGS84BoundingBox>\n      <ows:Identifier>sjokartraster</ows:Identifier>\n
         \     <Style isDefault=\"true\">\n        <ows:Identifier>default</ows:Identifier>\n
         \     </Style>\n      <Format>image/png</Format>\n      <TileMatrixSetLink>\n
         \       <TileMatrixSet>utm32n</TileMatrixSet>\n      </TileMatrixSetLink>\n
@@ -86,6 +75,16 @@ interactions:
         \       <ows:LowerCorner>3.776518008640693 57.64113238016523</ows:LowerCorner>\n
         \       <ows:UpperCorner>31.986654106477204 71.56636757017091</ows:UpperCorner>\n
         \     </ows:WGS84BoundingBox>\n      <ows:Identifier>toporaster</ows:Identifier>\n
+        \     <Style isDefault=\"true\">\n        <ows:Identifier>default</ows:Identifier>\n
+        \     </Style>\n      <Format>image/png</Format>\n      <TileMatrixSetLink>\n
+        \       <TileMatrixSet>utm32n</TileMatrixSet>\n      </TileMatrixSetLink>\n
+        \     <TileMatrixSetLink>\n        <TileMatrixSet>utm33n</TileMatrixSet>\n
+        \     </TileMatrixSetLink>\n      <TileMatrixSetLink>\n        <TileMatrixSet>utm35n</TileMatrixSet>\n
+        \     </TileMatrixSetLink>\n      <TileMatrixSetLink>\n        <TileMatrixSet>webmercator</TileMatrixSet>\n
+        \     </TileMatrixSetLink>\n    </Layer>\n    <Layer>\n      <ows:Title>Topo</ows:Title>\n
+        \     <ows:Abstract></ows:Abstract>\n      <ows:WGS84BoundingBox>\n        <ows:LowerCorner>3.776518008640693
+        57.64113238016523</ows:LowerCorner>\n        <ows:UpperCorner>31.986654106477204
+        71.56636757017091</ows:UpperCorner>\n      </ows:WGS84BoundingBox>\n      <ows:Identifier>topo</ows:Identifier>\n
         \     <Style isDefault=\"true\">\n        <ows:Identifier>default</ows:Identifier>\n
         \     </Style>\n      <Format>image/png</Format>\n      <TileMatrixSetLink>\n
         \       <TileMatrixSet>utm32n</TileMatrixSet>\n      </TileMatrixSetLink>\n
@@ -411,13 +410,13 @@ interactions:
       content-type:
       - application/xml
       date:
-      - Tue, 03 Nov 2026 22:28:20 GMT
+      - Thu, 05 Nov 2026 07:38:50 GMT
       server:
       - istio-envoy
       vary:
       - X-Script-Name, X-Forwarded-Host, X-Forwarded-Proto
       x-envoy-upstream-service-time:
-      - '21'
+      - '32'
     status:
       code: 200
       message: OK

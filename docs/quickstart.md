@@ -30,8 +30,8 @@ print(
     float(arr.x.max()),
     float(arr.y.max()),
 )  # mosaic extent in metres
-# Default dtype is float32 (0–255); xarray rgb= expects uint8 or floats in [0, 1]
-arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
+# PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 `bbox_crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat (`attrs["bbox_crs"]` keeps the query). Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
@@ -107,7 +107,7 @@ da = create_array(config, bbox, CRS.EPSG_27700)
 img = compute_mosaic(da)
 # Transparent GetMap PNG → RGBA (4 bands)
 print(img.shape, da.attrs["service_type"])
-img.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
+img.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ```{image} _static/guides/ea-vom-wms.png
@@ -138,7 +138,7 @@ da = create_array(
 )
 arr = compute_mosaic(da)
 print(arr.shape, da.attrs["crs"])  # mosaic CRS is EPSG:25833, not the query CRS
-arr.astype("uint8").plot.imshow(rgb="band", add_colorbar=False)
+arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
 ```{image} _static/guides/wmts-kartverket-oslo.png

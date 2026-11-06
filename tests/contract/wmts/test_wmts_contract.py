@@ -76,6 +76,21 @@ def _mock_fetch_tile(payload: bytes):
     return _fetch
 
 
+@pytest.fixture
+def vcr_cassette_name(request: pytest.FixtureRequest) -> str:
+    """Share one GetCapabilities cassette across Kartverket contract methods.
+
+    Both tests hit the same opaque ``/v1/service`` caps URL; bodies only differ
+    in layer order, which neither assert cares about.
+    """
+    if request.cls is TestKartverketWMTSContract:
+        return "TestKartverketWMTSContract.get_capabilities_utm33n_matrix"
+    test_class = request.cls
+    if test_class:
+        return f"{test_class.__name__}.{request.node.name}"
+    return request.node.name
+
+
 @pytest.mark.contract
 @pytest.mark.vcr()
 class TestKartverketWMTSContract:
