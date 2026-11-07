@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `choose_matrix_for_resolution` (+ `MatrixLevelSummary` / `MatrixChoice`): pure helper to pick a WMTS TileMatrix from a target resolution in **CRS units/pixel** and policy (`coarser` / `nearest` / `finer`). Compares on `resolution`; ScaleDenominator is best-effort (resolution-only levels accepted; `MatrixChoice.scale_denominator` may be `None`). Does not choose inside `create_array` and does not resample. Inspect `MatrixSetSummary.levels` carries scale + resolution. `ArrayPlan` gains `matrix_id` and `planned_pixel_size` (extent ÷ shape; CRS units/pixel — not ground metres for Web Mercator). Docs recipe on the WMTS guide (#123; related #93 / #61)
 - `EndpointInspection.build_config` for WMTS accepts **`target_resolution=`** (+ optional `resolution_policy=`) as an alternative to `tile_matrix=` — wraps `choose_matrix_for_resolution` on the selected TileMatrixSet's levels and still attaches `url_template` from GetCapabilities when present
 
+### Fixed
+
+- GetCapabilities **OGC ExceptionReport** bodies raise a loud parse/service error (with server `ExceptionText`) instead of sniffing as empty capabilities / “0 layers”
+- Soft-fail + **integer/uint mosaic dtype** with NaN `soft_fill_value` raises `ValidationError` (NaN→0 coercion previously hid failed tiles as black imagery). Use float dtype or a finite fill
+- WMS `build_tile_request` rejects **bbox CRS ≠ GetMap CRS** when `output_crs=` / `crs=` disagree with the tile bbox (no silent metre→lat/lon GetMap)
+- `EndpointInspection.build_config` for WMS validates **styles per layer** and enforces GetMap **LAYERS/STYLES arity** (typos and one-style-for-N-layers no longer slip through)
+- Tile fetch treats **HTTP 200 HTML portals** and **OGC ExceptionReports** (even with `Content-Type: image/*`) as fetch failures with actionable HTML/OGC messages — not Pillow `UnidentifiedImageError`
+- JPEG mosaic attrs set `palette_mode="rgb"` (never `"indices"`); PNG still records indices vs expanded RGB via `expand_palette=`
+
 ### Changed
 
 - Docs first-run path: install / quickstart / README / OSM London guide state that plotting needs a separate `matplotlib` install (not a core dependency; no `[plot]` extra). Primary OSM snippets use `expand_palette=True` for full-colour RGB and note that the default keeps palette indices; guide figure artifact script aligned

@@ -21,7 +21,11 @@ from tenacity import (
 )
 
 from ._http_client import make_sync_client
-from .error_messages import looks_like_html, redact_url
+from .error_messages import (
+    looks_like_html,
+    looks_like_ogc_exception_report,
+    redact_url,
+)
 from .errors import NetworkError, ValidationError
 from .pressure import (
     DEFAULT_PRESSURE_CLASSIFIER,
@@ -606,23 +610,55 @@ def _retry_wait(retry_state: RetryCallState) -> float:
 
 
 def _response_from_httpx(response: httpx.Response, request_url: str) -> TileResponse:
+    content_type = response.headers.get("content-type", "")
+    body = response.content
+    # 200 is not enough: portals and OGC ExceptionReports often return 200 with
+    # text/html or a misleading image/* Content-Type. Treat those as fetch fails
+    # so callers get HTML/OGC hints instead of Pillow "cannot identify image".
     if response.status_code == 200:
+        if looks_like_html(body, content_type=content_type):
+            body_snip = response.text[:200]
+            return TileResponse(
+                data=b"",
+                content_type=content_type,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                url=redact_url(str(response.url)),
+                success=False,
+                error_message=(
+                    f"HTTP 200 (HTML body, not tile bytes / login portal): {body_snip}"
+                ),
+            )
+        if looks_like_ogc_exception_report(body):
+            body_snip = response.text[:200]
+            return TileResponse(
+                data=b"",
+                content_type=content_type,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                url=redact_url(str(response.url)),
+                success=False,
+                error_message=(
+                    f"HTTP 200 (OGC ExceptionReport, not tile bytes): {body_snip}"
+                ),
+            )
         return TileResponse(
-            data=response.content,
-            content_type=response.headers.get("content-type", ""),
+            data=body,
+            content_type=content_type,
             status_code=response.status_code,
             headers=dict(response.headers),
             url=str(response.url),
             success=True,
         )
 
-    content_type = response.headers.get("content-type", "")
     body_snip = response.text[:200]
     error_msg = f"HTTP {response.status_code}: {body_snip}"
     if looks_like_html(response.text, content_type=content_type):
         error_msg = (
             f"HTTP {response.status_code} (HTML body, not tile bytes): {body_snip}"
         )
+    elif looks_like_ogc_exception_report(response.text):
+        error_msg = f"HTTP {response.status_code} (OGC ExceptionReport): {body_snip}"
     return TileResponse(
         data=b"",
         content_type=content_type,

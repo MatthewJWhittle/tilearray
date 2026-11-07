@@ -12,7 +12,7 @@ while keeping default CI network-free.
 | **Product contracts** | `tests/unit/test_product_contracts.py` | **Yes** | Opaque URL / inspect journey, soft-fail **phases**, plot-ready dims — Modes A–D |
 | Contract (VCR) | `tests/contract/` | Yes | Recorded caps / plan locks |
 | Live / soak | `tests/integration/` (`@net` / `@slow`) | Nightly only | Real hosts; discovery + plot-ready smoke |
-| Docs journey | `scripts/docs_journey_smoke.py` | Nightly step | Opaque inspect + palette decode without Jupyter |
+| Docs journey | `scripts/docs_journey_smoke.py` | Manual / local | Opaque inspect + palette decode without Jupyter |
 
 **PR green ≠ stage-gate notebooks pass.** Coverage ≥ 85% is a floor, not the definition of product readiness.
 

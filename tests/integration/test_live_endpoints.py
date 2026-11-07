@@ -11,7 +11,7 @@ import xarray as xr
 from tilearray import array as array_module
 from tilearray import compute_mosaic, create_array, inspect_endpoint, plan_array
 from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
-from tilearray.service.config import WCSConfig, WMTSConfig, XYZConfig
+from tilearray.service.config import WCSConfig, WMSConfig, WMTSConfig, XYZConfig
 from tilearray.service.wcs import WCSService
 from tilearray.types import CRS, Format, ServiceTypeEnum
 
@@ -185,6 +185,74 @@ def test_live_osm_plot_ready_smoke() -> None:
     assert arr.dtype == np.uint8
     assert arr.attrs.get("palette_mode") == "rgb"
     assert arr.attrs.get("dtype_policy") == "plot_ready_uint8"
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.net
+def test_live_gibs_xyz_bluemarble_smoke() -> None:
+    """Docs-host smoke: NASA GIBS Blue Marble XYZ → uint8 RGB, EPSG:3857 mosaic."""
+
+    template = (
+        "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/"
+        "BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/"
+        "{z}/{y}/{x}.jpeg"
+    )
+    config = XYZConfig.from_url(
+        template,
+        zoom=3,
+        output_format=Format.JPEG,
+        chunk_size=(256, 256),
+        max_concurrent_requests=2,
+        rate_limit_per_second=2.0,
+        headers={
+            "User-Agent": (
+                "tilearray-integration/0.3 "
+                "(+https://github.com/MatthewJWhittle/tilearray)"
+            ),
+        },
+    )
+    da = create_array(
+        config,
+        bbox=(-40.0, 20.0, -30.0, 30.0),
+        bbox_crs=CRS.EPSG_4326,
+        show_progress=False,
+    )
+    arr = compute_mosaic(da)
+    assert isinstance(arr, xr.DataArray)
+    assert "band" in arr.dims
+    assert arr.sizes["band"] == 3
+    assert arr.dtype == np.uint8
+    assert arr.attrs.get("palette_mode") != "indices"
+    assert da.attrs["crs"] == "EPSG:3857"
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.net
+def test_live_ea_vom_wms_smoke() -> None:
+    """Docs-host smoke: EA Vegetation Object Model WMS → small OSGB mosaic."""
+
+    config = WMSConfig.from_url(
+        "https://environment.data.gov.uk/spatialdata/vegetation-object-model/wms",
+        layers="Vegetation_Object_Model_2022",
+        output_format=Format.PNG,
+        chunk_size=(256, 256),
+        grid_shape=(1, 1),
+        max_concurrent_requests=2,
+        rate_limit_per_second=2.0,
+    )
+    da = create_array(
+        config,
+        bbox=(430000.0, 380000.0, 430256.0, 380256.0),
+        bbox_crs=CRS.EPSG_27700,
+        show_progress=False,
+    )
+    arr = compute_mosaic(da)
+    assert isinstance(arr, xr.DataArray)
+    assert arr.size > 0
+    assert da.attrs["crs"] in {"EPSG:27700", "27700"}
+    assert da.attrs["service_type"] == "WMS"
 
 
 @pytest.mark.integration

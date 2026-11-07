@@ -315,11 +315,52 @@ class EndpointInspection:
             advertised=advertised_crs,
             default_when_unique=True,
         )
+        styles_choice = choices.pop("styles", None)
+        layer_parts = [piece.strip() for piece in layers.split(",") if piece.strip()]
+        if styles_choice is not None:
+            style_parts = [piece.strip() for piece in str(styles_choice).split(",")]
+            # WMS GetMap STYLES is positional with LAYERS — arity must match
+            # when more than one layer is named (blank slots mean server default).
+            if len(layer_parts) > 1 and len(style_parts) != len(layer_parts):
+                raise ValidationError(
+                    f"WMS styles={styles_choice!r} has {len(style_parts)} "
+                    f"entr{'y' if len(style_parts) == 1 else 'ies'} but "
+                    f"layers= lists {len(layer_parts)} layers. Pass one style "
+                    "slot per layer (comma-separated; empty slot = server "
+                    "default), matching GetMap STYLES/LAYERS arity."
+                )
+            # Validate each non-empty style against the corresponding layer
+            # (or the sole layer when a single style is given).
+            by_id = {item.identifier: item for item in self.resources}
+            for index, layer_id in enumerate(layer_parts):
+                if len(style_parts) == 1 and len(layer_parts) == 1:
+                    style_name = style_parts[0]
+                elif len(style_parts) == len(layer_parts):
+                    style_name = style_parts[index]
+                else:
+                    style_name = style_parts[0] if style_parts else ""
+                if not style_name:
+                    continue
+                layer_res = by_id.get(layer_id)
+                advertised = (
+                    set(layer_res.styles)
+                    if layer_res is not None and layer_res.styles
+                    else set()
+                )
+                if advertised:
+                    _require_known(
+                        style_name,
+                        advertised,
+                        field_name="styles",
+                        kind="style",
+                    )
         kwargs = _merge_auth_kwargs(self, choices)
         if output_format is not None:
             kwargs["output_format"] = output_format
         if crs is not None:
             kwargs["crs"] = crs
+        if styles_choice is not None:
+            kwargs["styles"] = styles_choice
         return WMSConfig.from_url(self.base_url, layers, **kwargs)
 
     def _build_wmts_config(self, **choices: Any) -> WMTSConfig:

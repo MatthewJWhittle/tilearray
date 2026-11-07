@@ -11,6 +11,7 @@ import httpx
 from ..error_messages import (
     format_http_failure,
     looks_like_html,
+    looks_like_ogc_exception_report,
     redact_url,
     undetectable_service_type_message,
 )
@@ -90,7 +91,7 @@ def _coerce_service_type(
 def _sniff_capabilities_service_type(body: str) -> ServiceTypeEnum | None:
     """Infer OGC protocol from a GetCapabilities XML body (no network)."""
 
-    if not body or looks_like_html(body):
+    if not body or looks_like_html(body) or looks_like_ogc_exception_report(body):
         return None
     sample = body[:8000].lower()
     # WMTS: TileMatrixSet / GetTile are distinctive.

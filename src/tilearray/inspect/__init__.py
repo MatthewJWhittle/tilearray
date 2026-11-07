@@ -12,8 +12,13 @@ from typing import Any
 
 import httpx
 
-from ..error_messages import looks_like_html, redact_url
-from ..errors import ConfigurationError, ParseError
+from ..error_messages import (
+    looks_like_html,
+    looks_like_ogc_exception_report,
+    ogc_exception_report_message,
+    redact_url,
+)
+from ..errors import ConfigurationError, ParseError, ServiceError
 from ..matrix_resolution import MatrixLevelSummary
 from ..service.base import detect_service_type
 from ..service.wcs import WCSParser
@@ -144,6 +149,12 @@ def inspect_capabilities(
             f"{resolved_type.value} GetCapabilities response looks like HTML "
             f"(login/portal page), not OGC XML, for {redact_url(base_url)}. "
             "Check base_url and credentials via params=/headers=."
+        )
+    if looks_like_ogc_exception_report(text):
+        raise ServiceError(
+            ogc_exception_report_message(
+                text, protocol=resolved_type.value, url=base_url
+            )
         )
 
     header_map = dict(headers or {})

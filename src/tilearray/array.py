@@ -551,6 +551,14 @@ def create_array(
         effective_format=effective_format,
         needs_nan_soft_fill=tile_error_handler is not None,
     )
+    if tile_error_handler is not None and not np.issubdtype(dtype_np, np.floating):
+        if soft_fill_value != soft_fill_value:  # NaN
+            raise ValidationError(
+                f"soft_fail / on_tile_error with dtype={dtype_np} cannot use "
+                "NaN soft_fill_value (would become 0). Omit dtype= to keep the "
+                "float32 soft-fail default, pass dtype='float32', or set a "
+                "finite soft_fill_value."
+            )
     progress_callback = resolve_on_progress(
         on_progress,
         total_tiles=len(tile_requests),
@@ -756,7 +764,12 @@ def _geospatial_attrs(
         policy = band_policy or DEFAULT_BAND_POLICIES.get(output_format)
         if policy is not None:
             attrs["band_policy"] = policy
-        if output_format in {Format.PNG, Format.JPEG}:
+        if output_format == Format.JPEG:
+            # JPEG has no palette — never claim index mode (misleading for RGB).
+            attrs["palette_mode"] = "rgb"
+        elif output_format == Format.PNG:
+            # expand_palette=True forces RGB; False keeps native (indices for
+            # palette PNGs, already-RGB for truecolor — consumers must check ndim).
             attrs["palette_mode"] = "rgb" if expand_palette else "indices"
         if output_format == Format.GEOTIFF:
             # Decode maps GDAL_NODATA / sentinels → NaN in pixels (#53/#77).
@@ -960,6 +973,17 @@ def _soft_fill_array(
         shape = (height, width, n_bands)
     else:
         shape = (height, width)
+    # NaN into integer dtypes silently becomes 0 — looks like valid imagery.
+    if not np.issubdtype(dtype, np.floating) and (
+        soft_fill_value != soft_fill_value  # NaN
+        or soft_fill_value is None
+    ):
+        raise ValidationError(
+            f"soft_fill_value={soft_fill_value!r} cannot fill dtype={dtype} "
+            "(integer/uint mosaics would coerce NaN to 0 and hide soft-fails as "
+            "data). Pass dtype='float32' (or another floating dtype), or a "
+            "finite soft_fill_value that fits the dtype."
+        )
     return cast(NDArrayFloat, np.full(shape, soft_fill_value, dtype=dtype))
 
 
