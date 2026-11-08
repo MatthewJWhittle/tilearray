@@ -12,7 +12,7 @@ Use the `src/` layout. Public surface is whatever `__init__.__all__` exports.
 
 ```text
 tilearray/
-├─ src/tilearray/          # package (array, fetch, decode, service/, …)
+├─ src/tilearray/          # package (array, fetch, decode, placement, service/, …)
 ├─ tests/
 │  ├─ unit/
 │  ├─ contract/            # VCR / recorded HTTP

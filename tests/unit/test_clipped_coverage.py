@@ -12,14 +12,15 @@ from _pytest.monkeypatch import MonkeyPatch
 
 import tilearray._planning as planning_module
 import tilearray.array as array_module
-from tilearray.decode import (
+from tilearray.decode import decoder_for_format
+from tilearray.errors import ValidationError
+from tilearray.placement import (
     GeoTransform,
-    decoder_for_format,
+    fit_tile_to_request,
     pixel_offsets_for_placement,
     place_array_on_canvas,
     read_geotiff_georef,
 )
-from tilearray.errors import ValidationError
 from tilearray.types import (
     CRS,
     BoundingBox,
@@ -119,7 +120,7 @@ def test_fit_tile_places_clipped_corner_without_stretch() -> None:
     decoder = decoder_for_format(Format.GEOTIFF)
     assert decoder is not None
     array = decoder(response, request)
-    placed = array_module._fit_tile_to_request(array, request, response)  # noqa: SLF001
+    placed = fit_tile_to_request(array, request, response)
 
     assert placed.shape == (8, 8)
     assert np.isnan(placed[0, 0])
@@ -156,7 +157,7 @@ def test_fit_tile_rejects_missing_georef_on_undersize() -> None:
     assert decoder is not None
     array = decoder(response, request)
     with pytest.raises(ValidationError, match="ModelPixelScale|georeferencing"):
-        array_module._fit_tile_to_request(array, request, response)  # noqa: SLF001
+        fit_tile_to_request(array, request, response)
 
 
 @pytest.mark.unit
@@ -190,7 +191,7 @@ def test_fit_tile_rejects_crs_mismatch() -> None:
     assert decoder is not None
     array = decoder(response, request)
     with pytest.raises(ValidationError, match="CRS"):
-        array_module._fit_tile_to_request(array, request, response)  # noqa: SLF001
+        fit_tile_to_request(array, request, response)
 
 
 @pytest.mark.unit
