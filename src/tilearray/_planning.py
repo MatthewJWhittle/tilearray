@@ -668,30 +668,28 @@ class ArrayRequest(BaseModel):
     ) -> tuple[list[TileRequest], dict[str, Any]]:
         tile_options = self.tile_options()
         self._prepare_crs_roles(service, tile_options)
-        tile_requests_iter = service.generate_tile_requests(
+        plan = service.generate_tile_requests(
             self.bbox,
             self.chunk_pixels,
             **dict(tile_options),
         )
-        tile_requests = list(tile_requests_iter)
+        tile_requests = list(plan.tiles)
 
-        inferred_grid = getattr(service, "inferred_grid_shape", None)
         if (
-            inferred_grid is not None
+            plan.grid_shape is not None
             and self.grid_shape == (1, 1)
             and len(tile_requests) > 1
         ):
-            self.grid_shape = inferred_grid
+            self.grid_shape = plan.grid_shape
 
         # Fixed grids (metadata WMTS + XYZ / slippy WMTS): mosaic extent/CRS
         # follow the planned native tile union, not the caller's query bbox /
         # query CRS label (#93; XYZ/slippy native 3857).
-        inferred_bbox = getattr(service, "inferred_mosaic_bbox", None)
-        if isinstance(inferred_bbox, BoundingBox):
+        if plan.mosaic_bbox is not None:
             if self.requested_bbox is None:
                 self.requested_bbox = self.bbox
-            self.bbox = inferred_bbox
-            self.target_crs = inferred_bbox.crs
+            self.bbox = plan.mosaic_bbox
+            self.target_crs = plan.mosaic_bbox.crs
 
         return tile_requests, tile_options
 

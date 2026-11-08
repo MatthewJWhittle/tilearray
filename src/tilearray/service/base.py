@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from ..error_messages import undetectable_service_type_message
 from ..errors import ConfigurationError, ValidationError
+from ..mosaic_plan import MosaicPlan
 from ..tiles import snap_bbox_outward
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .requests import compose_tile_request as _compose_tile_request
@@ -81,13 +82,14 @@ class BaseService(ABC):
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: object,
-    ) -> list[TileRequest]:
-        """Generate concrete tile requests for the provided bounding box."""
+    ) -> MosaicPlan:
+        """Plan concrete tile requests plus native mosaic extent/grid when known."""
 
         tile_geoms = list(self.plan_tiles(bbox, chunk_size, **options))
-        return [
+        tiles = [
             self.build_tile_request(tile_geom, **options) for tile_geom in tile_geoms
         ]
+        return MosaicPlan.from_planning(tiles, tile_geoms)
 
     def plan_tiles(
         self,

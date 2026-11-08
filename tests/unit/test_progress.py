@@ -14,6 +14,7 @@ import tilearray.array as array_module
 import tilearray.decode as decode_module
 import tilearray.progress as progress_module
 from tilearray.fetch import FetchProgress
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.progress import (
     make_tile_progress_callback,
     resolve_on_progress,
@@ -209,7 +210,7 @@ def test_create_array_default_progress_multi_tile(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             grid_rows, grid_cols = options.get("grid_shape", (1, 1))
             span_x = (bbox.max_x - bbox.min_x) / grid_cols
@@ -238,7 +239,7 @@ def test_create_array_default_progress_multi_tile(
                             height=height,
                         )
                     )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -335,7 +336,7 @@ def test_create_array_show_progress_false_skips_default(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             grid_rows, grid_cols = options.get("grid_shape", (1, 1))
             span_x = (bbox.max_x - bbox.min_x) / grid_cols
@@ -364,7 +365,7 @@ def test_create_array_show_progress_false_skips_default(
                             height=height,
                         )
                     )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]

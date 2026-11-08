@@ -161,11 +161,11 @@ def test_xyz_service_infers_grid_shape_for_multi_tile_bbox():
         crs=CRS.EPSG_4326,
     )
 
-    tiles = list(service.plan_tiles(bbox, (256, 256), zoom=12))
-    assert len(tiles) > 1
-    assert service.inferred_grid_shape is not None
-    rows, cols = service.inferred_grid_shape
-    assert rows * cols == len(tiles)
+    plan = service.generate_tile_requests(bbox, (256, 256), zoom=12)
+    assert len(plan.tiles) > 1
+    assert plan.grid_shape is not None
+    rows, cols = plan.grid_shape
+    assert rows * cols == len(plan.tiles)
 
 
 def _single_tile_bbox(zoom: int, tile_x: int, tile_y: int) -> BoundingBox:
@@ -320,8 +320,8 @@ def test_xyz_config_headers_reach_http_fetch(rgb_jpeg_tile_bytes: bytes) -> None
     assert captured.get("user-agent") == "tilearray-peer-test/1.0"
 
 
-def test_xyz_plan_sets_inferred_mosaic_bbox_in_epsg_3857() -> None:
-    """Planner exposes tile-union extent in native Web Mercator (like WMTS)."""
+def test_xyz_plan_sets_mosaic_bbox_in_epsg_3857() -> None:
+    """MosaicPlan exposes tile-union extent in native Web Mercator (like WMTS)."""
 
     service = XYZService(OSM_TEMPLATE, zoom=10)
     # High-latitude inset so a lon/lat envelope affine would diverge hard.
@@ -332,10 +332,11 @@ def test_xyz_plan_sets_inferred_mosaic_bbox_in_epsg_3857() -> None:
         max_y=69.8,
         crs=CRS.EPSG_4326,
     )
+    plan = service.generate_tile_requests(bbox, (256, 256), zoom=10)
     tiles = list(service.plan_tiles(bbox, (256, 256), zoom=10))
-    assert tiles
-    assert service.inferred_mosaic_bbox is not None
-    assert service.inferred_mosaic_bbox.crs == CRS.EPSG_3857
+    assert plan.tiles
+    assert plan.mosaic_bbox is not None
+    assert plan.mosaic_bbox.crs == CRS.EPSG_3857
     assert all(tile.crs == CRS.EPSG_3857 for tile in tiles)
 
     x_min = min(t.tile_x for t in tiles if t.tile_x is not None)
@@ -345,7 +346,7 @@ def test_xyz_plan_sets_inferred_mosaic_bbox_in_epsg_3857() -> None:
     exp_min_x, exp_min_y, exp_max_x, exp_max_y = _independent_union_3857(
         x_min, y_min, x_max, y_max, 10
     )
-    mosaic = service.inferred_mosaic_bbox
+    mosaic = plan.mosaic_bbox
     assert mosaic.min_x == pytest.approx(exp_min_x)
     assert mosaic.min_y == pytest.approx(exp_min_y)
     assert mosaic.max_x == pytest.approx(exp_max_x)

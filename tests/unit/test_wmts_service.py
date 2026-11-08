@@ -242,11 +242,11 @@ def test_wmts_service_plan_tiles_for_bbox() -> None:
         crs=CRS.EPSG_4326,
     )
 
-    tiles = list(service.plan_tiles(bbox, (256, 256), tile_matrix=12))
-    assert len(tiles) > 1
-    assert service.inferred_grid_shape is not None
-    rows, cols = service.inferred_grid_shape
-    assert rows * cols == len(tiles)
+    plan = service.generate_tile_requests(bbox, (256, 256), tile_matrix=12)
+    assert len(plan.tiles) > 1
+    assert plan.grid_shape is not None
+    rows, cols = plan.grid_shape
+    assert rows * cols == len(plan.tiles)
 
 
 def _mock_fetch_tile(tile_bytes: bytes):
@@ -456,6 +456,7 @@ def test_wmts_plan_crs84_matrix_tile_bounds() -> None:
         max_y=89.0,
         crs=CRS.EPSG_4326,
     )
+    plan = service.generate_tile_requests(bbox, (256, 256))
     tiles = list(service.plan_tiles(bbox, (256, 256)))
 
     assert len(tiles) == 1
@@ -467,8 +468,8 @@ def test_wmts_plan_crs84_matrix_tile_bounds() -> None:
     assert tile.bbox.max_y == pytest.approx(90.0)
     assert tile.bbox.max_x == pytest.approx(-180.0 + _CRS84_TILE_SPAN)
     assert tile.bbox.min_y == pytest.approx(90.0 - _CRS84_TILE_SPAN)
-    assert service.inferred_mosaic_bbox is not None
-    assert service.inferred_mosaic_bbox.crs == CRS.parse("OGC:CRS84")
+    assert plan.mosaic_bbox is not None
+    assert plan.mosaic_bbox.crs == CRS.parse("OGC:CRS84")
 
 
 def test_wmts_plan_epsg25833_matrix_tile_bounds() -> None:
@@ -532,12 +533,13 @@ def test_wmts_plan_transforms_query_bbox_crs_to_matrix_crs() -> None:
         max_y=60.20,
         crs=CRS.EPSG_4326,
     )
+    plan = service.generate_tile_requests(bbox, (256, 256))
     tiles = list(service.plan_tiles(bbox, (256, 256)))
 
     assert tiles
     assert all(tile.crs == CRS.parse("EPSG:25833") for tile in tiles)
-    assert service.inferred_mosaic_bbox is not None
-    assert service.inferred_mosaic_bbox.crs == CRS.parse("EPSG:25833")
+    assert plan.mosaic_bbox is not None
+    assert plan.mosaic_bbox.crs == CRS.parse("EPSG:25833")
 
 
 def test_wmts_unknown_matrix_raises_without_web_mercator_fallback() -> None:
@@ -783,10 +785,11 @@ def test_wmts_slippy_fallback_labels_native_3857(
         tile_matrix=zoom,
         output_format=Format.PNG,
     )
+    plan = service.generate_tile_requests(bbox, (256, 256), crs=CRS.EPSG_4326)
     tiles = list(service.plan_tiles(bbox, (256, 256), crs=CRS.EPSG_4326))
     assert len(tiles) == 1
-    assert service.inferred_mosaic_bbox is not None
-    assert service.inferred_mosaic_bbox.crs == CRS.EPSG_3857
+    assert plan.mosaic_bbox is not None
+    assert plan.mosaic_bbox.crs == CRS.EPSG_3857
     assert tiles[0].crs == CRS.EPSG_3857
 
     config = WMTSConfig.from_url(

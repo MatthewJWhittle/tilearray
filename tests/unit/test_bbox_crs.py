@@ -17,6 +17,7 @@ import tilearray.decode as decode_module
 from tilearray import create_array, plan_array
 from tilearray.errors import ValidationError
 from tilearray.fetch import TileFetcher
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.service.base import TileGeometry
 from tilearray.service.config import WCSConfig, WMSConfig, WMTSConfig, XYZConfig
 from tilearray.service.wcs import WCSService
@@ -91,20 +92,22 @@ class _DummyWCS:
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: Any,
-    ) -> list[TileRequest]:
+    ) -> MosaicPlan:
         width, height = chunk_size
-        return [
-            TileRequest(
-                url="http://example.com/wcs",
-                params={},
-                headers={},
-                bbox=bbox,
-                crs=bbox.crs,
-                width=width,
-                height=height,
-                output_format=Format.GEOTIFF,
+        return MosaicPlan(
+            tiles=(
+                TileRequest(
+                    url="http://example.com/wcs",
+                    params={},
+                    headers={},
+                    bbox=bbox,
+                    crs=bbox.crs,
+                    width=width,
+                    height=height,
+                    output_format=Format.GEOTIFF,
+                ),
             )
-        ]
+        )
 
     def plan_tiles(
         self,
@@ -316,7 +319,7 @@ def test_wms_query_equals_service_crs_request_params(
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: Any,
-    ) -> list[TileRequest]:
+    ) -> MosaicPlan:
         requests = original(self, bbox, chunk_size, **options)
         captured.extend(requests)
         return requests
@@ -355,7 +358,7 @@ def test_wms_query_differs_from_service_crs_request_params(
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: Any,
-    ) -> list[TileRequest]:
+    ) -> MosaicPlan:
         requests = original(self, bbox, chunk_size, **options)
         captured.extend(requests)
         return requests
@@ -396,7 +399,7 @@ def test_wms_query_differs_from_output_crs_request_params(
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: Any,
-    ) -> list[TileRequest]:
+    ) -> MosaicPlan:
         requests = original(self, bbox, chunk_size, **options)
         captured.extend(requests)
         return requests

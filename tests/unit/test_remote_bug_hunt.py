@@ -26,6 +26,7 @@ from tilearray.errors import (
     ValidationError,
 )
 from tilearray.inspect import inspect_capabilities
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.wms import WMSService, format_wms_bbox
 from tilearray.types import (
@@ -181,20 +182,22 @@ def test_create_array_soft_fail_with_uint8_dtype_is_loud(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
-            return [
-                TileRequest(
-                    url="https://example.com/tile/0",
-                    params={},
-                    output_format=Format.GEOTIFF,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=width,
-                    height=height,
-                    retries=0,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="https://example.com/tile/0",
+                        params={},
+                        output_format=Format.GEOTIFF,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=width,
+                        height=height,
+                        retries=0,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -356,20 +359,22 @@ def test_html_200_tile_is_actionable_not_pillow_gibberish(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             w, h = chunk_size
-            return [
-                TileRequest(
-                    url=url,
-                    params={},
-                    output_format=Format.PNG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=w,
-                    height=h,
-                    retries=0,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url=url,
+                        params={},
+                        output_format=Format.PNG,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=w,
+                        height=h,
+                        retries=0,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -426,20 +431,22 @@ def test_exception_report_labeled_image_png_is_actionable(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             w, h = chunk_size
-            return [
-                TileRequest(
-                    url=url,
-                    params={"SERVICE": "WMS", "REQUEST": "GetMap"},
-                    output_format=Format.PNG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=w,
-                    height=h,
-                    retries=0,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url=url,
+                        params={"SERVICE": "WMS", "REQUEST": "GetMap"},
+                        output_format=Format.PNG,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=w,
+                        height=h,
+                        retries=0,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -496,20 +503,22 @@ def test_rgb_jpeg_attrs_do_not_claim_palette_indices(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             w, h = chunk_size
-            return [
-                TileRequest(
-                    url="https://example.com/tile.jpg",
-                    params={},
-                    output_format=Format.JPEG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=w,
-                    height=h,
-                    retries=0,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="https://example.com/tile.jpg",
+                        params={},
+                        output_format=Format.JPEG,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=w,
+                        height=h,
+                        retries=0,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -637,22 +646,26 @@ def test_soft_fill_multiband_png_preserves_band_axis(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             # Two tiles so the first can probe RGB and the second soft-fails.
-            return [
-                TileRequest(
-                    url=f"https://example.com/tile/{i}",
-                    params={},
-                    output_format=Format.PNG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=width,
-                    height=height,
-                    retries=0,
+            return MosaicPlan(
+                tiles=tuple(
+                    [
+                        TileRequest(
+                            url=f"https://example.com/tile/{i}",
+                            params={},
+                            output_format=Format.PNG,
+                            crs=bbox.crs,
+                            bbox=bbox,
+                            width=width,
+                            height=height,
+                            retries=0,
+                        )
+                        for i in range(2)
+                    ]
                 )
-                for i in range(2)
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -731,20 +744,22 @@ def test_tile_401_message_mentions_credentials(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             w, h = chunk_size
-            return [
-                TileRequest(
-                    url=url,
-                    params={},
-                    output_format=Format.PNG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=w,
-                    height=h,
-                    retries=0,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url=url,
+                        params={},
+                        output_format=Format.PNG,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=w,
+                        height=h,
+                        retries=0,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]

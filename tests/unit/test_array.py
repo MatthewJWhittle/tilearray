@@ -33,6 +33,7 @@ from tilearray.decode import (
 from tilearray.errors import ConfigurationError, NetworkError, ValidationError
 from tilearray.fetch import FetchPolicy
 from tilearray.fetch_presets import ea_dsp_fetch_defaults
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.placement import resize_tile_array
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
@@ -65,19 +66,21 @@ class DummyService:
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: Any,
-    ) -> list[TileRequest]:
+    ) -> MosaicPlan:
         width, height = chunk_size
-        return [
-            TileRequest(
-                url="http://example.com/wcs",
-                params={"tile": "0"},
-                output_format=Format.GEOTIFF,
-                crs=bbox.crs,
-                bbox=bbox,
-                width=width,
-                height=height,
+        return MosaicPlan(
+            tiles=(
+                TileRequest(
+                    url="http://example.com/wcs",
+                    params={"tile": "0"},
+                    output_format=Format.GEOTIFF,
+                    crs=bbox.crs,
+                    bbox=bbox,
+                    width=width,
+                    height=height,
+                ),
             )
-        ]
+        )
 
 
 def test_array_request_from_inputs_applies_defaults() -> None:
@@ -389,19 +392,21 @@ def test_builtin_png_decoder(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
-            return [
-                TileRequest(
-                    url="http://example.com/png",
-                    params={},
-                    output_format=Format.PNG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=width,
-                    height=height,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/png",
+                        params={},
+                        output_format=Format.PNG,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=width,
+                        height=height,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -467,7 +472,7 @@ def test_create_array_multi_tile_rgb_jpeg_mosaic(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             grid_rows, grid_cols = options.get("grid_shape", (1, 1))
             span_x = (bbox.max_x - bbox.min_x) / grid_cols
@@ -497,7 +502,7 @@ def test_create_array_multi_tile_rgb_jpeg_mosaic(
                             height=height,
                         )
                     )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -905,19 +910,21 @@ def test_rgb_jpeg_attrs_preserve_bands_no_nodata(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
-            return [
-                TileRequest(
-                    url="http://example.com/0/0.jpg",
-                    params={},
-                    output_format=Format.JPEG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=width,
-                    height=height,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/0/0.jpg",
+                        params={},
+                        output_format=Format.JPEG,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=width,
+                        height=height,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -977,19 +984,21 @@ def test_rgba_png_attrs_four_bands_no_nodata(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
-            return [
-                TileRequest(
-                    url="http://example.com/wms",
-                    params={},
-                    output_format=Format.PNG,
-                    crs=bbox.crs,
-                    bbox=bbox,
-                    width=width,
-                    height=height,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/wms",
+                        params={},
+                        output_format=Format.PNG,
+                        crs=bbox.crs,
+                        bbox=bbox,
+                        width=width,
+                        height=height,
+                    ),
                 )
-            ]
+            )
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -1379,7 +1388,7 @@ def test_create_array_compute_exceeds_cpu_count_inflight(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             grid_rows, grid_cols = options.get("grid_shape", (1, 1))
             span_x = (bbox.max_x - bbox.min_x) / grid_cols
@@ -1409,7 +1418,7 @@ def test_create_array_compute_exceeds_cpu_count_inflight(
                             height=height,
                         )
                     )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
     def fake_get_service(*args: Any, **kwargs: Any) -> GridTileService:
         return GridTileService()

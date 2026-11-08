@@ -23,6 +23,7 @@ from tilearray.decode import (
     read_geotiff_bytes,
     read_image_bytes,
 )
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.types import (
     CRS,
     BoundingBox,
@@ -180,21 +181,21 @@ def test_create_array_multiband_geotiff_mosaic(
         coverage_id = "dummy"
         output_format = Format.GEOTIFF
 
-        def generate_tile_requests(
-            self, *args: Any, **kwargs: Any
-        ) -> list[TileRequest]:
+        def generate_tile_requests(self, *args: Any, **kwargs: Any) -> MosaicPlan:
             del args, kwargs
-            return [
-                TileRequest(
-                    url="http://example.com/wcs",
-                    params={},
-                    output_format=Format.GEOTIFF,
-                    crs=CRS.EPSG_3857,
-                    bbox=bbox,
-                    width=4,
-                    height=4,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/wcs",
+                        params={},
+                        output_format=Format.GEOTIFF,
+                        crs=CRS.EPSG_3857,
+                        bbox=bbox,
+                        width=4,
+                        height=4,
+                    ),
                 )
-            ]
+            )
 
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: MultiBandWCS())
     monkeypatch.setattr(
@@ -245,21 +246,21 @@ def test_create_array_expand_palette_png(
         service_type = ServiceTypeEnum.XYZ
         output_format = Format.PNG
 
-        def generate_tile_requests(
-            self, *args: Any, **kwargs: Any
-        ) -> list[TileRequest]:
+        def generate_tile_requests(self, *args: Any, **kwargs: Any) -> MosaicPlan:
             del args, kwargs
-            return [
-                TileRequest(
-                    url="http://example.com/0/0/0.png",
-                    params={},
-                    output_format=Format.PNG,
-                    crs=CRS.EPSG_3857,
-                    bbox=bbox,
-                    width=4,
-                    height=4,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/0/0/0.png",
+                        params={},
+                        output_format=Format.PNG,
+                        crs=CRS.EPSG_3857,
+                        bbox=bbox,
+                        width=4,
+                        height=4,
+                    ),
                 )
-            ]
+            )
 
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: PaletteXYZ())
     monkeypatch.setattr(

@@ -31,6 +31,7 @@ from tilearray.fetch_presets import (
     ea_dsp_fetch_defaults,
     osm_fetch_defaults,
 )
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig, XYZConfig
 from tilearray.types import (
@@ -177,7 +178,7 @@ def test_multi_tile_fail_loud_aborts_under_pressure(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             grid_rows, grid_cols = options.get("grid_shape", (rows, cols))
             span_x = (bbox.max_x - bbox.min_x) / grid_cols
@@ -208,7 +209,7 @@ def test_multi_tile_fail_loud_aborts_under_pressure(
                             retries=0,
                         )
                     )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]

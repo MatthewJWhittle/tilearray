@@ -21,6 +21,7 @@ from tilearray.array import (
 )
 from tilearray.errors import ValidationError
 from tilearray.fetch import FetchPolicy
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.types import (
     CRS,
     BoundingBox,
@@ -49,19 +50,21 @@ class DummyService:
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: Any,
-    ) -> list[TileRequest]:
+    ) -> MosaicPlan:
         width, height = chunk_size
-        return [
-            TileRequest(
-                url="http://example.com/wcs/0/0",
-                params={},
-                output_format=Format.GEOTIFF,
-                crs=bbox.crs,
-                bbox=bbox,
-                width=width,
-                height=height,
+        return MosaicPlan(
+            tiles=(
+                TileRequest(
+                    url="http://example.com/wcs/0/0",
+                    params={},
+                    output_format=Format.GEOTIFF,
+                    crs=bbox.crs,
+                    bbox=bbox,
+                    width=width,
+                    height=height,
+                ),
             )
-        ]
+        )
 
 
 def _lazy_array(monkeypatch: MonkeyPatch) -> Any:
