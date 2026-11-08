@@ -61,19 +61,14 @@ from ._planning import (
 from .decode import (
     DEFAULT_BAND_POLICIES,
     BandPolicy,
-    GeoTransform,
-    NDArrayAny,
     NDArrayFloat,
     TileDecoder,
-    geotiff_bytes_from_response,
-    pixel_offsets_for_placement,
-    place_array_on_canvas,
-    read_geotiff_georef,
     sniff_effective_content_type,
 )
 from .error_messages import tile_fetch_failure_message
 from .errors import NetworkError, ValidationError
 from .fetch import FetchPolicy, FetchProgress, ProgressCallback
+from .placement import fit_tile_to_request
 from .progress import resolve_on_progress
 from .service.config import ServiceConfig as ServiceConfigModel
 from .tile_errors import (
@@ -804,162 +799,6 @@ def _assemble_tile_mosaic(
     return cast(DaskArray, da_block(blocks))
 
 
-def _resize_tile_array(
-    array: NDArrayAny, target_height: int, target_width: int
-) -> NDArrayAny:
-    """Downsample an oversize tile to the request shape (never upsample/stretch)."""
-
-    if array.ndim == 3:
-        resized_bands = [
-            _resize_tile_array(array[..., band], target_height, target_width)
-            for band in range(array.shape[2])
-        ]
-        return cast(NDArrayAny, np.stack(resized_bands, axis=-1))
-
-    actual_height, actual_width = array.shape
-
-    if actual_height == target_height and actual_width == target_width:
-        return array
-
-    if target_height <= 0 or target_width <= 0:
-        raise ValidationError("target dimensions must be positive")
-
-    if actual_height < target_height or actual_width < target_width:
-        raise ValidationError(
-            f"Decoded tile has shape {(actual_height, actual_width)}, "
-            f"expected at least {(target_height, target_width)}. "
-            "Clipped GeoTIFF responses need ModelPixelScale/ModelTiepoint "
-            "tags so pixels can be placed without stretching."
-        )
-
-    # Downsample in float space so nanmean accepts integer source tiles.
-    float_array = np.asarray(array, dtype=np.float64)
-    if actual_height % target_height == 0 and actual_width % target_width == 0:
-        factor_y = actual_height // target_height
-        factor_x = actual_width // target_width
-        reshaped = float_array.reshape(target_height, factor_y, target_width, factor_x)
-        return cast(NDArrayAny, np.nanmean(reshaped, axis=(1, 3)))
-
-    y_edges = np.linspace(0, actual_height, target_height + 1, dtype=int)
-    x_edges = np.linspace(0, actual_width, target_width + 1, dtype=int)
-    y_edges[0] = 0
-    y_edges[-1] = actual_height
-    x_edges[0] = 0
-    x_edges[-1] = actual_width
-
-    resized = np.empty((target_height, target_width), dtype=np.float64)
-    for row in range(target_height):
-        y_start, y_end = y_edges[row], y_edges[row + 1]
-        for col in range(target_width):
-            x_start, x_end = x_edges[col], x_edges[col + 1]
-            block = float_array[y_start:y_end, x_start:x_end]
-            resized[row, col] = np.nanmean(block) if block.size else np.nan
-    return cast(NDArrayAny, resized)
-
-
-def _epsg_code_from_crs(crs: CRS | None) -> int | None:
-    if crs is None:
-        return None
-    value = crs.value if hasattr(crs, "value") else str(crs)
-    text = str(value).upper()
-    if text.startswith("EPSG:"):
-        try:
-            return int(text.split(":", 1)[1])
-        except ValueError:
-            return None
-    return None
-
-
-def _place_clipped_geotiff_tile(
-    array: NDArrayAny,
-    request: TileRequest,
-    response: TileResponse,
-    *,
-    fill_value: float = float("nan"),
-) -> NDArrayAny:
-    """
-    Place a smaller-than-requested GeoTIFF onto the request canvas using tags.
-
-    Pads uncovered cells with ``fill_value`` (coverage nodata, not soft-fail).
-    """
-
-    target_height = request.height
-    target_width = request.width
-    if (
-        request.bbox is None
-        or target_height is None
-        or target_width is None
-        or target_height < 1
-        or target_width < 1
-    ):
-        raise ValidationError(
-            "Clipped coverage placement requires tile bbox, width, and height"
-        )
-
-    tiff_bytes = geotiff_bytes_from_response(response)
-    if tiff_bytes[:2] not in (b"II", b"MM"):
-        raise ValidationError(
-            f"Decoded tile has shape {array.shape[:2]}, expected "
-            f"{(target_height, target_width)}, and the response is not a GeoTIFF "
-            "with georeferencing tags for exact placement."
-        )
-    georef = read_geotiff_georef(tiff_bytes)
-    if georef is None:
-        raise ValidationError(
-            f"Decoded tile has shape {array.shape[:2]}, expected "
-            f"{(target_height, target_width)}, but the GeoTIFF lacks usable "
-            "ModelPixelScale/ModelTiepoint georeferencing. "
-            "Refusing to stretch or guess pixel placement."
-        )
-
-    request_epsg = _epsg_code_from_crs(request.crs or request.bbox.crs)
-    if (
-        georef.epsg is not None
-        and request_epsg is not None
-        and georef.epsg != request_epsg
-    ):
-        raise ValidationError(
-            f"Clipped coverage CRS EPSG:{georef.epsg} does not match the "
-            f"requested tile EPSG:{request_epsg}; refusing to reproject."
-        )
-
-    request_transform = GeoTransform(
-        *_mosaic_affine_transform(request.bbox, target_height, target_width)
-    )
-    row_offset, col_offset = pixel_offsets_for_placement(
-        request_transform=request_transform,
-        response_transform=georef.transform,
-    )
-    return place_array_on_canvas(
-        array,
-        target_height=target_height,
-        target_width=target_width,
-        row_offset=row_offset,
-        col_offset=col_offset,
-        fill_value=fill_value,
-    )
-
-
-def _fit_tile_to_request(
-    array: NDArrayAny,
-    request: TileRequest,
-    response: TileResponse,
-) -> NDArrayAny:
-    """Match decoded pixels to the requested tile shape without silent stretch."""
-
-    target_height = request.height or array.shape[0]
-    target_width = request.width or array.shape[1]
-    actual_height, actual_width = array.shape[0], array.shape[1]
-
-    if actual_height == target_height and actual_width == target_width:
-        return array
-
-    if actual_height < target_height or actual_width < target_width:
-        return _place_clipped_geotiff_tile(array, request, response)
-
-    return _resize_tile_array(array, target_height, target_width)
-
-
 def _soft_fill_array(
     request: TileRequest,
     dtype: np.dtype[Any],
@@ -1095,7 +934,7 @@ def _load_tile_array(
                 "tile_decoder must return a 2D or 3D (y, x[, band]) array"
             )
 
-        array = _fit_tile_to_request(array, request, response)
+        array = fit_tile_to_request(array, request, response)
         return np.asarray(array, dtype=dtype)
     except Exception as exc:
         if on_tile_error is None or progress is None:

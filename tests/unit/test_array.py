@@ -21,7 +21,6 @@ from tilearray.array import (
     _fetch_with_cache,
     _organize_tiles,
     _read_cache,
-    _resize_tile_array,
     _write_cache,
     compute_thread_pool_size,
 )
@@ -34,6 +33,7 @@ from tilearray.decode import (
 from tilearray.errors import ConfigurationError, NetworkError, ValidationError
 from tilearray.fetch import FetchPolicy
 from tilearray.fetch_presets import ea_dsp_fetch_defaults
+from tilearray.placement import resize_tile_array
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.service.config import WCSConfig
 from tilearray.types import (
@@ -1129,7 +1129,7 @@ def test_decode_geotiff_handles_oversized_native_resolution_tile() -> None:
 @pytest.mark.unit
 def test_resize_tile_array_supports_non_divisible_downsample() -> None:
     source = np.arange(64 * 64, dtype=np.float32).reshape(64, 64)
-    resized = _resize_tile_array(source, 13, 13)
+    resized = resize_tile_array(source, 13, 13)
 
     assert resized.shape == (13, 13)
     assert np.isfinite(resized).all()
@@ -1500,7 +1500,7 @@ def test_resize_tile_array_preserves_rgb_bands() -> None:
         axis=-1,
     )
 
-    resized = _resize_tile_array(source, 32, 32)
+    resized = resize_tile_array(source, 32, 32)
 
     assert resized.shape == (32, 32, 3)
     assert float(resized[..., 0].mean()) == pytest.approx(200.0)
