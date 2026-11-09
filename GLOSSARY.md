@@ -1,6 +1,6 @@
 # Tilearray
 
-Domain language for fetching remote tiled geospatial data into georeferenced arrays. This context is **data access** (plan, fetch, decode, assemble) — not GIS processing or client-side warp.
+Domain language for fetching remote tiled geospatial data into georeferenced arrays. This context is **data access** (design, plan, fetch, decode, assemble) — not GIS processing or client-side warp.
 
 ## Spatial intent
 
@@ -14,15 +14,15 @@ _Avoid_: mosaic bbox as a synonym for AOI; planned extent when meaning the calle
 
 **Query CRS**:
 The coordinate reference system in which the AOI is expressed.
-_Avoid_: `crs` alone for this role; conflating query CRS with the mosaic’s pixel-grid CRS
+_Avoid_: `crs` alone for this role; conflating query CRS with the mosaic CRS
 
 **Service CRS**:
 The CRS used when asking the provider for data (the request sent to the host).
 _Avoid_: assuming it always equals the query CRS; calling it “output CRS”
 
 **Mosaic CRS**:
-The actual CRS of the returned pixel grid.
-_Avoid_: assuming it equals the query CRS; calling any convenient AOI CRS the mosaic CRS
+The actual CRS of the returned pixel grid. Publicly surface it under a clear key such as `mosaic_crs`.
+_Avoid_: bare `crs` as the mosaic story; assuming mosaic CRS equals the query CRS; calling any convenient AOI CRS the mosaic CRS
 
 **Output CRS**:
 An explicit ask for the **provider** to return pixels in a chosen CRS (server-side only, where supported). When unset, mosaic CRS follows the service/request contract for that protocol.
@@ -34,9 +34,17 @@ _Avoid_: requiring matrix ids or ScaleDenominator on the happy path
 
 ## Access flow
 
+**Design**:
+The validated binding that solves the job’s constraints for one AOI — ready request, service, fetch policy, and plan — shared before preview and create diverge. Internal only.
+_Avoid_: array entry; entry builder; exposing design as a public caller type
+
 **Plan**:
-A read-only preflight of what a create would request — counts, extents, CRS roles, and related summary — without assembling mosaic pixels.
-_Avoid_: treating plan as a second compute path; calling every internal tile list a “plan” in user-facing docs without context
+How fetch and assemble will be done for one AOI: the tile list, optionally carrying a native mosaic extent and grid shape when the protocol uses a fixed indexed grid.
+_Avoid_: calling the preflight summary a plan; keeping two public “plan” nouns; inferred mosaic metadata as a second informal channel
+
+**Preview**:
+What the job will look like — a read-only preflight of counts, extents, CRS roles, and related summary — without assembling mosaic pixels.
+_Avoid_: treating preview as a second compute path; calling preview “plan”
 
 **Create**:
 Bind fetch and error behaviour and produce the mosaic array (lazy by default) for one AOI.
@@ -49,14 +57,6 @@ _Avoid_: treating compute as the place to change host ceilings or soft-fail poli
 **Mosaic**:
 The assembled, georeferenced array covering the mosaic extent for one create.
 _Avoid_: mosaic as a synonym for a single tile; mosaic as an orchestration of many AOIs
-
-**Array entry**:
-The validated binding shared by plan and create: one AOI’s ready request, service, fetch policy, and planned tiles, before plan and create diverge.
-_Avoid_: entry builder (process jargon); treating array entry as a public caller type
-
-**Mosaic plan**:
-The set of tiles planned for one AOI, optionally carrying a native mosaic extent and grid shape when the protocol uses a fixed indexed grid.
-_Avoid_: confusing mosaic plan with the public preflight plan summary; inferred mosaic metadata as a second informal channel
 
 ## Tiles and placement
 
@@ -91,7 +91,7 @@ _Avoid_: coverage pad; default hard-fail behaviour; decode or auth failures disg
 ## Host access
 
 **Fetch policy**:
-Plan-time rules for how politely and concurrently tiles are fetched for a mosaic.
+Rules, bound when the design is formed, for how politely and concurrently tiles are fetched for a mosaic.
 _Avoid_: changing host ceilings at compute time; promising a cross-process global host lock the library does not own
 
 **Fetch preset**:
