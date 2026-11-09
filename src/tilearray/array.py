@@ -351,20 +351,20 @@ def create_array(
     ------------
     ``bbox_crs`` is the **query** CRS (how the bbox is described). There is
     **no** client-side raster warp onto another CRS.
-    ``attrs["bbox_crs"]`` records that query CRS; ``attrs["crs"]`` is the
+    ``attrs["bbox_crs"]`` records that query CRS; ``attrs["mosaic_crs"]`` is the
     mosaic / output CRS (actual pixel grid).
 
     * **WCS / WMS** — service config ``crs=`` is the request / subsetting CRS
       (defaults to ``bbox_crs``). Optional ``output_crs=`` asks the **server**
       to return pixels in that CRS (WCS ``outputCRS`` / WMS GetMap CRS).
-      ``attrs["crs"]`` matches ``output_crs`` when set, else the request CRS.
+      ``attrs["mosaic_crs"]`` matches ``output_crs`` when set, else the request CRS.
       Unsupported ``output_crs`` values fail loud. Rejected on XYZ / WMTS.
     * **XYZ / slippy WMTS** — pixels stay on the Web Mercator grid;
-      ``attrs["crs"]`` is ``EPSG:3857`` and the planned extent is the
+      ``attrs["mosaic_crs"]`` is ``EPSG:3857`` and the planned extent is the
       tile-union footprint (``bbox_crs`` interprets the query bbox only;
       ``bbox_requested`` records the caller's window). No client-side warp.
     * **WMTS with TileMatrixSet metadata** — pixels stay on the native matrix
-      grid; ``attrs["crs"]`` and the planned extent follow the matrix
+      grid; ``attrs["mosaic_crs"]`` and the planned extent follow the matrix
       SupportedCRS (query bbox / ``bbox_crs`` may differ; ``bbox_requested``
       records the caller's window). Auto-loads GetCapabilities for non-slippy
       matrices (or pass ``matrix=`` via ``**service_options``).
@@ -399,7 +399,7 @@ def create_array(
         above (native-grid mosaic label).
     output_crs:
         Optional **server-side** output CRS for WMS / WCS only. Labels
-        ``attrs["crs"]`` when set. Rejected for XYZ / WMTS.
+        ``attrs["mosaic_crs"]`` when set. Rejected for XYZ / WMTS.
     service_type:
         Optional protocol override when ``service_url`` is a bare string.
         Must match the config when a config is passed.

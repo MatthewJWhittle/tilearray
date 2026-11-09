@@ -23,7 +23,7 @@ da = create_array(
 arr = compute_mosaic(da)
 
 print(arr.shape)  # ~ (1024, 512, 3) for this window
-print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])
+print(da.attrs["mosaic_crs"], da.attrs["bbox_crs"], da.attrs["transform"])
 print(
     float(arr.x.min()),
     float(arr.y.min()),
@@ -76,7 +76,7 @@ bbox = (431900.0, 382700.0, 432700.0, 383500.0)
 da = create_array(config, bbox, CRS.EPSG_27700)
 elevation = compute_mosaic(da)
 print(elevation.shape, float(elevation.mean()))
-print(elevation.attrs["crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
+print(elevation.attrs["mosaic_crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
 ```
 
 ```{image} _static/guides/ea-lidar-elevation.png
@@ -84,7 +84,7 @@ print(elevation.attrs["crs"], elevation.attrs["transform"][:2], elevation.attrs[
 :width: 520px
 ```
 
-The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["crs"]` matches `bbox_crs=`. Visual walkthrough: {doc}`guides/ea-lidar`.
+The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["mosaic_crs"]` matches `bbox_crs=`. Visual walkthrough: {doc}`guides/ea-lidar`.
 
 ### WMS — Environment Agency Vegetation Object Model
 
@@ -137,7 +137,7 @@ da = create_array(
     bbox_crs="EPSG:4326",
 )
 arr = compute_mosaic(da)
-print(arr.shape, da.attrs["crs"])  # mosaic CRS is EPSG:25833, not the query CRS
+print(arr.shape, da.attrs["mosaic_crs"])  # mosaic CRS is EPSG:25833, not the query CRS
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 

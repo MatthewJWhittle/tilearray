@@ -57,7 +57,7 @@ da = create_array(
     expand_palette=True,  # full-colour RGB; omit for single-band palette indices
 )
 arr = compute_mosaic(da)
-print(arr.shape, da.attrs["crs"], da.attrs["transform"])
+print(arr.shape, da.attrs["mosaic_crs"], da.attrs["transform"])
 # Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — bbox_crs= is query only
 # PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
 arr.plot.imshow(rgb="band", add_colorbar=False)
@@ -85,7 +85,7 @@ config = WCSConfig.from_url(
 bbox = (431900.0, 382700.0, 432700.0, 383500.0)  # British National Grid
 da = create_array(config, bbox, CRS.EPSG_27700)
 elevation = compute_mosaic(da)
-print(elevation.shape, float(elevation.mean()), elevation.attrs["crs"])
+print(elevation.shape, float(elevation.mean()), elevation.attrs["mosaic_crs"])
 ```
 
 EA Lidar fetch defaults (`tilearray.fetch_presets.ea_dsp_fetch_defaults`) cap sustained concurrency at **10**. WMTS: [host guide](https://matthewjwhittle.github.io/tilearray/guides/wmts.html) (Kartverket — inspect → `target_resolution`; mosaic CRS follows the TileMatrixSet, not necessarily your query `bbox_crs=`). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html) → `build_config`.

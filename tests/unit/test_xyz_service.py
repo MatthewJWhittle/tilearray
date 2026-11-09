@@ -389,7 +389,7 @@ def test_xyz_single_tile_mosaic_attrs_are_native_3857(
     )
 
     assert result.shape == (256, 256)
-    assert result.attrs["crs"] == CRS.EPSG_3857.value
+    assert result.attrs["mosaic_crs"] == CRS.EPSG_3857.value
     assert result.attrs["bbox_requested"]["crs"] == CRS.EPSG_4326.value
     assert result.attrs["bbox_requested"]["min_x"] == pytest.approx(bbox.min_x)
     assert result.attrs["transform_source"] == "mosaic_bbox"
@@ -443,7 +443,7 @@ def test_xyz_london_z16_affine_matches_tile_union_3857(
     )
 
     assert result.shape == (height, width)
-    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["mosaic_crs"] == "EPSG:3857"
     exp_min_x, exp_min_y, exp_max_x, exp_max_y = _independent_union_3857(
         x_min, y_min, x_max, y_max, zoom
     )
@@ -492,7 +492,7 @@ def test_xyz_query_crs_3857_still_labels_native_grid(
         show_progress=False,
     )
 
-    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["mosaic_crs"] == "EPSG:3857"
     assert result.shape == (256, 256)
     a, _b, c, _d, e, f = result.attrs["transform"]
     assert c == pytest.approx(min_x)

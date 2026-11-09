@@ -32,8 +32,8 @@ bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
 da = create_array(config, bbox, CRS.EPSG_4326)
 arr = compute_mosaic(da)
 print(arr.shape, arr.dims)  # expect (y, x, band) for RGB JPEG
-print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])  # EPSG:3857 mosaic
-# Query bbox_crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
+print(da.attrs["mosaic_crs"], da.attrs["bbox_crs"], da.attrs["transform"])  # EPSG:3857 mosaic
+# Query bbox_crs= is lon/lat; mosaic attrs["mosaic_crs"] is EPSG:3857 (tile-union metres)
 # PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```

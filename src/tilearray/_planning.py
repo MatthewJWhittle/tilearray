@@ -700,7 +700,7 @@ class ArrayRequest(BaseModel):
         effective_format: Format | None,
     ) -> dict[str, Any]:
         attrs: dict[str, Any] = {
-            "crs": self.target_crs.value,
+            "mosaic_crs": self.target_crs.value,
             "bbox_crs": self.bbox_crs.value,
             "service_url": self.service_url,
             "service_type": service.service_type.value,

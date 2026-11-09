@@ -154,7 +154,7 @@ def test_live_kartverket_inspect_opaque_url_smoke() -> None:
         bbox_crs=CRS.EPSG_4326,
     )
     assert preview.request_count >= 1
-    assert preview.crs in {"EPSG:25833", "25833"}
+    assert preview.mosaic_crs in {"EPSG:25833", "25833"}
 
 
 @pytest.mark.integration
@@ -224,7 +224,7 @@ def test_live_gibs_xyz_bluemarble_smoke() -> None:
     assert arr.sizes["band"] == 3
     assert arr.dtype == np.uint8
     assert arr.attrs.get("palette_mode") != "indices"
-    assert da.attrs["crs"] == "EPSG:3857"
+    assert da.attrs["mosaic_crs"] == "EPSG:3857"
 
 
 @pytest.mark.integration
@@ -251,7 +251,7 @@ def test_live_ea_vom_wms_smoke() -> None:
     arr = compute_mosaic(da)
     assert isinstance(arr, xr.DataArray)
     assert arr.size > 0
-    assert da.attrs["crs"] in {"EPSG:27700", "27700"}
+    assert da.attrs["mosaic_crs"] in {"EPSG:27700", "27700"}
     assert da.attrs["service_type"] == "WMS"
 
 
@@ -282,7 +282,7 @@ def test_live_kartverket_wmts_oslo_smoke() -> None:
     arr = compute_mosaic(da)
 
     assert isinstance(arr, xr.DataArray)
-    assert da.attrs["crs"] == "EPSG:25833"
+    assert da.attrs["mosaic_crs"] == "EPSG:25833"
     assert arr.shape[0] >= 256
     assert arr.shape[1] >= 256
     assert float(arr.x.min()) < float(arr.x.max())

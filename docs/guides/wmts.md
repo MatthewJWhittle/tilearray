@@ -25,11 +25,11 @@ config = inspection.build_config(
 
 bbox = (10.6, 59.85, 10.8, 59.95)  # query lon/lat near Oslo
 preview = preview_array(config, bbox, bbox_crs="EPSG:4326")
-print(preview.matrix_id, preview.planned_pixel_size, preview.crs, preview.bbox_crs)
+print(preview.matrix_id, preview.planned_pixel_size, preview.mosaic_crs, preview.bbox_crs)
 
 da = create_array(config, bbox, bbox_crs="EPSG:4326", show_progress=False)
 arr = compute_mosaic(da)
-print(arr.shape, da.attrs["crs"], da.attrs.get("bbox_requested"))
+print(arr.shape, da.attrs["mosaic_crs"], da.attrs.get("bbox_requested"))
 print(float(arr.x.min()), float(arr.x.max()), float(arr.y.min()), float(arr.y.max()))
 # PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
 arr.plot.imshow(rgb="band", add_colorbar=False)
@@ -47,7 +47,7 @@ Map data © Kartverket (CC BY 4.0). Keep crawls modest. This host often returns 
 What to notice:
 
 - You stated **job terms**: service, layer, matrix set, ~10 m spacing, AOI + `bbox_crs=`. Wire details (REST template, ScaleDenominator, matrix id `08`) stay inside inspect / `build_config`.
-- Output `attrs["crs"]` is **EPSG:25833** (matrix SupportedCRS), not the query CRS. `attrs["bbox_crs"]` keeps the lon/lat query.
+- Output `attrs["mosaic_crs"]` is **EPSG:25833** (matrix SupportedCRS), not the query CRS. `attrs["bbox_crs"]` keeps the lon/lat query.
 - Coordinates are pixel centres on the tile grid; the returned extent may expand to whole tiles.
 - `target_resolution` selects a native TileMatrix — tilearray does **not** resample pixels to that spacing. Same-grid trim is ordinary xarray slicing.
 
