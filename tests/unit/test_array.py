@@ -16,8 +16,8 @@ from pytest import MonkeyPatch
 import tilearray._planning as planning_module
 import tilearray.array as array_module
 import tilearray.decode as decode_module
+from tilearray._planning import ArrayRequest
 from tilearray.array import (
-    ArrayRequest,
     _fetch_with_cache,
     _organize_tiles,
     _read_cache,
@@ -1355,17 +1355,21 @@ def test_resolve_fetch_policy_keeps_host_ceiling_on_lower_override() -> None:
     )
     assert config.max_concurrent_requests == 10
 
-    polite = array_module._resolve_fetch_policy(config, {"max_concurrent_requests": 1})
+    polite = planning_module.resolve_fetch_policy(
+        config, {"max_concurrent_requests": 1}
+    )
     assert polite.max_concurrent == 10
     assert polite.call_max_concurrent == 1
     assert polite.adaptive_concurrency is True
     assert polite.forbidden_circuit_breaker is True
 
-    raised = array_module._resolve_fetch_policy(config, {"max_concurrent_requests": 12})
+    raised = planning_module.resolve_fetch_policy(
+        config, {"max_concurrent_requests": 12}
+    )
     assert raised.max_concurrent == 12
     assert raised.call_max_concurrent is None
 
-    bare = array_module._resolve_fetch_policy(None, {"max_concurrent_requests": 1})
+    bare = planning_module.resolve_fetch_policy(None, {"max_concurrent_requests": 1})
     assert bare.max_concurrent == 1
     assert bare.call_max_concurrent is None
 
