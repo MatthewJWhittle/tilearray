@@ -40,3 +40,18 @@ make docs          # Sphinx HTML; offline
 ```
 
 Live guide figures: `make docs-artifacts` (network). Do not bump the package version unless asked. One theme per PR.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues for MatthewJWhittle/tilearray via `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/`. See `docs/agents/domain.md`.
+

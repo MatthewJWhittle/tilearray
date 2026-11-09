@@ -35,6 +35,7 @@ exclude_patterns = [
     ".DS_Store",
     "**/.ipynb_checkpoints",
     # Maintainer / agent pages — kept in-repo for CONTRIBUTING / AGENTS, not the published site
+    "agents",
     "api-freeze-checklist.md",
     "building-docs.md",
     "docs-writing-principles.md",
