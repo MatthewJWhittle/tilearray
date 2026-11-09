@@ -22,6 +22,7 @@ from dask.array import concatenate as da_concatenate
 from dask.array import from_delayed as da_from_delayed
 from dask.delayed import Delayed, delayed
 
+from ._entry import from_public_args as _from_public_args
 from ._planning import (
     FETCH_POLICY_ATTR as _FETCH_POLICY_ATTR,
 )
@@ -33,9 +34,6 @@ from ._planning import (
 )
 from ._planning import (
     TILE_ERRORS_ATTR as _TILE_ERRORS_ATTR,
-)
-from ._planning import (
-    ArrayRequest,
 )
 from ._planning import (
     cache_key as _cache_key,
@@ -54,9 +52,6 @@ from ._planning import (
 )
 from ._planning import (
     resolve_decoder as _resolve_decoder,
-)
-from ._planning import (
-    resolve_fetch_policy as _resolve_fetch_policy,
 )
 from .decode import (
     DEFAULT_BAND_POLICIES,
@@ -473,55 +468,30 @@ def create_array(
         Lazy Dask-backed unless ``compute=True``.
     """
 
-    service_config = (
-        service_url if isinstance(service_url, ServiceConfigModel) else None
-    )
-    base_service_url = (
-        service_config.base_url if service_config else cast(str, service_url)
-    )
-
-    if (
-        service_config
-        and service_type is not None
-        and service_type != service_config.service_type
-    ):
-        raise ValidationError(
-            "Provided service_type does not match the ServiceConfig service_type"
-        )
-
     tile_error_handler = _resolve_on_tile_error(
         on_tile_error,
         soft_fail=soft_fail,
         soft_fail_max_fraction=soft_fail_max_fraction,
     )
 
-    options = dict(service_options)
-    if "crs" in options:
-        raise ValidationError(
-            "create_array no longer accepts crs=; pass bbox_crs= for the query "
-            "CRS (service config crs= for request defaults is unchanged)."
-        )
-    if output_crs is not None:
-        if "output_crs" in options:
-            raise ValidationError(
-                "pass output_crs= once (named argument or service option, not both)"
-            )
-        options["output_crs"] = output_crs
-    fetch_policy = _resolve_fetch_policy(service_config, options)
-
-    request = ArrayRequest.from_inputs(
-        service_url=base_service_url,
-        service_config=service_config,
-        bbox_input=bbox,
-        bbox_crs_input=bbox_crs,
-        chunk_size_input=chunk_size,
-        grid_shape_input=grid_shape,
-        output_format_input=output_format,
-        cache_dir_input=cache_dir,
-        service_options_input=options,
+    entry = _from_public_args(
+        service_url,
+        bbox,
+        bbox_crs,
+        service_type=service_type,
+        chunk_size=chunk_size,
+        grid_shape=grid_shape,
+        output_format=output_format,
+        cache_dir=cache_dir,
+        output_crs=output_crs,
+        **service_options,
     )
+    request = entry.request
+    service = entry.service
+    fetch_policy = entry.fetch_policy
+    tile_requests = list(entry.tile_requests)
+    tile_options = dict(entry.tile_options)
 
-    service = request.build_service(service_type)
     effective_format = request.effective_format(service)
     resolved_band_policy: BandPolicy | None = band_policy
     if resolved_band_policy is None and effective_format is not None:
@@ -533,8 +503,6 @@ def create_array(
         band_policy=resolved_band_policy,
         expand_palette=expand_palette,
     )
-
-    tile_requests, tile_options = request.plan_tile_requests(service)
 
     rows, cols = request.grid_shape
     tile_grid = _organize_tiles(tile_requests, rows, cols)

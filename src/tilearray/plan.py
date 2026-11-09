@@ -5,8 +5,9 @@ concurrency ceiling before ``create_array`` / ``compute_mosaic``.
 Does not invent wall-clock time, provider cost, or a second compute path.
 
 Shared request / policy / grid / cache helpers live in
-:mod:`tilearray._planning` — this module imports nothing private from
-:mod:`tilearray.array`.
+:mod:`tilearray._planning`; the create/plan preamble is
+:func:`tilearray._entry.from_public_args`. This module imports nothing
+private from :mod:`tilearray.array`.
 """
 
 from __future__ import annotations
@@ -18,11 +19,11 @@ from typing import Any, Literal
 import numpy as np
 import xarray as xr
 
+from ._entry import from_public_args
 from ._planning import (
     FETCH_POLICY_ATTR,
     PROGRESS_REF_ATTR,
     TILE_ERRORS_ATTR,
-    ArrayRequest,
     cache_key,
     fetch_policy_from_summary,
     fetch_policy_summary,
@@ -30,7 +31,6 @@ from ._planning import (
     probe_tile_band_count,
     recommend_grid_shape,
     resolve_decoder,
-    resolve_fetch_policy,
 )
 from .decode import default_band_count_for_format
 from .errors import ValidationError
@@ -262,50 +262,24 @@ def plan_array(
     ``create_array`` → ``compute_mosaic``.
     """
 
-    service_config = (
-        service_url if isinstance(service_url, ServiceConfigModel) else None
+    entry = from_public_args(
+        service_url,
+        bbox,
+        bbox_crs,
+        service_type=service_type,
+        chunk_size=chunk_size,
+        grid_shape=grid_shape,
+        output_format=output_format,
+        cache_dir=cache_dir,
+        output_crs=output_crs,
+        **service_options,
     )
-    base_service_url = service_config.base_url if service_config else str(service_url)
-
-    if (
-        service_config
-        and service_type is not None
-        and service_type != service_config.service_type
-    ):
-        raise ValidationError(
-            "Provided service_type does not match the ServiceConfig service_type"
-        )
-
-    options = dict(service_options)
-    if "crs" in options:
-        raise ValidationError(
-            "plan_array no longer accepts crs=; pass bbox_crs= for the query "
-            "CRS (service config crs= for request defaults is unchanged)."
-        )
-    if output_crs is not None:
-        if "output_crs" in options:
-            raise ValidationError(
-                "pass output_crs= once (named argument or service option, not both)"
-            )
-        options["output_crs"] = output_crs
-    fetch_policy = resolve_fetch_policy(service_config, options)
-
-    request = ArrayRequest.from_inputs(
-        service_url=base_service_url,
-        service_config=service_config,
-        bbox_input=bbox,
-        bbox_crs_input=bbox_crs,
-        chunk_size_input=chunk_size,
-        grid_shape_input=grid_shape,
-        output_format_input=output_format,
-        cache_dir_input=cache_dir,
-        service_options_input=options,
-    )
-
-    service = request.build_service(service_type)
-    tile_requests, _tile_options = request.plan_tile_requests(service)
-    if not tile_requests:
-        raise ValidationError("Planning produced no tile requests for this AOI")
+    request = entry.request
+    service = entry.service
+    fetch_policy = entry.fetch_policy
+    tile_requests = list(entry.tile_requests)
+    tile_options = dict(entry.tile_options)
+    options = dict(request.service_options)
 
     rows, cols = request.grid_shape
     tile_grid = organize_tiles(tile_requests, rows, cols)
@@ -402,7 +376,7 @@ def plan_array(
 
     format_value = effective_format.value if effective_format is not None else None
 
-    matrix_id = _matrix_or_zoom_id(service, _tile_options)
+    matrix_id = _matrix_or_zoom_id(service, tile_options)
     planned_pixel_size = _planned_pixel_size_from_plan(
         planned_bbox=request.bbox,
         pixel_height=pixel_height,

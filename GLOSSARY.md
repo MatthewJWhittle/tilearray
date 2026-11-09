@@ -22,6 +22,8 @@ Owned by `tilearray.placement` (`fit_tile_to_request`). Decode stays pixels-from
 
 Owned by `tilearray.mosaic_plan`. Services no longer publish informal `inferred_*` attributes; `ArrayRequest.plan_tile_requests` applies the plan locally.
 
-## Entry builder (planned)
+## Entry builder
 
-Internal shared builder for the duplicated `create_array` / `plan_array` preamble (config vs URL, CRS/output_crs, fetch policy). Name at ticket time (`_entry` / `from_public_args`). Follow-on deepening after MosaicPlan.
+**Entry builder** is the shared create/plan preamble: public argument bag → validated request, service, fetch policy, and planned tiles.
+
+Owned by `tilearray._entry` (`from_public_args` → `ArrayEntry`). `create_array` and `plan_array` only diverge after that into mosaic assembly vs plan summary. Planning helpers stay in `_planning`; this module composes them.
