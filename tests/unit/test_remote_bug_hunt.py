@@ -16,7 +16,7 @@ import pytest
 import respx
 from PIL import Image
 
-from tilearray import create_array, inspect_endpoint, plan_array
+from tilearray import create_array, inspect_endpoint, preview_array
 from tilearray.array import _soft_fill_array
 from tilearray.errors import (
     ConfigurationError,
@@ -305,7 +305,7 @@ def test_build_config_output_crs_rejected_on_wmts_config() -> None:
     )
     # Passing output_crs through create_array/plan must stay loud.
     with pytest.raises(ValidationError, match="output_crs"):
-        plan_array(
+        preview_array(
             config,
             bbox=(-10, -10, 10, 10),
             bbox_crs=CRS.EPSG_4326,

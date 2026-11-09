@@ -29,9 +29,9 @@ WCS, WMS, WMTS, and XYZ share one request-and-decode path. Host **presets** in `
 
 Adapters turn your bbox + chunk/grid settings into an ordered list of tile requests (XYZ/WMTS grids, WCS coverage subsets). A larger AOI means more requests — not a different client API. For non-slippy WMTS TileMatrixSets, `create_array` loads GetCapabilities automatically (or you can pass an explicit `matrix=`). Planning uses that set’s SupportedCRS and ScaleDenominator in CRS units; the mosaic extent and `attrs["crs"]` follow the native tile grid rather than a guessed Web Mercator layout. See {doc}`guides/wmts`.
 
-### Inspect the plan before you fetch
+### Preview before you fetch
 
-For a large AOI, call {py:func}`~tilearray.plan_array` with the same config / bbox / crs (and optional `resolution=` / `chunk_size=` / `cache_dir=`) you would pass to `create_array`. It returns an {py:class}`~tilearray.ArrayPlan` — printable via `print(plan)` / `plan.summary()` — covering:
+For a large AOI, call {py:func}`~tilearray.preview_array` with the same config / bbox / crs (and optional `resolution=` / `chunk_size=` / `cache_dir=`) you would pass to `create_array`. It returns an {py:class}`~tilearray.ArrayPreview` — printable via `print(preview)` / `preview.summary()` — covering:
 
 - requested vs planned (snapped) bbox and CRS
 - `grid_shape`, chunk size, mosaic pixel dimensions, request count
@@ -44,10 +44,10 @@ Estimates never invent transfer time, provider cost, or band counts. XYZ/WMTS no
 Pure geometry helper when you only need the grid: {py:func}`~tilearray.recommend_grid_shape` (`bbox` + `chunk_size` + `resolution` → `(rows, cols)`). After compute (or mid-flight on a lazy array), {py:func}`~tilearray.fetch_summary` reports done/total, soft-fails, and fetcher pressure counters when available.
 
 ```python
-from tilearray import plan_array, create_array, compute_mosaic, fetch_summary
+from tilearray import preview_array, create_array, compute_mosaic, fetch_summary
 
-plan = plan_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
-print(plan)                       # read-only preflight
+preview = preview_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
+print(preview)                    # read-only preflight
 da = create_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
 result = compute_mosaic(da)
 print(fetch_summary(da))          # progress / pressure snapshot
@@ -160,7 +160,7 @@ Three CRS roles matter ({doc}`design-principles`):
 | **Service / request CRS** | CRS used when talking to the provider |
 | **Output / array CRS** | Actual CRS of returned pixels + transform |
 
-`bbox_crs=` is the query CRS on `create_array` / `plan_array` (the old overloaded `crs=` argument there was removed). Any pyproj-valid CRS works (presets such as `CRS.EPSG_27700`, or strings like `"EPSG:25833"` / `"EPSG:28992"`); invalid identifiers raise {py:exc}`~tilearray.ValidationError` before planning. For WCS / WMS the query CRS also labels the mosaic (`attrs["crs"]`). For **XYZ / slippy WMTS**, pixels stay on the Web Mercator grid; `attrs["crs"]` is `EPSG:3857` and the planned extent is the tile union (`bbox_requested` records the caller's window). For **WMTS with TileMatrixSet metadata**, pixels stay on the native grid; `attrs["crs"]` and the planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). `attrs["bbox_crs"]` always records the query CRS. tilearray does **not** warp pixels client-side — a lon/lat query against a projected grid is planning plus native-grid assemble. See {doc}`design-principles`. Parameter reference: {py:func}`~tilearray.create_array`.
+`bbox_crs=` is the query CRS on `create_array` / `preview_array` (the old overloaded `crs=` argument there was removed). Any pyproj-valid CRS works (presets such as `CRS.EPSG_27700`, or strings like `"EPSG:25833"` / `"EPSG:28992"`); invalid identifiers raise {py:exc}`~tilearray.ValidationError` before planning. For WCS / WMS the query CRS also labels the mosaic (`attrs["crs"]`). For **XYZ / slippy WMTS**, pixels stay on the Web Mercator grid; `attrs["crs"]` is `EPSG:3857` and the planned extent is the tile union (`bbox_requested` records the caller's window). For **WMTS with TileMatrixSet metadata**, pixels stay on the native grid; `attrs["crs"]` and the planned extent follow the matrix SupportedCRS (query CRS may differ; `bbox_requested` records the caller's window). `attrs["bbox_crs"]` always records the query CRS. tilearray does **not** warp pixels client-side — a lon/lat query against a projected grid is planning plus native-grid assemble. See {doc}`design-principles`. Parameter reference: {py:func}`~tilearray.create_array`.
 
 **Imagery vs numerical coverages:** XYZ/WMS (and many WMTS) paths are often *rendered* tiles (JPEG/PNG, sometimes palette indices unless `expand_palette=True`). WCS elevation is a *numerical* coverage (GeoTIFF, nodata → NaN). Do not assume colour mosaics imply analysis-grade values, or elevation nodata rules for imagery.
 
@@ -183,9 +183,9 @@ Three CRS roles matter ({doc}`design-principles`):
 
 **Tile progress:** multi-tile mosaics show a tqdm-style bar by default while tiles complete (same `on_progress` / `FetchProgress` path in scripts and notebooks). Quiet for CI / redirected scripts with `show_progress=False` or `TILEARRAY_PROGRESS=0`. Pass your own `on_progress=` to replace the default bar. Single-tile plans stay quiet unless you force progress.
 
-**Cache lifecycle:** each successful tile write stores `{sha256}.tile` plus a small `{sha256}.meta` sidecar under `cache_dir`. Keys hash URL, params, format, bbox, and width/height — change any of those and you miss. Warm hits skip HTTP but still decode; they do not bypass the shared host concurrency gate when a cold sibling is fetching. Clear the directory (or delete individual `.tile` files) after changing decode expectations, credentials, or when you suspect corruption. {py:func}`~tilearray.plan_array` reports how many planned tiles are already warm so you can size a cold run before `compute_mosaic`.
+**Cache lifecycle:** each successful tile write stores `{sha256}.tile` plus a small `{sha256}.meta` sidecar under `cache_dir`. Keys hash URL, params, format, bbox, and width/height — change any of those and you miss. Warm hits skip HTTP but still decode; they do not bypass the shared host concurrency gate when a cold sibling is fetching. Clear the directory (or delete individual `.tile` files) after changing decode expectations, credentials, or when you suspect corruption. {py:func}`~tilearray.preview_array` reports how many planned tiles are already warm so you can size a cold run before `compute_mosaic`.
 
-Memory tracks **what you compute** (full mosaic, a reduction, a window) — not automatically the whole AOI. Scale with bbox, chunks, and fetch policy. Use `plan_array` for a rough in-memory byte estimate when band count is known.
+Memory tracks **what you compute** (full mosaic, a reduction, a window) — not automatically the whole AOI. Scale with bbox, chunks, and fetch policy. Use `preview_array` for a rough in-memory byte estimate when band count is known.
 
 ---
 

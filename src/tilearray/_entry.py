@@ -1,9 +1,9 @@
-"""Shared create/plan entry path from the public argument bag.
+"""Shared create/preview entry path from the public argument bag.
 
-Owns the duplicated ``create_array`` / ``plan_array`` preamble: config vs URL,
+Owns the duplicated ``create_array`` / ``preview_array`` preamble: config vs URL,
 ``service_type`` checks, ``crs=`` rejection, ``output_crs`` merge, fetch-policy
 resolution, ``ArrayRequest`` construction, service build, and tile planning.
-Callers then diverge into mosaic assembly vs plan summary.
+Callers then diverge into mosaic assembly vs preview summary.
 
 Helpers that already live in :mod:`tilearray._planning` stay there; this module
 composes them.
@@ -33,7 +33,7 @@ from .types import (
 
 @dataclass(frozen=True)
 class ArrayEntry:
-    """Validated create/plan entry: request, service, fetch policy, and tiles."""
+    """Validated create/preview entry: request, service, fetch policy, and tiles."""
 
     request: ArrayRequest
     service: BaseService
@@ -59,7 +59,7 @@ def from_public_args(
     output_crs: CRS | str | int | None = None,
     **service_options: Any,
 ) -> ArrayEntry:
-    """Build the shared create/plan entry from the public argument bag.
+    """Build the shared create/preview entry from the public argument bag.
 
     Returns ``(request, service, fetch_policy, tile_requests, tile_options)``
     bundled as :class:`ArrayEntry`. Does not decode tiles or build a mosaic.
@@ -84,7 +84,7 @@ def from_public_args(
     options = dict(service_options)
     if "crs" in options:
         raise ValidationError(
-            "create_array / plan_array no longer accepts crs=; pass bbox_crs= "
+            "create_array / preview_array no longer accepts crs=; pass bbox_crs= "
             "for the query CRS (service config crs= for request defaults is "
             "unchanged)."
         )

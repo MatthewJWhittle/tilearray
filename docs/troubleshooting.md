@@ -16,16 +16,16 @@ result = compute_mosaic(da)          # or compute_mosaic(da.mean())
 
 ## How big will this AOI be?
 
-Before a large compute, inspect the plan without fetching mosaic pixels:
+Before a large compute, preview the job without fetching mosaic pixels:
 
 ```python
-from tilearray import plan_array, recommend_grid_shape, fetch_summary
+from tilearray import preview_array, recommend_grid_shape, fetch_summary
 
-plan = plan_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
-print(plan)  # requests, pixels, concurrency ceiling, cache warm/cold, unknowns
+preview = preview_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
+print(preview)  # requests, pixels, concurrency ceiling, cache warm/cold, unknowns
 ```
 
-Tune `chunk_size` / `resolution` / `grid_shape` / `max_concurrent_requests` from that summary — you should not need protocol-specific tile maths. `recommend_grid_shape(bbox, chunk_size=…, resolution=…)` is the pure helper when you only need `(rows, cols)`. Band counts and byte estimates stay **unknown** for JPEG/PNG until a probe or `create_array`; GeoTIFF elevation plans report 1 band from format policy. After compute, `print(fetch_summary(da))` shows done/total, soft-fails, and AIMD / breaker counters when a shared fetcher exists.
+Tune `chunk_size` / `resolution` / `grid_shape` / `max_concurrent_requests` from that summary — you should not need protocol-specific tile maths. `recommend_grid_shape(bbox, chunk_size=…, resolution=…)` is the pure helper when you only need `(rows, cols)`. Band counts and byte estimates stay **unknown** for JPEG/PNG until a probe or `create_array`; GeoTIFF elevation format policy reports 1 band. After compute, `print(fetch_summary(da))` shows done/total, soft-fails, and AIMD / breaker counters when a shared fetcher exists.
 
 ## Large mosaic looks hung / want quiet CI
 
@@ -124,7 +124,7 @@ These fail **before** a useful mosaic exists. Exception text names what was wron
 
 ## Disk cache
 
-Pass `cache_dir=` to `create_array` / `load_array` (and the same path to `plan_array` when preflighting) to reuse tile bytes across runs. Each tile is `{sha256}.tile` + `{sha256}.meta` keyed by URL/params/format/bbox/size. Warm reads sniff the body when response headers lie (e.g. multipart WCS). Warm hits skip the network for that tile but cold siblings still share the host concurrency gate. Clear the directory if you change decode expectations, auth params, or suspect corrupt cache entries. `plan_array(...).summary()` reports warm/cold counts for the planned request set before you spend a cold compute.
+Pass `cache_dir=` to `create_array` / `load_array` (and the same path to `preview_array` when preflighting) to reuse tile bytes across runs. Each tile is `{sha256}.tile` + `{sha256}.meta` keyed by URL/params/format/bbox/size. Warm reads sniff the body when response headers lie (e.g. multipart WCS). Warm hits skip the network for that tile but cold siblings still share the host concurrency gate. Clear the directory if you change decode expectations, auth params, or suspect corrupt cache entries. `preview_array(...).summary()` reports warm/cold counts for the planned request set before you spend a cold compute.
 
 ## Private / keyed hosts
 

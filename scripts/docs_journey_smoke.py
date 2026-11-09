@@ -16,7 +16,7 @@ import numpy as np
 import respx
 from PIL import Image
 
-from tilearray import create_array, inspect_endpoint, plan_array
+from tilearray import create_array, inspect_endpoint, preview_array
 from tilearray.decode import read_image_bytes
 from tilearray.types import CRS, Format
 
@@ -49,12 +49,12 @@ def main() -> int:
             tile_matrix_set="GoogleMapsCompatible",
             target_resolution=100_000.0,
         )
-        plan = plan_array(
+        preview = preview_array(
             config,
             bbox=(-10.0, -10.0, 10.0, 10.0),
             bbox_crs=CRS.EPSG_4326,
         )
-        assert plan.request_count >= 1
+        assert preview.request_count >= 1
 
     # Palette plot-contract via decode (create_array path is locked in pytest).
     rgb = read_image_bytes(_palette_png(), expand_palette=True)

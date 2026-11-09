@@ -1,8 +1,8 @@
-"""Shared planning helpers for :mod:`tilearray.array` and :mod:`tilearray.plan`.
+"""Shared planning helpers for :mod:`tilearray.array` and :mod:`tilearray.preview`.
 
 Owns :class:`ArrayRequest`, decoder resolution, band probing, attr-key
 constants, fetch-policy snapshots, tile-grid organisation, cache keys, and
-:func:`recommend_grid_shape` so ``plan_array`` does not reach into private
+:func:`recommend_grid_shape` so ``preview_array`` does not reach into private
 ``array`` symbols.
 
 Band probing needs the create-path tile loader. That is a documented cycle:
@@ -132,7 +132,7 @@ def resolve_fetch_policy(
     service_config: ServiceConfigModel | None,
     service_options: dict[str, Any],
 ) -> FetchPolicy:
-    """Build the fetch policy for :func:`~tilearray.create_array` / plan.
+    """Build the fetch policy for :func:`~tilearray.create_array` / preview.
 
     ``max_concurrent`` on the returned policy is the **shared process-local
     gate ceiling** (host / preset). A lower ``max_concurrent_requests`` override
@@ -416,7 +416,7 @@ def _positive_size_pair(value: tuple[int, int], *, label: str) -> tuple[int, int
 
 
 class ArrayRequest(BaseModel):
-    """Validated mosaic request shared by :func:`create_array` and :func:`plan_array`."""
+    """Validated mosaic request shared by :func:`create_array` and :func:`preview_array`."""
 
     service_config: ServiceConfigModel | None = None
     service_url: str
