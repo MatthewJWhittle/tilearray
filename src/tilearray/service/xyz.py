@@ -18,9 +18,6 @@ _WEB_MERCATOR_ORIGIN = math.pi * 6378137.0
 class XYZService(BaseService):
     """Client for XYZ / slippy-map tile endpoints."""
 
-    inferred_grid_shape: tuple[int, int] | None = None
-    inferred_mosaic_bbox: BoundingBox | None = None
-
     def __init__(
         self,
         base_url: str,
@@ -57,7 +54,6 @@ class XYZService(BaseService):
         chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
-        self.inferred_mosaic_bbox = None
         zoom_value = options.get("zoom", self.zoom)
         tile_size_value = options.get("tile_size", self.tile_size)
         zoom = int(zoom_value) if isinstance(zoom_value, (int, str)) else self.zoom
@@ -67,18 +63,11 @@ class XYZService(BaseService):
             else self.tile_size
         )
         # crs= / options["crs"] is query CRS only (bbox already normalised by
-        # ArrayRequest); slippy mosaics are labelled EPSG:3857 via
-        # inferred_mosaic_bbox — do not label TileGeometry with the query CRS.
+        # ArrayRequest); slippy mosaics are labelled EPSG:3857 via MosaicPlan
+        # (indexed tile union) — do not label TileGeometry with the query CRS.
 
         working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
         x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
-
-        rows = y_max - y_min + 1
-        cols = x_max - x_min + 1
-        self.inferred_grid_shape = (rows, cols)
-        self.inferred_mosaic_bbox = _tile_union_bounds_3857(
-            x_min, y_min, x_max, y_max, zoom
-        )
 
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
@@ -163,21 +152,6 @@ def _tile_bounds_3857(x: int, y: int, zoom: int) -> BoundingBox:
         min_y=min_y,
         max_x=max_x,
         max_y=max_y,
-        crs=CRS.EPSG_3857,
-    )
-
-
-def _tile_union_bounds_3857(
-    x_min: int, y_min: int, x_max: int, y_max: int, zoom: int
-) -> BoundingBox:
-    """Tile-aligned mosaic extent in EPSG:3857 for an inclusive XYZ index range."""
-
-    span = _tile_span_3857(zoom)
-    return BoundingBox(
-        min_x=-_WEB_MERCATOR_ORIGIN + x_min * span,
-        min_y=_WEB_MERCATOR_ORIGIN - (y_max + 1) * span,
-        max_x=-_WEB_MERCATOR_ORIGIN + (x_max + 1) * span,
-        max_y=_WEB_MERCATOR_ORIGIN - y_min * span,
         crs=CRS.EPSG_3857,
     )
 

@@ -25,7 +25,6 @@ from .http import (
 from .xyz import (
     _tile_bounds_3857,
     _tile_range_for_bbox,
-    _tile_union_bounds_3857,
 )
 
 logger = logging.getLogger(__name__)
@@ -232,9 +231,6 @@ class WMTSParser:
 class WMTSService(BaseService):
     """Client for WMTS GetTile endpoints (REST template or KVP)."""
 
-    inferred_grid_shape: tuple[int, int] | None = None
-    inferred_mosaic_bbox: BoundingBox | None = None
-
     def __init__(
         self,
         base_url: str,
@@ -339,7 +335,6 @@ class WMTSService(BaseService):
         chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
-        self.inferred_mosaic_bbox = None
         tile_matrix_id = _coerce_tile_matrix_id(
             options.get("tile_matrix", self.tile_matrix)
         )
@@ -575,13 +570,6 @@ class WMTSService(BaseService):
         working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
         x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
 
-        rows = y_max - y_min + 1
-        cols = x_max - x_min + 1
-        self.inferred_grid_shape = (rows, cols)
-        self.inferred_mosaic_bbox = _tile_union_bounds_3857(
-            x_min, y_min, x_max, y_max, zoom
-        )
-
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
                 tile_bbox = _tile_bounds_3857(tile_x, tile_y, zoom)
@@ -671,22 +659,6 @@ class WMTSService(BaseService):
                 )
                 + "."
             )
-
-        rows = max_row - min_row + 1
-        cols = max_col - min_col + 1
-        self.inferred_grid_shape = (rows, cols)
-
-        mosaic_min_x = matrix.top_left_x + min_col * span_x
-        mosaic_max_x = matrix.top_left_x + (max_col + 1) * span_x
-        mosaic_max_y = matrix.top_left_y - min_row * span_y
-        mosaic_min_y = matrix.top_left_y - (max_row + 1) * span_y
-        self.inferred_mosaic_bbox = BoundingBox(
-            min_x=mosaic_min_x,
-            min_y=mosaic_min_y,
-            max_x=mosaic_max_x,
-            max_y=mosaic_max_y,
-            crs=matrix_crs,
-        )
 
         zoom: int | None = (
             int(matrix.identifier) if matrix.identifier.isdigit() else None

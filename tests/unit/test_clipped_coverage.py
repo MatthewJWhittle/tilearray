@@ -14,6 +14,7 @@ import tilearray._planning as planning_module
 import tilearray.array as array_module
 from tilearray.decode import decoder_for_format
 from tilearray.errors import ValidationError
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.placement import (
     GeoTransform,
     fit_tile_to_request,
@@ -210,21 +211,21 @@ def test_create_array_clipped_wcs_keeps_shape_and_values(
         coverage_id = "dummy"
         output_format = Format.GEOTIFF
 
-        def generate_tile_requests(
-            self, *args: Any, **kwargs: Any
-        ) -> list[TileRequest]:
+        def generate_tile_requests(self, *args: Any, **kwargs: Any) -> MosaicPlan:
             del args, kwargs
-            return [
-                TileRequest(
-                    url="http://example.com/wcs",
-                    params={},
-                    output_format=Format.GEOTIFF,
-                    crs=CRS.EPSG_27700,
-                    bbox=bbox,
-                    width=8,
-                    height=8,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/wcs",
+                        params={},
+                        output_format=Format.GEOTIFF,
+                        crs=CRS.EPSG_27700,
+                        bbox=bbox,
+                        width=8,
+                        height=8,
+                    ),
                 )
-            ]
+            )
 
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: ClippedWCS())
     monkeypatch.setattr(
@@ -282,30 +283,30 @@ def test_adjacent_clipped_tiles_seam(
         coverage_id = "dummy"
         output_format = Format.GEOTIFF
 
-        def generate_tile_requests(
-            self, *args: Any, **kwargs: Any
-        ) -> list[TileRequest]:
+        def generate_tile_requests(self, *args: Any, **kwargs: Any) -> MosaicPlan:
             del args, kwargs
-            return [
-                TileRequest(
-                    url="http://example.com/wcs?tile=left",
-                    params={},
-                    output_format=Format.GEOTIFF,
-                    crs=CRS.EPSG_27700,
-                    bbox=left_bbox,
-                    width=4,
-                    height=4,
-                ),
-                TileRequest(
-                    url="http://example.com/wcs?tile=right",
-                    params={},
-                    output_format=Format.GEOTIFF,
-                    crs=CRS.EPSG_27700,
-                    bbox=right_bbox,
-                    width=4,
-                    height=4,
-                ),
-            ]
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/wcs?tile=left",
+                        params={},
+                        output_format=Format.GEOTIFF,
+                        crs=CRS.EPSG_27700,
+                        bbox=left_bbox,
+                        width=4,
+                        height=4,
+                    ),
+                    TileRequest(
+                        url="http://example.com/wcs?tile=right",
+                        params={},
+                        output_format=Format.GEOTIFF,
+                        crs=CRS.EPSG_27700,
+                        bbox=right_bbox,
+                        width=4,
+                        height=4,
+                    ),
+                )
+            )
 
     payloads = {
         "http://example.com/wcs?tile=left": left_bytes,

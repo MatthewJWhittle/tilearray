@@ -21,6 +21,7 @@ import respx
 from tilearray.array import create_array
 from tilearray.errors import ConfigurationError, NetworkError
 from tilearray.inspect import inspect_endpoint
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.plan import plan_array
 from tilearray.service.base import BaseService, TileGeometry, detect_service_type
 from tilearray.service.config import WMTSConfig
@@ -183,7 +184,7 @@ def _phase_grid_service(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             grid_rows, grid_cols = options.get("grid_shape", (rows, cols))
             span_x = (bbox.max_x - bbox.min_x) / grid_cols
@@ -214,7 +215,7 @@ def _phase_grid_service(
                             retries=0,
                         )
                     )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -435,21 +436,21 @@ def test_expand_palette_mosaic_is_plot_ready_for_imshow(
         service_type = ServiceTypeEnum.XYZ
         output_format = Format.PNG
 
-        def generate_tile_requests(
-            self, *args: Any, **kwargs: Any
-        ) -> list[TileRequest]:
+        def generate_tile_requests(self, *args: Any, **kwargs: Any) -> MosaicPlan:
             del args, kwargs
-            return [
-                TileRequest(
-                    url="http://example.com/0/0/0.png",
-                    params={},
-                    output_format=Format.PNG,
-                    crs=CRS.EPSG_3857,
-                    bbox=bbox,
-                    width=8,
-                    height=8,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/0/0/0.png",
+                        params={},
+                        output_format=Format.PNG,
+                        crs=CRS.EPSG_3857,
+                        bbox=bbox,
+                        width=8,
+                        height=8,
+                    ),
                 )
-            ]
+            )
 
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: PaletteXYZ())
     monkeypatch.setattr(
@@ -504,21 +505,21 @@ def test_default_palette_indices_stay_single_band_gray(
         service_type = ServiceTypeEnum.XYZ
         output_format = Format.PNG
 
-        def generate_tile_requests(
-            self, *args: Any, **kwargs: Any
-        ) -> list[TileRequest]:
+        def generate_tile_requests(self, *args: Any, **kwargs: Any) -> MosaicPlan:
             del args, kwargs
-            return [
-                TileRequest(
-                    url="http://example.com/0/0/0.png",
-                    params={},
-                    output_format=Format.PNG,
-                    crs=CRS.EPSG_3857,
-                    bbox=bbox,
-                    width=8,
-                    height=8,
+            return MosaicPlan(
+                tiles=(
+                    TileRequest(
+                        url="http://example.com/0/0/0.png",
+                        params={},
+                        output_format=Format.PNG,
+                        crs=CRS.EPSG_3857,
+                        bbox=bbox,
+                        width=8,
+                        height=8,
+                    ),
                 )
-            ]
+            )
 
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: PaletteXYZ())
     monkeypatch.setattr(

@@ -23,6 +23,7 @@ from tilearray.array import (
     create_array,
 )
 from tilearray.fetch import FetchPolicy, FetchProgress, TileFetcher
+from tilearray.mosaic_plan import MosaicPlan
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.tile_errors import TileErrorAction, TileErrorContext
 from tilearray.types import (
@@ -65,7 +66,7 @@ def _grid_service(rows: int, cols: int, *, tile_retries: int = 0) -> type[BaseSe
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             grid_rows, grid_cols = options.get("grid_shape", (rows, cols))
             span_x = (bbox.max_x - bbox.min_x) / grid_cols
@@ -97,7 +98,7 @@ def _grid_service(rows: int, cols: int, *, tile_retries: int = 0) -> type[BaseSe
                             retries=tile_retries,
                         )
                     )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]
@@ -541,7 +542,7 @@ def test_probe_phase_hard_fails_despite_soft_fail(
             bbox: BoundingBox,
             chunk_size: tuple[int, int],
             **options: Any,
-        ) -> list[TileRequest]:
+        ) -> MosaicPlan:
             width, height = chunk_size
             tiles: list[TileRequest] = []
             for idx in range(rows * cols):
@@ -557,7 +558,7 @@ def test_probe_phase_hard_fails_despite_soft_fail(
                         retries=0,
                     )
                 )
-            return tiles
+            return MosaicPlan(tiles=tuple(tiles))
 
         def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
             return self.generate_tile_requests(tile.bbox, (tile.width, tile.height))[0]

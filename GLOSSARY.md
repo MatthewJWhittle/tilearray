@@ -13,9 +13,14 @@ Shared vocabulary for tilearray internals and docs. Prefer these names in code c
 
 Owned by `tilearray.placement` (`fit_tile_to_request`). Decode stays pixels-from-bytes; mosaic CRS/transform attrs stay plan-time.
 
-## MosaicPlan (planned)
+## MosaicPlan
 
-Typed plan result that should replace informal `inferred_grid_shape` / `inferred_mosaic_bbox` side effects on XYZ/WMTS services. Follow-on deepening — not part of the placement module.
+**MosaicPlan** is the typed result of planning tiles for one AOI: HTTP **tile requests** plus optional native **mosaic bbox/CRS** and **grid shape**.
+
+- Indexed fixed grids (XYZ, metadata/slippy WMTS) → `mosaic_bbox` / `grid_shape` describe the tile-union extent.
+- Query-window planners (WMS/WCS) → those fields stay unset; `ArrayRequest` keeps the prepared query bbox/CRS.
+
+Owned by `tilearray.mosaic_plan`. Services no longer publish informal `inferred_*` attributes; `ArrayRequest.plan_tile_requests` applies the plan locally.
 
 ## Entry builder (planned)
 

@@ -143,6 +143,7 @@ class TestKartverketWMTSContract:
             },
         )
         # Auto-loads GetCapabilities (same path as create_array)
+        plan = service.generate_tile_requests(_QUERY_BBOX_4326, (256, 256))
         tiles = list(service.plan_tiles(_QUERY_BBOX_4326, (256, 256)))
 
         assert len(tiles) == 1
@@ -155,8 +156,8 @@ class TestKartverketWMTSContract:
         assert tile.bbox.max_x == pytest.approx(_EXPECTED_MAX_X)
         assert tile.bbox.min_y == pytest.approx(_EXPECTED_MIN_Y)
         assert tile.bbox.max_y == pytest.approx(_EXPECTED_MAX_Y)
-        assert service.inferred_mosaic_bbox is not None
-        assert service.inferred_mosaic_bbox.crs == CRS.parse("EPSG:25833")
+        assert plan.mosaic_bbox is not None
+        assert plan.mosaic_bbox.crs == CRS.parse("EPSG:25833")
 
 
 @pytest.mark.contract
