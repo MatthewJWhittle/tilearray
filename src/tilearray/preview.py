@@ -72,7 +72,7 @@ class ArrayPreview:
     requested_bbox: BoundingBox
     planned_bbox: BoundingBox
     bbox_snap_delta: dict[str, float] | None
-    crs: str
+    mosaic_crs: str
     bbox_crs: str
     chunk_size: tuple[int, int]
     grid_shape: tuple[int, int]
@@ -106,7 +106,7 @@ class ArrayPreview:
                 + (f"  format: {self.output_format}" if self.output_format else "")
             ),
             f"  bbox_crs (query): {self.bbox_crs}",
-            f"  crs (output): {self.crs}",
+            f"  mosaic_crs: {self.mosaic_crs}",
             (
                 "  requested bbox: "
                 f"({self.requested_bbox.min_x}, {self.requested_bbox.min_y}, "
@@ -394,7 +394,7 @@ def preview_array(
         requested_bbox=requested,
         planned_bbox=request.bbox,
         bbox_snap_delta=request.bbox_snap_delta,
-        crs=request.target_crs.value,
+        mosaic_crs=request.target_crs.value,
         bbox_crs=request.bbox_crs.value,
         chunk_size=(chunk_width, chunk_height),
         grid_shape=request.grid_shape,

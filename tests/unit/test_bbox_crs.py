@@ -132,7 +132,7 @@ def test_create_array_bbox_crs_xyz_native_3857(
     result = create_array(
         config, bbox, CRS.EPSG_4326, compute=True, show_progress=False
     )
-    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["mosaic_crs"] == "EPSG:3857"
     assert result.attrs["bbox_crs"] == "EPSG:4326"
     assert result.attrs["bbox_requested"]["crs"] == "EPSG:4326"
 
@@ -151,7 +151,7 @@ def test_create_array_bbox_crs_keyword_matches_positional(
     keyword = create_array(
         config, bbox, bbox_crs=CRS.EPSG_4326, compute=True, show_progress=False
     )
-    assert positional.attrs["crs"] == keyword.attrs["crs"] == "EPSG:3857"
+    assert positional.attrs["mosaic_crs"] == keyword.attrs["mosaic_crs"] == "EPSG:3857"
     assert positional.attrs["bbox_crs"] == keyword.attrs["bbox_crs"] == "EPSG:4326"
     assert positional.shape == keyword.shape
 
@@ -214,7 +214,7 @@ def test_create_array_bbox_crs_wmts_native_matrix(
         matrix_crs=CRS.parse("EPSG:25833"),
         show_progress=False,
     )
-    assert result.attrs["crs"] == "EPSG:25833"
+    assert result.attrs["mosaic_crs"] == "EPSG:25833"
     assert result.attrs["bbox_crs"] == "EPSG:25833"
     assert "bbox_requested" in result.attrs
 
@@ -237,7 +237,7 @@ def test_create_array_bbox_crs_wms(
         config, bbox, CRS.EPSG_4326, compute=True, show_progress=False
     )
     assert isinstance(result, xr.DataArray)
-    assert result.attrs["crs"] == "EPSG:4326"
+    assert result.attrs["mosaic_crs"] == "EPSG:4326"
     assert result.attrs["bbox_crs"] == "EPSG:4326"
 
 
@@ -275,7 +275,7 @@ def test_create_array_bbox_crs_wcs(monkeypatch: MonkeyPatch) -> None:
         output_format=Format.GEOTIFF,
         show_progress=False,
     )
-    assert result.attrs["crs"] == CRS.EPSG_27700.value
+    assert result.attrs["mosaic_crs"] == CRS.EPSG_27700.value
     assert result.attrs["bbox_crs"] == CRS.EPSG_27700.value
 
 
@@ -289,10 +289,10 @@ def test_preview_array_exposes_bbox_crs_and_output_crs(
     )
     preview = preview_array(config, bbox, CRS.EPSG_4326)
     assert preview.bbox_crs == "EPSG:4326"
-    assert preview.crs == "EPSG:3857"
+    assert preview.mosaic_crs == "EPSG:3857"
     text = preview.summary()
     assert "bbox_crs (query)" in text
-    assert "crs (output)" in text
+    assert "mosaic_crs:" in text
 
 
 def test_bounding_box_crs_conflicts_with_bbox_crs() -> None:
@@ -341,7 +341,7 @@ def test_wms_query_equals_service_crs_request_params(
         show_progress=False,
     )
     assert result.attrs["bbox_crs"] == "EPSG:4326"
-    assert result.attrs["crs"] == "EPSG:4326"
+    assert result.attrs["mosaic_crs"] == "EPSG:4326"
     assert captured
     assert captured[0].params["crs"] == "EPSG:4326"
 
@@ -380,7 +380,7 @@ def test_wms_query_differs_from_service_crs_request_params(
         show_progress=False,
     )
     assert result.attrs["bbox_crs"] == "EPSG:4326"
-    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["mosaic_crs"] == "EPSG:3857"
     assert result.attrs["bbox_requested"]["crs"] == "EPSG:4326"
     assert captured
     assert captured[0].params["crs"] == "EPSG:3857"
@@ -421,7 +421,7 @@ def test_wms_query_differs_from_output_crs_request_params(
         show_progress=False,
     )
     assert result.attrs["bbox_crs"] == "EPSG:4326"
-    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["mosaic_crs"] == "EPSG:3857"
     assert captured[0].params["crs"] == "EPSG:3857"
 
 
@@ -485,7 +485,7 @@ def test_wcs_query_differs_from_output_crs_sends_outputCRS(
         show_progress=False,
     )
     assert result.attrs["bbox_crs"] == "EPSG:4326"
-    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["mosaic_crs"] == "EPSG:3857"
 
     requests = service.generate_tile_requests(
         BoundingBox(

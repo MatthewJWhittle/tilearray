@@ -36,7 +36,7 @@ bbox = (431900.0, 382700.0, 432156.0, 382956.0)
 da = create_array(config, bbox, CRS.EPSG_27700)  # or "EPSG:27700"
 elevation = compute_mosaic(da)  # match Dask workers to fetch ceiling
 print(elevation.shape, float(elevation.mean()))
-print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])
+print(da.attrs["mosaic_crs"], da.attrs["bbox_crs"], da.attrs["transform"])
 elevation.plot.imshow(cmap="terrain", add_colorbar=True)
 ```
 

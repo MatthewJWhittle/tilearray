@@ -723,7 +723,7 @@ def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
 
     ``bbox_crs=`` is the query CRS and labels WCS/WMS mosaics. Pixel values
     are not client-warped onto another CRS; GeoTIFF tags must not replace
-    ``attrs["crs"]``. Fixed-grid XYZ/WMTS label with the native grid CRS.
+    ``attrs["mosaic_crs"]``. Fixed-grid XYZ/WMTS label with the native grid CRS.
     """
 
     bbox = BoundingBox(
@@ -764,7 +764,7 @@ def test_create_array_mosaic_crs_matches_request_crs_no_silent_retag(
         output_format=Format.GEOTIFF,
     )
 
-    assert result.attrs["crs"] == CRS.EPSG_27700.value
+    assert result.attrs["mosaic_crs"] == CRS.EPSG_27700.value
     assert result.attrs["transform_source"] == "mosaic_bbox"
     a, b, c, d, e, f = result.attrs["transform"]
     assert (a, b, c, d, e, f) == (1.0, 0.0, 100.0, 0.0, -1.0, 204.0)
@@ -820,7 +820,7 @@ def test_create_array_accepts_provider_crs_string(
         output_format=Format.GEOTIFF,
     )
 
-    assert result.attrs["crs"] == "EPSG:25833"
+    assert result.attrs["mosaic_crs"] == "EPSG:25833"
     assert result.attrs["transform_source"] == "mosaic_bbox"
 
 
@@ -871,7 +871,7 @@ def test_geotiff_elevation_attrs_crs_transform_nodata(
 
     assert result.dims == ("y", "x")
     assert result.shape == (4, 8)
-    assert result.attrs["crs"] == CRS.EPSG_27700.value
+    assert result.attrs["mosaic_crs"] == CRS.EPSG_27700.value
     assert result.attrs["band_policy"] == "preserve"
     assert result.attrs["transform_source"] == "mosaic_bbox"
     assert math.isnan(result.attrs["nodata"])
@@ -958,7 +958,7 @@ def test_rgb_jpeg_attrs_preserve_bands_no_nodata(
     assert result.dims == ("y", "x", "band")
     assert result.sizes["band"] == 3
     assert list(result.coords["band"].values) == [0, 1, 2]
-    assert result.attrs["crs"] == CRS.EPSG_4326.value
+    assert result.attrs["mosaic_crs"] == CRS.EPSG_4326.value
     assert result.attrs["band_policy"] == "preserve"
     assert result.attrs["transform_source"] == "mosaic_bbox"
     assert "nodata" not in result.attrs

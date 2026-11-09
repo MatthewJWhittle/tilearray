@@ -42,11 +42,11 @@ Keep these concepts separate in types, docs, and tests:
 
 ### Current alpha behaviour
 
-`create_array(..., bbox_crs=)` is the **query** CRS (how the bbox is described). The old overloaded `crs=` argument on `create_array` / `preview_array` was removed. Any pyproj-valid CRS is accepted (presets or EPSG strings such as `EPSG:25833`). A `BoundingBox` whose CRS conflicts with `bbox_crs=` fails loud — no silent reproject of conflicting declarations. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS. `attrs["bbox_crs"]` always records the query CRS; `attrs["crs"]` is the **actual** pixel-grid CRS.
+`create_array(..., bbox_crs=)` is the **query** CRS (how the bbox is described). The old overloaded `crs=` argument on `create_array` / `preview_array` was removed. Any pyproj-valid CRS is accepted (presets or EPSG strings such as `EPSG:25833`). A `BoundingBox` whose CRS conflicts with `bbox_crs=` fails loud — no silent reproject of conflicting declarations. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS. `attrs["bbox_crs"]` always records the query CRS; `attrs["mosaic_crs"]` is the **actual** pixel-grid CRS.
 
 **Labelling today:**
 
-| Protocol | Request / service CRS | Output / `attrs["crs"]` |
+| Protocol | Request / service CRS | Output / `attrs["mosaic_crs"]` |
 |----------|----------------------|-------------------------|
 | **WCS / WMS** | Config `crs=` (defaults to `bbox_crs`) drives subsetting / GetMap BBOX | Optional server-side `output_crs=` (WCS `outputCRS` / WMS GetMap CRS). When omitted, equals the request CRS. Unsupported values fail. |
 | **XYZ / slippy WMTS** | N/A (query only) | Always `EPSG:3857` tile-union extent; `bbox_requested` keeps the caller's window. `output_crs=` is **rejected**. |

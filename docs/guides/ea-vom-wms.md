@@ -31,12 +31,12 @@ da = create_array(config, bbox, CRS.EPSG_27700)
 img = compute_mosaic(da)
 
 print(img.shape, da.attrs["service_type"])  # often (y, x, band) with 4 bands
-print(da.attrs["crs"], da.attrs["bbox_crs"], da.attrs["transform"])
+print(da.attrs["mosaic_crs"], da.attrs["bbox_crs"], da.attrs["transform"])
 # PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
 img.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-`bbox_crs=` is the query CRS. For WMS, mosaic `attrs["crs"]` matches that query (no client-side warp).
+`bbox_crs=` is the query CRS. For WMS, mosaic `attrs["mosaic_crs"]` matches that query (no client-side warp).
 
 ## Result
 

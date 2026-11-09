@@ -209,7 +209,7 @@ def test_create_array_kartverket_matrix_pixel_centres(
         show_progress=False,
     )
 
-    assert result.attrs["crs"] == "EPSG:25833"
+    assert result.attrs["mosaic_crs"] == "EPSG:25833"
     assert result.shape == (256, 256)
     assert float(result.x.min()) == pytest.approx(_EXPECTED_MIN_X + _PIXEL_M / 2.0)
     assert float(result.x.max()) == pytest.approx(_EXPECTED_MAX_X - _PIXEL_M / 2.0)

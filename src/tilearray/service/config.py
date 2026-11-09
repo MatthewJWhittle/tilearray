@@ -244,7 +244,7 @@ class WCSConfig(ServiceConfig):
         default=None,
         description=(
             "Optional server-side GetCoverage outputCRS. When set, mosaic "
-            "attrs['crs'] matches this CRS. Not a client-side warp."
+            "attrs['mosaic_crs'] matches this CRS. Not a client-side warp."
         ),
     )
     service_type: ServiceTypeEnum = Field(

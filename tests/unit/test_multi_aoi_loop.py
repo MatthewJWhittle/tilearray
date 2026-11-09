@@ -123,7 +123,7 @@ def test_multi_aoi_loop_noncontiguous_wmts_shapes_and_provenance(
 
     for arr in patches:
         assert arr.shape == (256, 256)
-        assert arr.attrs["crs"] == CRS.EPSG_3857.value
+        assert arr.attrs["mosaic_crs"] == CRS.EPSG_3857.value
         assert arr.attrs["transform_source"] == "mosaic_bbox"
         assert arr.attrs["service_type"] == ServiceTypeEnum.WMTS.value
         assert "nodata" not in arr.attrs  # rendered PNG imagery

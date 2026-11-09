@@ -123,7 +123,10 @@ def test_opaque_url_inspect_journey_to_plan() -> None:
         bbox=(-10.0, -10.0, 10.0, 10.0),
         bbox_crs=CRS.EPSG_4326,
     )
-    assert preview.crs in {"EPSG:3857", "3857"} or preview.crs == CRS.EPSG_3857.value
+    assert (
+        preview.mosaic_crs in {"EPSG:3857", "3857"}
+        or preview.mosaic_crs == CRS.EPSG_3857.value
+    )
     assert preview.bbox_crs in {"EPSG:4326", "4326"}
     assert preview.request_count >= 1
     assert preview.matrix_id is not None

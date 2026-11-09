@@ -28,14 +28,14 @@ da = create_array(config, bbox, CRS.EPSG_4326, expand_palette=True)
 arr = compute_mosaic(da)
 
 print(arr.shape, arr.dims, da.attrs["service_type"])
-print(da.attrs["crs"], da.attrs["transform"])
+print(da.attrs["mosaic_crs"], da.attrs["transform"])
 print(
     float(arr.x.min()),
     float(arr.y.min()),
     float(arr.x.max()),
     float(arr.y.max()),
 )
-# Query bbox_crs= is lon/lat; mosaic attrs["crs"] is EPSG:3857 (tile-union metres)
+# Query bbox_crs= is lon/lat; mosaic attrs["mosaic_crs"] is EPSG:3857 (tile-union metres)
 # PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```

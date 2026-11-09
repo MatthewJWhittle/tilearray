@@ -182,7 +182,7 @@ def generate_osm(out_dir: Path) -> dict[str, Any]:
         "service": "XYZ",
         "bbox_query": list(OSM_LONDON_BBOX),
         "crs_query": "EPSG:4326",
-        "crs_mosaic": da.attrs.get("crs"),
+        "crs_mosaic": da.attrs.get("mosaic_crs"),
         "transform": list(da.attrs.get("transform", ())),
         "extent_m": [
             float(arr.x.min()),
@@ -263,7 +263,7 @@ def generate_gibs(out_dir: Path) -> dict[str, Any]:
         "service": "XYZ",
         "bbox_query": list(GIBS_BBOX),
         "crs_query": "EPSG:4326",
-        "crs_mosaic": da.attrs.get("crs"),
+        "crs_mosaic": da.attrs.get("mosaic_crs"),
         "transform": list(da.attrs.get("transform", ())),
         "extent_m": [
             float(arr.x.min()),
@@ -433,7 +433,7 @@ def generate_kartverket(out_dir: Path) -> dict[str, Any]:
         "tile_matrix": KARTVERKET_MATRIX,
         "bbox_query": list(KARTVERKET_BBOX),
         "crs_query": "EPSG:4326",
-        "crs_mosaic": da.attrs.get("crs"),
+        "crs_mosaic": da.attrs.get("mosaic_crs"),
         "shape": list(arr.shape),
         "dims": list(arr.dims),
         "elapsed_s": round(elapsed, 3),
@@ -442,7 +442,7 @@ def generate_kartverket(out_dir: Path) -> dict[str, Any]:
     }
     _write_json(out_dir / "wmts-kartverket-oslo.json", stats)
     print(
-        f"  wrote {png.name} shape={arr.shape} crs={da.attrs.get('crs')} "
+        f"  wrote {png.name} shape={arr.shape} crs={da.attrs.get('mosaic_crs')} "
         f"in {elapsed:.1f}s"
     )
     return stats
@@ -492,7 +492,7 @@ def generate_ea_vom(out_dir: Path) -> dict[str, Any]:
         "layers": EA_VOM_LAYER,
         "bbox": list(EA_VOM_BBOX),
         "crs_query": "EPSG:27700",
-        "crs_mosaic": da.attrs.get("crs"),
+        "crs_mosaic": da.attrs.get("mosaic_crs"),
         "shape": list(arr.shape),
         "dims": list(arr.dims),
         "elapsed_s": round(elapsed, 3),
@@ -565,7 +565,7 @@ def generate_multi_aoi(out_dir: Path) -> dict[str, Any]:
                 "bbox_query": list(
                     next(b for name, b in MULTI_AOI_PATCHES if name == label)
                 ),
-                "crs_mosaic": da.attrs.get("crs"),
+                "crs_mosaic": da.attrs.get("mosaic_crs"),
                 "shape": list(arr.shape),
                 "dims": list(arr.dims),
             }

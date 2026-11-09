@@ -749,7 +749,7 @@ def test_create_array_wmts_native_matrix_labels_output_crs(
         show_progress=False,
     )
 
-    assert result.attrs["crs"] == "EPSG:25833"
+    assert result.attrs["mosaic_crs"] == "EPSG:25833"
     assert result.shape == (256, 256)
     # Pixel centres from native mosaic extent (tile-aligned), not the query inset.
     assert float(result.x.min()) == pytest.approx(expected_min_x + _UTM33_PIXEL_M / 2.0)
@@ -804,7 +804,7 @@ def test_wmts_slippy_fallback_labels_native_3857(
         config, bbox, CRS.EPSG_4326, compute=True, show_progress=False
     )
 
-    assert result.attrs["crs"] == "EPSG:3857"
+    assert result.attrs["mosaic_crs"] == "EPSG:3857"
     assert result.attrs["bbox_requested"]["crs"] == "EPSG:4326"
     a, _b, c, _d, e, f = result.attrs["transform"]
     assert c == pytest.approx(exp_min_x)
