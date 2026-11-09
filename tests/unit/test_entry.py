@@ -1,4 +1,4 @@
-"""Contract tests for the shared create/plan entry builder."""
+"""Contract tests for the shared create/preview entry builder."""
 
 from __future__ import annotations
 

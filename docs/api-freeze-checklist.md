@@ -36,7 +36,7 @@ These are the SemVer spine for 1.0:
 | `create_array` | Primary entry — plan / bind / lazy mosaic |
 | `load_array` | Eager sugar (`create_array(..., compute=True)`); not a second habit |
 | `compute_mosaic` | Canonical compute helper (Dask workers ↔ fetch ceiling); process-local gate documented |
-| `plan_array` / `ArrayPlan` | Preflight — request count, grid, concurrency, cache warm/cold, unknown band/byte counts where not knowable (#61 / #109) |
+| `preview_array` / `ArrayPreview` | Preflight — request count, grid, concurrency, cache warm/cold, unknown band/byte counts where not knowable (#61 / #109) |
 | `recommend_grid_shape` | Pure AOI helper for resolution × chunk sizing (#61 / #109) |
 | `fetch_summary` / `FetchSummary` | Post-plan / post-compute progress & pressure counters (#61 / #109) |
 | `inspect_endpoint` / `inspect_capabilities` / `EndpointInspection` (+ `ResourceSummary`, `MatrixSetSummary`) | Discover → choose → validated config from GetCapabilities (#96 / #108) |
@@ -85,7 +85,7 @@ These landed on `main` during the post-0.2.0 uniqueness / DX queue. They are **A
 | [#107](https://github.com/MatthewJWhittle/tilearray/pull/107) | [#93](https://github.com/MatthewJWhittle/tilearray/issues/93) | Native TileMatrixSet planning / mosaic CRS labelling |
 | [#110](https://github.com/MatthewJWhittle/tilearray/pull/110) | [#60](https://github.com/MatthewJWhittle/tilearray/issues/60) | WMTS host guide + Kartverket contract tests; auto-load caps for non-slippy matrices |
 | [#108](https://github.com/MatthewJWhittle/tilearray/pull/108) | [#96](https://github.com/MatthewJWhittle/tilearray/issues/96) | `inspect_endpoint` / `inspect_capabilities` / `EndpointInspection.build_config` |
-| [#109](https://github.com/MatthewJWhittle/tilearray/pull/109) | [#61](https://github.com/MatthewJWhittle/tilearray/issues/61) | `recommend_grid_shape`, `plan_array` / `ArrayPlan`, `fetch_summary` / `FetchSummary` |
+| [#109](https://github.com/MatthewJWhittle/tilearray/pull/109) | [#61](https://github.com/MatthewJWhittle/tilearray/issues/61) | `recommend_grid_shape`, `preview_array` / `ArrayPreview`, `fetch_summary` / `FetchSummary` |
 | [#112](https://github.com/MatthewJWhittle/tilearray/pull/112) | [#87](https://github.com/MatthewJWhittle/tilearray/issues/87) | Multi-AOI / ML sample-loop **docs + offline tests** — **no** orchestration API |
 | [#113](https://github.com/MatthewJWhittle/tilearray/pull/113) | [#59](https://github.com/MatthewJWhittle/tilearray/issues/59) | Process-local fetch-gate docs; warn on non-`threads` scheduler — **no** distributed coordinator |
 | [#116](https://github.com/MatthewJWhittle/tilearray/pull/116) / [#103](https://github.com/MatthewJWhittle/tilearray/pull/103) | [#97](https://github.com/MatthewJWhittle/tilearray/issues/97) | Worked examples notebook + guide — **no** new library exports |
@@ -102,8 +102,8 @@ Until 1.0, Alpha may change; still prefer additive changes and documented CHANGE
 At **1.0.0**, publish something equivalent to:
 
 1. **Compatible** (minor/patch): additive exports; new optional kwargs with safe defaults; new error subclasses under `TileArrayError`; docs/clarifications; bug fixes that restore documented behaviour.
-2. **Breaking** (major): remove/rename anything in `__all__` / API reference; change default fail / abort / soft-fill / band / CRS / politeness semantics; change meaning of `create_array` / config fields / `compute_mosaic` / `plan_array` / `inspect_endpoint` without a documented migration.
-3. **Spine that must not break silently:** `create_array`, protocol `*Config` + `from_url` compose path, `FetchPolicy` host-ceiling rules, error hierarchy at public boundaries, `compute_mosaic`, `plan_array` / `fetch_summary`, `inspect_endpoint` / `build_config`, documented soft-fail presets (`soft_fail_exhausted_tiles` / `on_tile_error` plan-time bind).
+2. **Breaking** (major): remove/rename anything in `__all__` / API reference; change default fail / abort / soft-fill / band / CRS / politeness semantics; change meaning of `create_array` / config fields / `compute_mosaic` / `preview_array` / `inspect_endpoint` without a documented migration.
+3. **Spine that must not break silently:** `create_array`, protocol `*Config` + `from_url` compose path, `FetchPolicy` host-ceiling rules, error hierarchy at public boundaries, `compute_mosaic`, `preview_array` / `fetch_summary`, `inspect_endpoint` / `build_config`, documented soft-fail presets (`soft_fail_exhausted_tiles` / `on_tile_error` plan-time bind).
 4. **Out of promise:** submodule internals, undocumented attrs, registry plugins beyond documented hooks, live-host availability.
 
 ---
@@ -129,7 +129,7 @@ Do **not** cut 1.0 until every box is true (or an unchecked item is explicitly a
 ### Public vs private
 
 - [ ] `__all__` + API reference match; provisional symbols either promoted, demoted with docs, or deprecated
-- [ ] Inspect / plan / fetch-summary surfaces inventoried above either confirmed for 1.0 or explicitly provisional
+- [ ] Inspect / preview / fetch-summary surfaces inventoried above either confirmed for 1.0 or explicitly provisional
 - [ ] Deprecation cycle complete for anything removed between last Alpha and 1.0
 
 ### SemVer + messaging

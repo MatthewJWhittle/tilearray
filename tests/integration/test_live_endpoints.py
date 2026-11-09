@@ -9,7 +9,7 @@ import pytest
 import xarray as xr
 
 from tilearray import array as array_module
-from tilearray import compute_mosaic, create_array, inspect_endpoint, plan_array
+from tilearray import compute_mosaic, create_array, inspect_endpoint, preview_array
 from tilearray.fetch_presets import OSM_TILE_TEMPLATE, osm_fetch_defaults
 from tilearray.service.config import WCSConfig, WMSConfig, WMTSConfig, XYZConfig
 from tilearray.service.wcs import WCSService
@@ -122,7 +122,7 @@ _KARTVERKET_UA = {
 @pytest.mark.slow
 @pytest.mark.net
 def test_live_kartverket_inspect_opaque_url_smoke() -> None:
-    """Discovery path: opaque ``/v1/service`` → inspect → build_config → tiny plan.
+    """Discovery path: opaque ``/v1/service`` → inspect → build_config → tiny preview.
 
     Typed ``WMTSConfig.from_url`` smoke below does **not** cover this front door.
     """
@@ -148,13 +148,13 @@ def test_live_kartverket_inspect_opaque_url_smoke() -> None:
     assert isinstance(config, WMTSConfig)
     assert config.tile_matrix is not None
 
-    plan = plan_array(
+    preview = preview_array(
         config,
         bbox=(10.72, 59.90, 10.73, 59.91),
         bbox_crs=CRS.EPSG_4326,
     )
-    assert plan.request_count >= 1
-    assert plan.crs in {"EPSG:25833", "25833"}
+    assert preview.request_count >= 1
+    assert preview.crs in {"EPSG:25833", "25833"}
 
 
 @pytest.mark.integration

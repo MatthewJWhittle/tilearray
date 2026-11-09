@@ -9,7 +9,7 @@ Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dep
 ## Code
 
 ```python
-from tilearray import compute_mosaic, create_array, inspect_endpoint, plan_array
+from tilearray import compute_mosaic, create_array, inspect_endpoint, preview_array
 
 # Service URL from the host docs (KVP / GetCapabilities entry point)
 inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
@@ -24,8 +24,8 @@ config = inspection.build_config(
 )
 
 bbox = (10.6, 59.85, 10.8, 59.95)  # query lon/lat near Oslo
-plan = plan_array(config, bbox, bbox_crs="EPSG:4326")
-print(plan.matrix_id, plan.planned_pixel_size, plan.crs, plan.bbox_crs)
+preview = preview_array(config, bbox, bbox_crs="EPSG:4326")
+print(preview.matrix_id, preview.planned_pixel_size, preview.crs, preview.bbox_crs)
 
 da = create_array(config, bbox, bbox_crs="EPSG:4326", show_progress=False)
 arr = compute_mosaic(da)

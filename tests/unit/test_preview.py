@@ -11,16 +11,16 @@ import xarray as xr
 
 import tilearray._planning as planning_module
 import tilearray.array as array_module
-import tilearray.plan as plan_module
+import tilearray.preview as preview_module
 from tilearray import (
     CRS,
-    ArrayPlan,
+    ArrayPreview,
     BoundingBox,
     FetchSummary,
     Format,
     XYZConfig,
     fetch_summary,
-    plan_array,
+    preview_array,
     recommend_grid_shape,
 )
 from tilearray._planning import ArrayRequest
@@ -110,7 +110,7 @@ class _SizedWCS(BaseService):
         )
 
 
-def test_plan_array_large_aoi_respects_chunk_cap(
+def test_preview_array_large_aoi_respects_chunk_cap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Synthetic large AOI: every planned request stays within chunk_size."""
@@ -126,7 +126,7 @@ def test_plan_array_large_aoi_respects_chunk_cap(
     bbox = BoundingBox(
         min_x=0.0, min_y=0.0, max_x=2000.0, max_y=1500.0, crs=CRS.EPSG_27700
     )
-    plan = plan_array(
+    preview = preview_array(
         "http://example.com/wcs",
         bbox,
         CRS.EPSG_27700,
@@ -136,26 +136,26 @@ def test_plan_array_large_aoi_respects_chunk_cap(
         resolution=(1.0, 1.0),
     )
 
-    assert isinstance(plan, ArrayPlan)
-    assert plan.request_count == plan.grid_shape[0] * plan.grid_shape[1]
-    assert plan.request_count >= 8
-    assert plan.pixel_height == 1500
-    assert plan.pixel_width == 2000
+    assert isinstance(preview, ArrayPreview)
+    assert preview.request_count == preview.grid_shape[0] * preview.grid_shape[1]
+    assert preview.request_count >= 8
+    assert preview.pixel_height == 1500
+    assert preview.pixel_width == 2000
     # GeoTIFF default band_policy is preserve (#94): band count needs a probe.
-    assert plan.bands is None
-    assert plan.bands_source == "unknown"
-    assert plan.estimated_nbytes is None
-    assert any("band count" in item for item in plan.unknowns)
-    assert plan.fetch_policy["max_concurrent"] >= 1
+    assert preview.bands is None
+    assert preview.bands_source == "unknown"
+    assert preview.estimated_nbytes is None
+    assert any("band count" in item for item in preview.unknowns)
+    assert preview.fetch_policy["max_concurrent"] >= 1
     assert all(w * h <= max_chunk[0] * max_chunk[1] for w, h in service.seen_sizes)
     assert all(w <= max_chunk[0] and h <= max_chunk[1] for w, h in service.seen_sizes)
-    text = plan.summary()
+    text = preview.summary()
     assert "preflight" in text
     assert "2000" in text
     assert "unknowns" in text
 
 
-def test_plan_array_edge_leftover_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_preview_array_edge_leftover_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _SizedWCS(max_pixels=100 * 100)
 
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: service)
@@ -163,7 +163,7 @@ def test_plan_array_edge_leftover_tiles(monkeypatch: pytest.MonkeyPatch) -> None
     bbox = BoundingBox(
         min_x=0.0, min_y=0.0, max_x=250.0, max_y=180.0, crs=CRS.EPSG_27700
     )
-    plan = plan_array(
+    preview = preview_array(
         "http://example.com/wcs",
         bbox,
         CRS.EPSG_27700,
@@ -173,10 +173,10 @@ def test_plan_array_edge_leftover_tiles(monkeypatch: pytest.MonkeyPatch) -> None
         resolution=(1.0, 1.0),
     )
 
-    assert plan.grid_shape == (2, 3)
-    assert plan.request_count == 6
-    assert plan.pixel_width == 250
-    assert plan.pixel_height == 180
+    assert preview.grid_shape == (2, 3)
+    assert preview.request_count == 6
+    assert preview.pixel_width == 250
+    assert preview.pixel_height == 180
     widths = sorted({w for w, _ in service.seen_sizes})
     heights = sorted({h for _, h in service.seen_sizes})
     assert 50 in widths  # leftover column
@@ -185,7 +185,7 @@ def test_plan_array_edge_leftover_tiles(monkeypatch: pytest.MonkeyPatch) -> None
     assert max(heights) == 100
 
 
-def test_plan_array_jpeg_bands_unknown_without_probe(
+def test_preview_array_jpeg_bands_unknown_without_probe(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class JpegService(BaseService):
@@ -208,7 +208,7 @@ def test_plan_array_jpeg_bands_unknown_without_probe(
 
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: JpegService())
 
-    plan = plan_array(
+    preview = preview_array(
         "http://example.com/wms",
         (0.0, 0.0, 10.0, 10.0),
         CRS.EPSG_4326,
@@ -217,14 +217,14 @@ def test_plan_array_jpeg_bands_unknown_without_probe(
         grid_shape=(2, 2),
         output_format=Format.JPEG,
     )
-    assert plan.bands is None
-    assert plan.bands_source == "unknown"
-    assert plan.estimated_nbytes is None
-    assert any("band count" in item for item in plan.unknowns)
-    assert "estimated array bytes: unknown" in plan.summary()
+    assert preview.bands is None
+    assert preview.bands_source == "unknown"
+    assert preview.estimated_nbytes is None
+    assert any("band count" in item for item in preview.unknowns)
+    assert "estimated array bytes: unknown" in preview.summary()
 
 
-def test_plan_array_cache_warm_cold(
+def test_preview_array_cache_warm_cold(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     service = _SizedWCS(max_pixels=256 * 256)
@@ -233,7 +233,7 @@ def test_plan_array_cache_warm_cold(
     bbox = BoundingBox(
         min_x=0.0, min_y=0.0, max_x=512.0, max_y=256.0, crs=CRS.EPSG_27700
     )
-    plan = plan_array(
+    preview = preview_array(
         "http://example.com/wcs",
         bbox,
         CRS.EPSG_27700,
@@ -243,14 +243,14 @@ def test_plan_array_cache_warm_cold(
         resolution=(1.0, 1.0),
         cache_dir=tmp_path,
     )
-    assert plan.cached_tiles == 0
-    assert plan.request_count == 2
+    assert preview.cached_tiles == 0
+    assert preview.request_count == 2
 
-    first = plan.tile_requests[0]
+    first = preview.tile_requests[0]
     key = _cache_key(first)
     (tmp_path / f"{key}.tile").write_bytes(b"fake")
 
-    plan2 = plan_array(
+    preview2 = preview_array(
         "http://example.com/wcs",
         bbox,
         CRS.EPSG_27700,
@@ -260,11 +260,11 @@ def test_plan_array_cache_warm_cold(
         resolution=(1.0, 1.0),
         cache_dir=tmp_path,
     )
-    assert plan2.cached_tiles == 1
-    assert "1 warm / 1 cold" in plan2.summary()
+    assert preview2.cached_tiles == 1
+    assert "1 warm / 1 cold" in preview2.summary()
 
 
-def test_plan_array_xyz_notes_native_zoom(tmp_path: Path) -> None:
+def test_preview_array_xyz_notes_native_zoom(tmp_path: Path) -> None:
     config = XYZConfig.from_url(
         "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         zoom=10,
@@ -274,12 +274,12 @@ def test_plan_array_xyz_notes_native_zoom(tmp_path: Path) -> None:
         max_concurrent_requests=2,
     )
     bbox = BoundingBox(min_x=-0.2, min_y=51.4, max_x=0.2, max_y=51.6, crs=CRS.EPSG_4326)
-    plan = plan_array(config, bbox, CRS.EPSG_4326)
-    assert plan.request_count > 1
-    assert plan.service_type == ServiceTypeEnum.XYZ.value
-    assert any("native zoom" in note for note in plan.notes)
-    assert plan.fetch_policy["max_concurrent"] == 2
-    assert plan.bands is None  # PNG
+    preview = preview_array(config, bbox, CRS.EPSG_4326)
+    assert preview.request_count > 1
+    assert preview.service_type == ServiceTypeEnum.XYZ.value
+    assert any("native zoom" in note for note in preview.notes)
+    assert preview.fetch_policy["max_concurrent"] == 2
+    assert preview.bands is None  # PNG
 
 
 def test_fetch_summary_from_progress_and_stats() -> None:
@@ -349,17 +349,17 @@ def test_fetch_summary_honest_unknowns_without_progress() -> None:
     assert "unknown" in summary.summary().lower()
 
 
-def test_plan_array_does_not_fetch_pixels(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_preview_array_does_not_fetch_pixels(monkeypatch: pytest.MonkeyPatch) -> None:
     service = _SizedWCS(max_pixels=256 * 256)
     monkeypatch.setattr(planning_module, "get_service", lambda *a, **k: service)
 
     def boom(*args: Any, **kwargs: Any) -> TileResponse:
-        raise AssertionError("plan_array must not fetch mosaic tiles by default")
+        raise AssertionError("preview_array must not fetch mosaic tiles by default")
 
     monkeypatch.setattr(array_module, "fetch_tile", boom)
-    monkeypatch.setattr(plan_module, "probe_tile_band_count", boom)
+    monkeypatch.setattr(preview_module, "probe_tile_band_count", boom)
 
-    plan_array(
+    preview_array(
         "http://example.com/wcs",
         BoundingBox(min_x=0, min_y=0, max_x=100, max_y=100, crs=CRS.EPSG_27700),
         CRS.EPSG_27700,

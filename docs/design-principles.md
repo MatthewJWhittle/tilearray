@@ -42,7 +42,7 @@ Keep these concepts separate in types, docs, and tests:
 
 ### Current alpha behaviour
 
-`create_array(..., bbox_crs=)` is the **query** CRS (how the bbox is described). The old overloaded `crs=` argument on `create_array` / `plan_array` was removed. Any pyproj-valid CRS is accepted (presets or EPSG strings such as `EPSG:25833`). A `BoundingBox` whose CRS conflicts with `bbox_crs=` fails loud — no silent reproject of conflicting declarations. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS. `attrs["bbox_crs"]` always records the query CRS; `attrs["crs"]` is the **actual** pixel-grid CRS.
+`create_array(..., bbox_crs=)` is the **query** CRS (how the bbox is described). The old overloaded `crs=` argument on `create_array` / `preview_array` was removed. Any pyproj-valid CRS is accepted (presets or EPSG strings such as `EPSG:25833`). A `BoundingBox` whose CRS conflicts with `bbox_crs=` fails loud — no silent reproject of conflicting declarations. Mosaic georef comes from the planned bbox + shape (`transform_source="mosaic_bbox"`); per-tile GeoTIFF tags never silently replace mosaic CRS. There is still **no** client-side warp of pixels onto a different CRS. `attrs["bbox_crs"]` always records the query CRS; `attrs["crs"]` is the **actual** pixel-grid CRS.
 
 **Labelling today:**
 
@@ -52,7 +52,7 @@ Keep these concepts separate in types, docs, and tests:
 | **XYZ / slippy WMTS** | N/A (query only) | Always `EPSG:3857` tile-union extent; `bbox_requested` keeps the caller's window. `output_crs=` is **rejected**. |
 | **WMTS with TileMatrixSet** | Matrix SupportedCRS | Native matrix CRS + tile-aligned extent; query may differ. `output_crs=` is **rejected**. |
 
-Service config `crs=` remains the request-default field — not the create/plan query argument.
+Service config `crs=` remains the request-default field — not the create/preview query argument.
 
 ### Imagery vs numerical coverages
 

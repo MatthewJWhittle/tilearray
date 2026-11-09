@@ -219,7 +219,7 @@ class WMSService(BaseService):
             raise ValidationError(
                 f"WMS GetMap crs={crs.value} does not match tile bbox CRS "
                 f"{CRS.parse(bbox_crs).value}. Reproject the AOI to the GetMap "
-                "CRS before build_tile_request (create_array / plan_array do this "
+                "CRS before build_tile_request (create_array / preview_array do this "
                 "when output_crs= is set), or omit output_crs=."
             )
 

@@ -22,7 +22,7 @@ from tilearray.array import create_array
 from tilearray.errors import ConfigurationError, NetworkError
 from tilearray.inspect import inspect_endpoint
 from tilearray.mosaic_plan import MosaicPlan
-from tilearray.plan import plan_array
+from tilearray.preview import preview_array
 from tilearray.service.base import BaseService, TileGeometry, detect_service_type
 from tilearray.service.config import WMTSConfig
 from tilearray.types import (
@@ -99,7 +99,7 @@ def test_detect_service_type_opaque_path_is_actionable() -> None:
 
 @respx.mock
 def test_opaque_url_inspect_journey_to_plan() -> None:
-    """Opaque base_url + real-shaped caps → config → plan identifiers/CRS."""
+    """Opaque base_url + real-shaped caps → config → preview identifiers/CRS."""
 
     opaque = "https://cache.example.org/v1/service"
     respx.get(opaque).mock(return_value=httpx.Response(200, text=_wmts_caps()))
@@ -118,15 +118,15 @@ def test_opaque_url_inspect_journey_to_plan() -> None:
     assert config.tile_matrix is not None
 
     # Lon/lat window over the world so matrix 0 planning stays a single tile.
-    plan = plan_array(
+    preview = preview_array(
         config,
         bbox=(-10.0, -10.0, 10.0, 10.0),
         bbox_crs=CRS.EPSG_4326,
     )
-    assert plan.crs in {"EPSG:3857", "3857"} or plan.crs == CRS.EPSG_3857.value
-    assert plan.bbox_crs in {"EPSG:4326", "4326"}
-    assert plan.request_count >= 1
-    assert plan.matrix_id is not None
+    assert preview.crs in {"EPSG:3857", "3857"} or preview.crs == CRS.EPSG_3857.value
+    assert preview.bbox_crs in {"EPSG:4326", "4326"}
+    assert preview.request_count >= 1
+    assert preview.matrix_id is not None
 
 
 @respx.mock

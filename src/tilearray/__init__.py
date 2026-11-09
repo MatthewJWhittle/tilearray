@@ -31,11 +31,11 @@ from .matrix_resolution import (
     MatrixLevelSummary,
     choose_matrix_for_resolution,
 )
-from .plan import (
-    ArrayPlan,
+from .preview import (
+    ArrayPreview,
     FetchSummary,
     fetch_summary,
-    plan_array,
+    preview_array,
     recommend_grid_shape,
 )
 from .service import (
@@ -77,13 +77,13 @@ __all__ = [
     "compute_mosaic",
     "create_array",
     "load_array",
-    "plan_array",
+    "preview_array",
     "recommend_grid_shape",
     "choose_matrix_for_resolution",
     "MatrixChoice",
     "MatrixLevelSummary",
     "fetch_summary",
-    "ArrayPlan",
+    "ArrayPreview",
     "FetchSummary",
     "FetchPolicy",
     "TileArrayError",

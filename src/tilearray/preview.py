@@ -1,11 +1,11 @@
-"""AOI planning helpers and fetch summaries (#61).
+"""AOI preview helpers and fetch summaries (#61).
 
 Read-only preflight for large mosaics: inspect the planned grid and
 concurrency ceiling before ``create_array`` / ``compute_mosaic``.
 Does not invent wall-clock time, provider cost, or a second compute path.
 
 Shared request / policy / grid / cache helpers live in
-:mod:`tilearray._planning`; the create/plan preamble is
+:mod:`tilearray._planning`; the create/preview preamble is
 :func:`tilearray._entry.from_public_args`. This module imports nothing
 private from :mod:`tilearray.array`.
 """
@@ -50,15 +50,15 @@ from .types import (
     TileRequest,
 )
 
-# Re-export for ``from tilearray.plan import recommend_grid_shape``.
+# Re-export for ``from tilearray.preview import recommend_grid_shape``.
 __all__ = [
-    "ArrayPlan",
+    "ArrayPreview",
     "FetchSummary",
     "MatrixChoice",
     "MatrixLevelSummary",
     "choose_matrix_for_resolution",
     "fetch_summary",
-    "plan_array",
+    "preview_array",
     "recommend_grid_shape",
 ]
 
@@ -66,8 +66,8 @@ BandsSource = Literal["format_policy", "probe", "unknown"]
 
 
 @dataclass(frozen=True)
-class ArrayPlan:
-    """Read-only request plan produced by :func:`plan_array`."""
+class ArrayPreview:
+    """Read-only job preview produced by :func:`preview_array`."""
 
     requested_bbox: BoundingBox
     planned_bbox: BoundingBox
@@ -99,7 +99,7 @@ class ArrayPlan:
         """Human-readable preflight text (estimated vs confirmed called out)."""
 
         lines: list[str] = [
-            "tilearray plan (preflight — no mosaic pixel fetch"
+            "tilearray preview (preflight — no mosaic pixel fetch"
             + ("; band probe ran)" if self.bands_source == "probe" else ")"),
             (
                 f"  service: {self.service_type}"
@@ -236,7 +236,7 @@ class FetchSummary:
         return self.summary()
 
 
-def plan_array(
+def preview_array(
     service_url: str | ServiceConfigModel,
     bbox: BoundingBox | BBoxTuple,
     bbox_crs: CRS | str | int,
@@ -250,8 +250,8 @@ def plan_array(
     probe_bands: bool = False,
     output_crs: CRS | str | int | None = None,
     **service_options: Any,
-) -> ArrayPlan:
-    """Plan tile requests without building a mosaic or fetching pixels.
+) -> ArrayPreview:
+    """Preview the mosaic job without building a mosaic or fetching pixels.
 
     Mirrors the planning inputs of :func:`~tilearray.create_array`
     (including ``bbox_crs`` and optional WMS/WCS ``output_crs``). Capabilities /
@@ -377,7 +377,7 @@ def plan_array(
     format_value = effective_format.value if effective_format is not None else None
 
     matrix_id = _matrix_or_zoom_id(service, tile_options)
-    planned_pixel_size = _planned_pixel_size_from_plan(
+    planned_pixel_size = _planned_pixel_size_from_extent(
         planned_bbox=request.bbox,
         pixel_height=pixel_height,
         pixel_width=pixel_width,
@@ -390,7 +390,7 @@ def plan_array(
             "otherwise — not ground metres for Web Mercator)"
         )
 
-    return ArrayPlan(
+    return ArrayPreview(
         requested_bbox=requested,
         planned_bbox=request.bbox,
         bbox_snap_delta=request.bbox_snap_delta,
@@ -422,7 +422,7 @@ def plan_array(
 def fetch_summary(array: xr.DataArray) -> FetchSummary:
     """Summarise fetch progress / pressure for a mosaic ``DataArray``.
 
-    Reads plan-time attrs and, when still present, the live
+    Reads design-time attrs and, when still present, the live
     :class:`~tilearray.fetch.FetchProgress` handle. Fetcher AIMD counters come
     from the shared :class:`~tilearray.fetch.TileFetcher` for the array's
     ``tilearray_fetch_policy`` when one has been constructed. Missing pieces
@@ -546,7 +546,7 @@ def _matrix_or_zoom_id(service: Any, tile_options: dict[str, Any]) -> str | None
     return None
 
 
-def _planned_pixel_size_from_plan(
+def _planned_pixel_size_from_extent(
     *,
     planned_bbox: BoundingBox,
     pixel_height: int,

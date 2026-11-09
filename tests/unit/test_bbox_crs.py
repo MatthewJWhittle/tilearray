@@ -1,4 +1,4 @@
-"""Public ``bbox_crs=`` query CRS (replaces overloaded create/plan ``crs=``)."""
+"""Public ``bbox_crs=`` query CRS (replaces overloaded create/preview ``crs=``)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pytest import MonkeyPatch
 import tilearray._planning as planning_module
 import tilearray.array as array_module
 import tilearray.decode as decode_module
-from tilearray import create_array, plan_array
+from tilearray import create_array, preview_array
 from tilearray.errors import ValidationError
 from tilearray.fetch import TileFetcher
 from tilearray.mosaic_plan import MosaicPlan
@@ -279,7 +279,7 @@ def test_create_array_bbox_crs_wcs(monkeypatch: MonkeyPatch) -> None:
     assert result.attrs["bbox_crs"] == CRS.EPSG_27700.value
 
 
-def test_plan_array_exposes_bbox_crs_and_output_crs(
+def test_preview_array_exposes_bbox_crs_and_output_crs(
     png_tile_bytes: bytes, monkeypatch: MonkeyPatch
 ) -> None:
     monkeypatch.setattr("tilearray.array.fetch_tile", _mock_fetch_tile(png_tile_bytes))
@@ -287,10 +287,10 @@ def test_plan_array_exposes_bbox_crs_and_output_crs(
     config = XYZConfig.from_url(
         OSM_TEMPLATE, zoom=10, output_format=Format.PNG, chunk_size=(256, 256)
     )
-    plan = plan_array(config, bbox, CRS.EPSG_4326)
-    assert plan.bbox_crs == "EPSG:4326"
-    assert plan.crs == "EPSG:3857"
-    text = plan.summary()
+    preview = preview_array(config, bbox, CRS.EPSG_4326)
+    assert preview.bbox_crs == "EPSG:4326"
+    assert preview.crs == "EPSG:3857"
+    text = preview.summary()
     assert "bbox_crs (query)" in text
     assert "crs (output)" in text
 
