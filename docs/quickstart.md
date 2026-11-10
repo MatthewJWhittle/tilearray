@@ -167,7 +167,7 @@ config = WCSConfig.from_url(
     "https://environment.data.gov.uk/spatialdata/"
     "lidar-composite-digital-terrain-model-dtm-1m/wcs",
     "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
-    bbox_crs=CRS.EPSG_27700,
+    crs=CRS.EPSG_27700,
     output_format=Format.GEOTIFF,
     chunk_size=(128, 128),
     resolution=(1.0, 1.0),
@@ -175,7 +175,7 @@ config = WCSConfig.from_url(
 )
 
 bbox = (418_000.0, 451_400.0, 419_024.0, 452_424.0)
-da = create_array(config, bbox, CRS.EPSG_27700)
+da = create_array(config, bbox, bbox_crs=CRS.EPSG_27700)
 mean_elevation = compute_mosaic(da.mean())
 print(float(mean_elevation))
 ```
