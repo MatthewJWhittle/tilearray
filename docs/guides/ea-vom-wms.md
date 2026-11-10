@@ -27,7 +27,7 @@ config = WMSConfig.from_url(
 
 # ~512 m OSGB window (British National Grid)
 bbox = (430000.0, 380000.0, 430512.0, 380512.0)
-da = create_array(config, bbox, CRS.EPSG_27700)
+da = create_array(config, bbox, bbox_crs=CRS.EPSG_27700)
 img = compute_mosaic(da)
 
 print(img.shape, da.attrs["service_type"])  # often (y, x, band) with 4 bands
@@ -45,4 +45,4 @@ img.plot.imshow(rgb="band", add_colorbar=False)
 :width: 480px
 ```
 
-Contains public sector information licensed under the Open Government Licence v3.0. Layer quirks and more hosts: {doc}`../example-sources`. Short recipe: {doc}`../quickstart`.
+**Success check:** shape often `(y, x, band)` with 4 bands (RGBA), `attrs["mosaic_crs"]` matches the OSGB query CRS, and the plot shows the vegetation mosaic. Contains public sector information licensed under the Open Government Licence v3.0. Layer quirks and more hosts: {doc}`../example-sources`.

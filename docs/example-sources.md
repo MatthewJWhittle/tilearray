@@ -1,6 +1,6 @@
 # Example sources
 
-Public endpoints and thin fetch presets for testing host quirks — **not** a product catalogue. Prefer `from_url` + `tilearray.fetch_presets` helpers in {doc}`quickstart` where they apply; use bare `from_url` for everything else. Stay polite: identifiable User-Agent where required, and do not raise concurrency past a host's documented ceiling.
+How-to: copy-paste public endpoints and thin fetch presets for testing host quirks — **not** a product catalogue or a first-run tutorial. Prefer `from_url` + `tilearray.fetch_presets` helpers; use bare `from_url` when no preset exists. Stay polite: identifiable User-Agent where required, and do not raise concurrency past a host's documented ceiling. First success: {doc}`quickstart`. Visual walkthroughs: {doc}`guides/index`.
 
 ## OpenStreetMap raster tiles (XYZ)
 

@@ -76,7 +76,7 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
 
     Uses in-process AIMD concurrency (starts modest, ramps on success, backs off
     hard on 403/408/429 / timeouts) with a bounded ceiling. No fixed per-second throttle;
-    ``Retry-After`` and transient 403/408/429/503 are handled by :class:`~tilearray.fetch.TileFetcher`.
+    ``Retry-After`` and transient 403/408/429/503 are handled by the polite fetch gate.
     """
 
     return {

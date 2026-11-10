@@ -36,5 +36,6 @@ Product boundaries and CRS vocabulary: {doc}`design-principles`.
 
 ## See also
 
-- {doc}`how-it-works` — plan, polite fetch, mosaic
+- {doc}`how-it-works` — plan → fetch → decode → mosaic
+- {doc}`polite-fetch` — host ceilings, soft-fail, scaling
 - {doc}`example-sources` — public endpoints and presets

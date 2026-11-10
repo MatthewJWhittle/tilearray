@@ -29,7 +29,7 @@ config = XYZConfig.from_url(
 )
 
 bbox = (-40.0, 20.0, -10.0, 45.0)  # query lon/lat
-da = create_array(config, bbox, CRS.EPSG_4326)
+da = create_array(config, bbox, bbox_crs=CRS.EPSG_4326)
 arr = compute_mosaic(da)
 print(arr.shape, arr.dims)  # expect (y, x, band) for RGB JPEG
 print(da.attrs["mosaic_crs"], da.attrs["bbox_crs"], da.attrs["transform"])  # EPSG:3857 mosaic
@@ -49,4 +49,4 @@ Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dep
 :width: 520px
 ```
 
-Imagery: NASA GIBS / BlueMarble_NextGeneration. Keep crawls modest; coordinate with GIBS for very large jobs.
+**Success check:** RGB shape `(y, x, band)`, `attrs["mosaic_crs"]` is `EPSG:3857`, and the plot shows Blue Marble over the mid-Atlantic. Imagery: NASA GIBS / BlueMarble_NextGeneration. Keep crawls modest; coordinate with GIBS for very large jobs.

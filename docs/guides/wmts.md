@@ -44,10 +44,12 @@ arr.plot.imshow(rgb="band", add_colorbar=False)
 
 Map data © Kartverket (CC BY 4.0). Keep crawls modest. This host often returns RGBA PNGs — expect a band dimension.
 
+**Success check:** `attrs["mosaic_crs"]` is **EPSG:25833** (not the lon/lat query), `preview.matrix_id` / planned spacing reflect ~10 m, and the plot shows Oslo-area topo.
+
 What to notice:
 
 - You stated **job terms**: service, layer, matrix set, ~10 m spacing, AOI + `bbox_crs=`. Wire details (REST template, ScaleDenominator, matrix id `08`) stay inside inspect / `build_config`.
-- Output `attrs["mosaic_crs"]` is **EPSG:25833** (matrix SupportedCRS), not the query CRS. `attrs["bbox_crs"]` keeps the lon/lat query.
+- `attrs["bbox_crs"]` keeps the lon/lat query; mosaic CRS follows the matrix SupportedCRS.
 - Coordinates are pixel centres on the tile grid; the returned extent may expand to whole tiles.
 - `target_resolution` selects a native TileMatrix — tilearray does **not** resample pixels to that spacing. Same-grid trim is ordinary xarray slicing.
 
@@ -82,7 +84,8 @@ Low-level helper {py:func}`~tilearray.choose_matrix_for_resolution` still works 
 ## Related
 
 - {doc}`../example-sources` — Kartverket + GIBS endpoints
-- {doc}`../quickstart` — short WMTS recipe
+- {doc}`../quickstart` — five-minute OSM first run
 - {doc}`../inspect-endpoint` — discover layers / matrices before hard-coding
+- {doc}`../user-terms` — TileMatrixSet / mosaic CRS
 - {doc}`../how-it-works` — native-grid CRS / snapped extent
 - {doc}`gibs-bluemarble` — same GIBS imagery via XYZ (no WMTS discovery)
