@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-10
+
 ### Breaking
 
 - Mosaic pixel-grid CRS attr renamed **`attrs["crs"]` → `attrs["mosaic_crs"]`**. Query CRS stays `attrs["bbox_crs"]` / `bbox_crs=`. Matching preview field: **`ArrayPreview.crs` → `ArrayPreview.mosaic_crs`**. No dual-write / compatibility alias for the old attr key. Service config `crs=` (request default) and nested `bbox_requested["crs"]` are unchanged
@@ -190,7 +192,8 @@ Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
 - Package renamed from scaffold `ogc-array` to `tilearray`; README, CI, and metadata aligned with shipped API
 - EA Lidar WCS GeoTIFF decode and non-divisible tile resize for native-resolution tiles
 
-[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.0...v0.1.1
