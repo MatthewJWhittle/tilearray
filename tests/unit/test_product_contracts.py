@@ -380,9 +380,10 @@ def test_soft_fail_phase_auth_and_429_still_abort(
 def test_soft_fail_docs_and_stage_gate_state_probe_phase() -> None:
     """Docs/notebooks must name the probe-hard exception beside soft-fail."""
 
-    how = (ROOT / "docs" / "how-it-works.md").read_text(encoding="utf-8")
-    assert "soft_fail" in how or "soft-fail" in how.lower()
-    assert "probe" in how.lower()
+    # Soft-fail phases live in polite-fetch (Diátaxis how-to); how-it-works links out.
+    polite = (ROOT / "docs" / "polite-fetch.md").read_text(encoding="utf-8")
+    assert "soft_fail" in polite or "soft-fail" in polite.lower()
+    assert "probe" in polite.lower()
 
     troubleshooting = (ROOT / "docs" / "troubleshooting.md").read_text(encoding="utf-8")
     assert "probe" in troubleshooting.lower()
