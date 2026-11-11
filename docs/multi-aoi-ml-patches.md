@@ -1,10 +1,8 @@
 # Multi-AOI / ML sample patches
 
-Fetch **many small, noncontiguous bboxes** (training chips, sample sites) without building one country-wide mosaic.
+Training chips and sample sites are usually **many small, noncontiguous bboxes**. Unioning them into one country-wide `bbox=` builds a huge empty mosaic (or floods the host). Fetch each box as its own mosaic instead.
 
-Loop `create_array` per bbox, then `compute_mosaic`, save, and release. Stay polite under the shared host ceiling. Do **not** union distant boxes into one `bbox=`.
-
-Background: {doc}`how-it-works`. Copy-paste hosts: {doc}`quickstart`.
+Loop `create_array` per bbox, then `compute_mosaic`, save, and release. Stay polite under the shared host ceiling. Assumes a single-AOI first run ({doc}`quickstart`). Host ceilings: {doc}`polite-fetch`. Copy-paste hosts: {doc}`example-sources`.
 
 ---
 
@@ -13,7 +11,7 @@ Background: {doc}`how-it-works`. Copy-paste hosts: {doc}`quickstart`.
 Each `create_array` call plans and assembles **one** contiguous mosaic for its bbox. Distant sample sites are separate arrays — not one sparse mosaic over a union bbox.
 
 ```text
-boxes → [create_array(config, b, crs, ...) for b in boxes]   # lazy list is fine
+boxes → [create_array(config, b, bbox_crs=..., ...) for b in boxes]   # lazy list is fine
 for da in lazy:
     arr = compute_mosaic(da)
     save_patch(arr)   # GeoTIFF / zarr / your training record
@@ -59,7 +57,7 @@ lazy = [
     create_array(
         config,
         bbox,
-        CRS.EPSG_4326,
+        bbox_crs=CRS.EPSG_4326,
         expand_palette=True,
         show_progress=False,
     )
@@ -99,7 +97,7 @@ Same host preset / same `FetchPolicy.cache_key` → **one process-wide concurren
 Do **not**:
 
 - Raise the shared ceiling because you have “20 jobs”
-- Set `FetchPolicy(max_concurrent=1)` (or a raised-then-shared override) to “be polite” on one call — that serialises siblings. Prefer a lower `max_concurrent_requests=` on that `create_array` (call-local) or `call_max_concurrent` — see the name map in {doc}`how-it-works`
+- Set `FetchPolicy(max_concurrent=1)` (or a raised-then-shared override) to “be polite” on one call — that serialises siblings. Prefer a lower `max_concurrent_requests=` on that `create_array` (call-local) or `call_max_concurrent` — see the name map in {doc}`polite-fetch`
 - Union every sample into one huge bbox “for convenience”
 
 ---
@@ -144,6 +142,7 @@ Symptom table: {doc}`troubleshooting`.
 
 ## Related
 
-- {doc}`how-it-works` — plan, polite fetch, lazy mosaic; concurrency name map and scaling without overwhelming the host
+- {doc}`how-it-works` — plan → fetch → decode → mosaic
+- {doc}`polite-fetch` — concurrency name map and scaling without overwhelming the host
 - {doc}`troubleshooting` — hung compute, politeness mix-ups, CRS handoff
 - {doc}`guides/index` — live-host visual guides (single AOI); this page’s figure shows three OSM patches

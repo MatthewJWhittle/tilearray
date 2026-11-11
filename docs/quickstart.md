@@ -1,6 +1,10 @@
 # Quick start
 
-Five minutes from install to a plotted, georeferenced mosaic. Prefer {py:func}`tilearray.compute_mosaic` so Dask workers match the fetch ceiling. Visual walkthroughs: {doc}`guides/index`. More endpoints: {doc}`example-sources`.
+Prove the live path once — install → fetch → plot a georeferenced mosaic — before you try other hosts or tune concurrency. This five-minute OpenStreetMap run is that first success. Prefer {py:func}`tilearray.compute_mosaic` so Dask thread workers match the fetch ceiling. Visual walkthrough: {doc}`guides/osm-london`.
+
+```{note}
+This path needs **network** access to the OSM tile host. If the fetch fails (403, timeout, offline), see {doc}`troubleshooting` or try another public host from {doc}`example-sources`.
+```
 
 ## First run — OpenStreetMap XYZ
 
@@ -34,148 +38,34 @@ print(
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-`bbox_crs=` is the **query** CRS (how you describe the bbox). XYZ / slippy mosaics are labelled **EPSG:3857** over the tile-union footprint — output CRS is Web Mercator, not lon/lat (`attrs["bbox_crs"]` keeps the query). Pixels are not client-warped. OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
+**Success check:** shape about `(1024, 512, 3)`, `attrs["mosaic_crs"]` is `EPSG:3857`, and the plot shows a London street mosaic. Axis units are metres, not degrees.
 
 ```{image} _static/guides/osm-london.png
 :alt: OpenStreetMap mosaic over a small central London bbox
 :width: 420px
 ```
 
-Map data © OpenStreetMap contributors. `osm_fetch_defaults()` sets an identifiable User-Agent and polite limits (max 2 in-flight, ~2 req/s). Full guide: {doc}`guides/osm-london`.
+Map data © OpenStreetMap contributors. `osm_fetch_defaults()` sets an identifiable User-Agent and polite limits (max 2 in-flight, ~2 req/s). OSM tiles are often palette PNGs: without `expand_palette=True` the mosaic stays single-band indices (plot with `cmap="gray"`).
 
-**Next:** discover layers on an unfamiliar URL ({doc}`inspect-endpoint`), understand plan → fetch → mosaic ({doc}`how-it-works`), or try other hosts below.
+## CRS cheat sheet (three roles)
 
-## Also — other protocols
+| Role | What it means here | Where you see it |
+|------|--------------------|------------------|
+| **Query CRS** | How you describe the bbox | `bbox_crs=` on `create_array` → `attrs["bbox_crs"]` |
+| **Service / request CRS** | CRS the host expects on the wire | Config `crs=` / matrix SupportedCRS (provider-side) |
+| **Mosaic CRS** | CRS of the returned pixels + transform | `attrs["mosaic_crs"]` |
 
-### WCS — Environment Agency Lidar
+For this XYZ example the query is lon/lat (`EPSG:4326`) and the mosaic is **Web Mercator** (`EPSG:3857`) over the tile-union footprint. Pixels are not client-warped. Always pass the query CRS as keyword **`bbox_crs=`**. More detail: {doc}`user-terms`, {doc}`design-principles`.
 
-```python
-from tilearray import WCSConfig, compute_mosaic, create_array
-from tilearray.fetch_presets import ea_dsp_fetch_defaults
-from tilearray.types import CRS, Format
+## Next steps
 
-wcs_url = (
-    "https://environment.data.gov.uk/spatialdata/"
-    "lidar-composite-digital-terrain-model-dtm-1m/wcs"
-)
-coverage_id = (
-    "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m"
-)
-
-config = WCSConfig.from_url(
-    wcs_url,
-    coverage_id,
-    crs=CRS.EPSG_27700,
-    output_format=Format.GEOTIFF,
-    chunk_size=(800, 800),
-    grid_shape=(1, 1),
-    **ea_dsp_fetch_defaults(),
-)
-
-bbox = (431900.0, 382700.0, 432700.0, 383500.0)
-da = create_array(config, bbox, CRS.EPSG_27700)
-elevation = compute_mosaic(da)
-print(elevation.shape, float(elevation.mean()))
-print(elevation.attrs["mosaic_crs"], elevation.attrs["transform"][:2], elevation.attrs["nodata"])
-```
-
-```{image} _static/guides/ea-lidar-elevation.png
-:alt: EA Lidar elevation map and histogram for a small OSGB window
-:width: 520px
-```
-
-The EA Lidar preset caps sustained concurrency at **10**. CoverageId comes from GetCapabilities — not the URL path slug. For WCS / WMS, `attrs["mosaic_crs"]` matches `bbox_crs=`. Visual walkthrough: {doc}`guides/ea-lidar`.
-
-### WMS — Environment Agency Vegetation Object Model
-
-```python
-from tilearray import WMSConfig, compute_mosaic, create_array
-from tilearray.types import CRS, Format
-
-# Confirm the year-suffixed layer name via GetCapabilities before hard-coding
-config = WMSConfig.from_url(
-    "https://environment.data.gov.uk/spatialdata/vegetation-object-model/wms",
-    layers="Vegetation_Object_Model_2022",
-    output_format=Format.PNG,
-    chunk_size=(512, 512),
-    grid_shape=(1, 1),
-)
-
-# Approximate OSGB window (British National Grid)
-bbox = (430000.0, 380000.0, 430512.0, 380512.0)
-da = create_array(config, bbox, CRS.EPSG_27700)
-img = compute_mosaic(da)
-# Transparent GetMap PNG → RGBA (4 bands)
-print(img.shape, da.attrs["service_type"])
-img.plot.imshow(rgb="band", add_colorbar=False)
-```
-
-```{image} _static/guides/ea-vom-wms.png
-:alt: EA Vegetation Object Model WMS mosaic over a small OSGB window
-:width: 420px
-```
-
-No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. Visual walkthrough: {doc}`guides/ea-vom-wms`. Layer quirks: {doc}`example-sources`.
-
-### WMTS — Kartverket topo (EPSG:25833)
-
-```python
-from tilearray import compute_mosaic, create_array, inspect_endpoint
-
-inspection = inspect_endpoint("https://cache.kartverket.no/v1/service")
-config = inspection.build_config(
-    layer="topo",
-    tile_matrix_set="utm33n",
-    target_resolution=10.0,  # metres / pixel in the matrix CRS
-    style="default",
-)
-
-# Lon/lat AOI → native UTM33 mosaic (tile-aligned extent may expand)
-da = create_array(
-    config,
-    bbox=(10.6, 59.85, 10.8, 59.95),
-    bbox_crs="EPSG:4326",
-)
-arr = compute_mosaic(da)
-print(arr.shape, da.attrs["mosaic_crs"])  # mosaic CRS is EPSG:25833, not the query CRS
-arr.plot.imshow(rgb="band", add_colorbar=False)
-```
-
-```{image} _static/guides/wmts-kartverket-oslo.png
-:alt: Kartverket topo WMTS mosaic over a small Oslo-area bbox in EPSG:25833
-:width: 420px
-```
-
-Name the service, layer, TileMatrixSet, and a familiar spacing — inspect attaches templates / matrix metadata. The mosaic is labelled with the matrix SupportedCRS and tile-aligned extent. Visual walkthrough: {doc}`guides/wmts`. Unknown hosts: {doc}`inspect-endpoint`.
-
-Many noncontiguous sample boxes (ML chips): {doc}`multi-aoi-ml-patches` — one `create_array` per bbox, not one mosaic over the union of all boxes.
-
-## Private or keyed hosts
-
-Same habit: config → `create_array` → `compute_mosaic`. Pass static credentials on the config with `params=` (query API keys, legacy username/password query params) or `headers=` (Bearer, API-key headers, Basic). Prefer env-backed `params=` over secrets in XYZ URL templates. Details and the WCS/WMTS capabilities caveat: {doc}`troubleshooting`. Keyed OS Maps XYZ: {doc}`example-sources`.
-
-## Large mosaics — `compute_mosaic`
-
-For multi-tile lazy mosaics, `compute_mosaic` reads fetch policy from `da.attrs` automatically:
-
-```python
-from tilearray import WCSConfig, compute_mosaic, create_array
-from tilearray.fetch_presets import ea_dsp_fetch_defaults
-from tilearray.types import CRS, Format
-
-config = WCSConfig.from_url(
-    "https://environment.data.gov.uk/spatialdata/"
-    "lidar-composite-digital-terrain-model-dtm-1m/wcs",
-    "13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m",
-    crs=CRS.EPSG_27700,
-    output_format=Format.GEOTIFF,
-    chunk_size=(128, 128),
-    resolution=(1.0, 1.0),
-    **ea_dsp_fetch_defaults(),
-)
-
-bbox = (418_000.0, 451_400.0, 419_024.0, 452_424.0)
-da = create_array(config, bbox, bbox_crs=CRS.EPSG_27700)
-mean_elevation = compute_mosaic(da.mean())
-print(float(mean_elevation))
-```
+| Job | Go to |
+|-----|-------|
+| Same OSM path with more commentary | {doc}`guides/osm-london` |
+| Other hosts (WCS / WMS / WMTS / GIBS) | {doc}`guides/index` |
+| Unknown URL → pick layer / CoverageId | {doc}`inspect-endpoint` |
+| What happens on `create_array` | {doc}`how-it-works` |
+| Host ceilings / soft-fail / scaling | {doc}`polite-fetch` |
+| Fetch failed or CRS looks wrong | {doc}`troubleshooting` |
+| Many noncontiguous sample boxes | {doc}`multi-aoi-ml-patches` |
+| Private or keyed hosts | {doc}`troubleshooting` · {doc}`example-sources` |

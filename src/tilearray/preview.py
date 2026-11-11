@@ -423,8 +423,8 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
     """Summarise fetch progress / pressure for a mosaic ``DataArray``.
 
     Reads design-time attrs and, when still present, the live
-    :class:`~tilearray.fetch.FetchProgress` handle. Fetcher AIMD counters come
-    from the shared :class:`~tilearray.fetch.TileFetcher` for the array's
+    :class:`~tilearray.fetch.FetchProgress` handle. AIMD / pressure counters come
+    from the shared process-local fetch gate for the array's
     ``tilearray_fetch_policy`` when one has been constructed. Missing pieces
     stay ``None`` / listed under ``unknowns`` — never invented.
     """

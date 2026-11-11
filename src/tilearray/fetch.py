@@ -439,13 +439,14 @@ class FetchStats:
 
 
 class FetchPolicy(BaseModel):
-    """Configuration for :class:`TileFetcher`.
+    """Concurrency, retries, timeouts, rate limits, and optional AIMD / circuit-breaker
+    settings for polite tile HTTP.
 
     ``max_concurrent`` is the **shared process-local gate ceiling** (host / preset
     limit). Threads in one Python process that resolve the same
-    :meth:`cache_key` share one fetcher and concurrency gate. Separate OS
-    processes and Dask distributed workers each get their own gate — there is
-    no cross-process host ceiling.
+    :meth:`cache_key` share one concurrency gate. Separate OS processes and Dask
+    distributed workers each get their own gate — there is no cross-process host
+    ceiling.
 
     ``call_max_concurrent`` is an optional **per-call / per-session** limit. It is
     not part of :meth:`cache_key`, so one caller's local politeness cannot shrink

@@ -1,6 +1,6 @@
 # EA Lidar WCS — elevation + analysis
 
-Fetch a small British National Grid window from the Environment Agency Lidar composite DTM (WCS), plot elevation, and summarise the distribution.
+Rendered map tiles are pictures; WCS Lidar is a **numerical** elevation coverage (GeoTIFF, nodata → NaN). This guide fetches a small British National Grid window, plots elevation, and summarises the distribution.
 
 Uses `WCSConfig.from_url(..., **ea_dsp_fetch_defaults())` (AIMD under a hard ceiling, pressure circuit breaker). Keep large cold mosaics at or below the preset ceiling — higher limits can trip gateway pressure.
 
@@ -33,7 +33,7 @@ config = WCSConfig.from_url(
 bbox = (431900.0, 382700.0, 432156.0, 382956.0)
 
 # Presets or any pyproj-valid EPSG string work the same way
-da = create_array(config, bbox, CRS.EPSG_27700)  # or "EPSG:27700"
+da = create_array(config, bbox, bbox_crs=CRS.EPSG_27700)  # or bbox_crs="EPSG:27700"
 elevation = compute_mosaic(da)  # match Dask workers to fetch ceiling
 print(elevation.shape, float(elevation.mean()))
 print(da.attrs["mosaic_crs"], da.attrs["bbox_crs"], da.attrs["transform"])
@@ -49,4 +49,4 @@ elevation.plot.imshow(cmap="terrain", add_colorbar=True)
 :width: 720px
 ```
 
-Example stats for this window: shape `(256, 256)`, mean elevation about 176 m (see histogram). More public endpoints: {doc}`../example-sources`.
+**Success check:** shape `(256, 256)`, finite mean elevation (about 176 m for this window — see histogram), `attrs["mosaic_crs"]` is `EPSG:27700`. More public endpoints: {doc}`../example-sources`.

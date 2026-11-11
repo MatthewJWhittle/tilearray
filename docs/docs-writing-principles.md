@@ -33,6 +33,8 @@ Write for someone who wants to:
 
 Prefer **visual usage guides** from live hosts (figures assembled into Sphinx offline). Plain language over framework jargon.
 
+**Why-first leads.** Tutorials, how-tos, and explanations open with why the page matters for the reader’s job (the stake: 403s, wrong CRS, missing CoverageId, …), then how/what and cross-links. Do not lead with knob lists or a cluster of “see also” links. Pure API reference stubs may stay terse.
+
 ---
 
 ## Cut filter (remove or demote)

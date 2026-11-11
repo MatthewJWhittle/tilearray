@@ -1,6 +1,8 @@
 # Troubleshooting
 
-Short answers for the failures that show up first with public hosts. Background: {doc}`how-it-works`. Endpoints: {doc}`example-sources`.
+Public tile hosts fail in familiar ways — 403/429 pressure, wrong CoverageIds, CRS attrs that look “off,” hung multi-tile computes. Use this page when a fetch or mosaic does not match what you expected.
+
+Symptom → cause → action below. Pipeline: {doc}`how-it-works`. Host ceilings / soft-fail / scaling: {doc}`polite-fetch`. Endpoints: {doc}`example-sources`.
 
 ## Prefer `compute_mosaic`
 
@@ -21,11 +23,13 @@ Before a large compute, preview the job without fetching mosaic pixels:
 ```python
 from tilearray import preview_array, recommend_grid_shape, fetch_summary
 
-preview = preview_array(config, bbox, crs, resolution=(1.0, 1.0), cache_dir="./tiles")
+preview = preview_array(
+    config, bbox, bbox_crs=..., resolution=(1.0, 1.0), cache_dir="./tiles"
+)
 print(preview)  # requests, pixels, concurrency ceiling, cache warm/cold, unknowns
 ```
 
-Tune `chunk_size` / `resolution` / `grid_shape` / `max_concurrent_requests` from that summary — you should not need protocol-specific tile maths. `recommend_grid_shape(bbox, chunk_size=…, resolution=…)` is the pure helper when you only need `(rows, cols)`. Band counts and byte estimates stay **unknown** for JPEG/PNG until a probe or `create_array`; GeoTIFF elevation format policy reports 1 band. After compute, `print(fetch_summary(da))` shows done/total, soft-fails, and AIMD / breaker counters when a shared fetcher exists.
+Tune `chunk_size` / `resolution` / `grid_shape` / `max_concurrent_requests` from that summary — you should not need protocol-specific tile maths. `recommend_grid_shape(bbox, chunk_size=…, resolution=…)` is the pure helper when you only need `(rows, cols)`. Band counts and byte estimates stay **unknown** for JPEG/PNG until a probe or `create_array`; GeoTIFF elevation format policy reports 1 band. After compute, `print(fetch_summary(da))` shows done/total, soft-fails, and AIMD / breaker counters when available.
 
 ## Large mosaic looks hung / want quiet CI
 
@@ -46,10 +50,10 @@ Host ceiling / concurrency semantics are unchanged — progress only observes ti
 |---------|---------------|------------|
 | One polite call serialises sibling mosaics | Shared gate shrunk (`FetchPolicy.max_concurrent=1` / raised-then-shared override) | Lower `max_concurrent_requests=` on `create_array` (call-local) or set `call_max_concurrent`; keep the preset host ceiling |
 | Many sample sites produce one huge empty mosaic or flood the host | Union bbox, or raised ceiling “for 20 jobs” | One `create_array` per bbox; sequential (or small-batch) compute under the shared gate — {doc}`multi-aoi-ml-patches` |
-| `compute_mosaic(..., num_workers=N)` changed HTTP in-flight | That kwarg sizes **Dask workers only** | Set fetch politeness at `create_array` / config; see the concurrency name map in {doc}`how-it-works` |
-| Headers / `resolution` / AIMD knobs “ignored” or applied oddly | Same `**service_options` bag feeds **fetch**, **planner**, and **identity** families | Match the key to its family in {doc}`how-it-works` (fetch keys are popped into `FetchPolicy` first) |
-| Many 403/429 after moving to “more workers” / processes / distributed | Process-local gate × N workers overwhelms the host | Stay on `compute_mosaic` (threads). Multi-process/distributed does **not** share one ceiling — see {doc}`how-it-works` (scaling without overwhelming the host); divide ceilings by worker count only as a conservative approach |
-| `compute_mosaic(..., scheduler="processes")` still threads | Helper **always** uses `scheduler="threads"` so the process gate can apply | Use threads on purpose; for processes, read the scaling section in {doc}`how-it-works` first — there is no cross-process host gate |
+| `compute_mosaic(..., num_workers=N)` changed HTTP in-flight | That kwarg sizes **Dask workers only** | Set fetch politeness at `create_array` / config; see the concurrency name map in {doc}`polite-fetch` |
+| Headers / `resolution` / AIMD knobs “ignored” or applied oddly | Same `**service_options` bag feeds **fetch**, **planner**, and **identity** families | Match the key to its family in {doc}`polite-fetch` (fetch keys are popped into `FetchPolicy` first) |
+| Many 403/429 after moving to “more workers” / processes / distributed | Process-local gate × N workers overwhelms the host | Stay on `compute_mosaic` (threads). Multi-process/distributed does **not** share one ceiling — see {doc}`polite-fetch`; divide ceilings by worker count only as a conservative approach |
+| `compute_mosaic(..., scheduler="processes")` still threads | Helper **always** uses `scheduler="threads"` so the process gate can apply | Use threads on purpose; for processes, read the scaling section in {doc}`polite-fetch` first — there is no cross-process host gate |
 
 Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `**service_options` key.
 
@@ -57,7 +61,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 
 | Symptom | Likely cause | What to do |
 |---------|--------------|------------|
-| “Wrong” CRS vs GeoTIFF tags | Mosaic CRS comes from planning (`attrs["mosaic_crs"]`), not tags inside tiles | Query CRS is `attrs["bbox_crs"]` (`bbox_crs=`). For WCS / WMS mosaic `attrs["mosaic_crs"]` matches the query; for XYZ / slippy WMTS it is `EPSG:3857`; for metadata-backed WMTS it is the matrix SupportedCRS — see {doc}`how-it-works` georef contract |
+| “Wrong” CRS vs GeoTIFF tags | Mosaic CRS comes from planning (`attrs["mosaic_crs"]`), not tags inside tiles | Query CRS is `attrs["bbox_crs"]` (`bbox_crs=`). For WCS / WMS mosaic `attrs["mosaic_crs"]` matches the query; for XYZ / slippy WMTS it is `EPSG:3857`; for metadata-backed WMTS it is the matrix SupportedCRS — see {doc}`user-terms` · {doc}`how-it-works` |
 | `Invalid CRS` / `Did you mean 'EPSG:…'` | Typo or unknown authority (e.g. `EPGS:28992`) | Use a pyproj-valid EPSG string/integer or preset (`CRS.EPSG_27700`); provider codes such as `EPSG:25833` are fine |
 | Expected native-grid CRS ≠ query CRS | **XYZ / slippy WMTS** label mosaics `EPSG:3857` over the tile-union extent; **WMTS with TileMatrixSet metadata** labels with the matrix SupportedCRS. Query bbox may differ (`bbox_crs=` / `bbox_requested`). WCS / WMS use the query CRS for bbox + mosaic label | Fixed grids plan in native CRS without warping downloaded pixels — prefer `bbox_crs=` — see {doc}`guides/wmts` / {doc}`design-principles` |
 | `TileMatrix '8' was not found` but caps list `08` | Host uses zero-padded matrix ids | Pass `tile_matrix=8` (matched automatically) or the exact caps id `"08"` |
@@ -68,7 +72,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 | Palette PNG is grayscale indices | Mode `P` kept as indices by default | Pass `expand_palette=True` for RGB, or use a truecolor source |
 | Edge tile smaller / ValidationError on shape | WCS clipped the coverage | Georeferenced GeoTIFF responses are placed+padded with NaN; missing tags or a resolution/CRS mismatch still fail — see {doc}`how-it-works` |
 | Edge NaNs look like soft-fail | Coverage pad vs fetch soft-fail | Outside-coverage pads do not increment `tilearray_tile_errors`; soft-fail only records exhausted tile fetches |
-| Need rasterio/rioxarray write | Optional downstream | Use the rioxarray recipe in {doc}`how-it-works` § Downstream use (`write_crs` / `write_transform` / `write_nodata` from attrs) |
+| Need rasterio/rioxarray write | Optional downstream | Use the rioxarray recipe in {doc}`how-it-works` (`write_crs` / `write_transform` / `write_nodata` from attrs) |
 
 ## Environment Agency WCS
 

@@ -1,8 +1,8 @@
 # Inspect an unknown endpoint
 
-Point tilearray at a WMS, WMTS, or WCS URL, read what the host advertises, then build a **validated** config for {py:func}`~tilearray.create_array`. XYZ templates have no GetCapabilities — the helper explains that and only checks the URL shape.
+A tile URL rarely tells you the CoverageId, layer name, or TileMatrixSet you must pass. Guessing those identifiers wastes time on 404s and empty mosaics.
 
-This is discovery and validation, not automatic reprojection or a provider catalogue.
+Point tilearray at a WMS, WMTS, or WCS URL, read what the host advertises, then build a **validated** config for {py:func}`~tilearray.create_array`. XYZ templates have no GetCapabilities — the helper explains that and only checks the URL shape. This is discovery and validation, not automatic reprojection or a provider catalogue. Terms (CoverageId, TileMatrixSet): {doc}`user-terms`.
 
 ## WCS — list coverages, then load
 
@@ -82,6 +82,8 @@ Everyday use is {py:func}`~tilearray.inspect_endpoint` with a URL. Offline / fix
 
 ## Related
 
-- {doc}`quickstart` — known public hosts
+- {doc}`quickstart` — five-minute OSM first run
+- {doc}`guides/index` — visual host tutorials after you have a config
+- {doc}`example-sources` — known public hosts
 - {doc}`troubleshooting` — wrong CoverageId / format / URL symptoms
 - {doc}`api/index` — `inspect_endpoint` (URL) / `inspect_capabilities` (offline body) / `EndpointInspection`

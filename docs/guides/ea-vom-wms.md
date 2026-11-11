@@ -1,8 +1,8 @@
 # EA Vegetation Object Model — WMS
 
-Load a small British National Grid window from the Environment Agency Vegetation Object Model (WMS), compute it, and plot the mosaic.
+WMS layers are often year-suffixed and return transparent PNG GetMap responses as **RGBA** — easy to hard-code the wrong year or expect three bands. This guide loads a small British National Grid window and plots the mosaic.
 
-Uses `WMSConfig.from_url` with a year-suffixed layer id from GetCapabilities (confirm the year before hard-coding). No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. Transparent GetMap PNGs often decode as **RGBA** (4 bands).
+Uses `WMSConfig.from_url` with a layer id from GetCapabilities (confirm the year before hard-coding). No WMS fetch preset — stay polite with modest `grid_shape` / concurrency.
 
 ```{note}
 Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dependency); see {doc}`../install`.
@@ -27,7 +27,7 @@ config = WMSConfig.from_url(
 
 # ~512 m OSGB window (British National Grid)
 bbox = (430000.0, 380000.0, 430512.0, 380512.0)
-da = create_array(config, bbox, CRS.EPSG_27700)
+da = create_array(config, bbox, bbox_crs=CRS.EPSG_27700)
 img = compute_mosaic(da)
 
 print(img.shape, da.attrs["service_type"])  # often (y, x, band) with 4 bands
@@ -45,4 +45,4 @@ img.plot.imshow(rgb="band", add_colorbar=False)
 :width: 480px
 ```
 
-Contains public sector information licensed under the Open Government Licence v3.0. Layer quirks and more hosts: {doc}`../example-sources`. Short recipe: {doc}`../quickstart`.
+**Success check:** shape often `(y, x, band)` with 4 bands (RGBA), `attrs["mosaic_crs"]` matches the OSGB query CRS, and the plot shows the vegetation mosaic. Contains public sector information licensed under the Open Government Licence v3.0. Layer quirks and more hosts: {doc}`../example-sources`.
