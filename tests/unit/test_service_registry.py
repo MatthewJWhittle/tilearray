@@ -17,15 +17,22 @@ pytestmark = pytest.mark.unit
     ("url", "expected"),
     [
         ("https://example.com/wcs?service=WCS", ServiceTypeEnum.WCS),
+        ("https://example.com/v1/service?SERVICE=WMTS", ServiceTypeEnum.WMTS),
         ("https://example.com/path/wcs", ServiceTypeEnum.WCS),
         ("https://example.com/wms", ServiceTypeEnum.WMS),
         ("https://example.com/wmts", ServiceTypeEnum.WMTS),
         ("https://tiles.example/{z}/{x}/{y}.png", ServiceTypeEnum.XYZ),
     ],
-    ids=["query-wcs", "path-wcs", "path-wms", "path-wmts", "xyz-template"],
+    ids=[
+        "query-wcs",
+        "query-SERVICE-wmts",
+        "path-wcs",
+        "path-wms",
+        "path-wmts",
+        "xyz-template",
+    ],
 )
 def test_detect_service_type(url: str, expected: ServiceTypeEnum) -> None:
-    """Didactic token/path/XYZ rows; opaque/query taxonomy lives in product contracts."""
     assert detect_service_type(url) == expected
 
 

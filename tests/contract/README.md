@@ -8,17 +8,16 @@ while keeping default CI network-free.
 
 | Layer | Where | PR? | Role |
 |-------|-------|-----|------|
-| Unit | `tests/unit/` | Yes | Logic under mocks |
-| **Product contracts** | `tests/unit/test_product_contracts.py` | **Yes** | Opaque URL / inspect journey, soft-fail **phases**, plot-ready dims — Modes A–D |
+| Unit | `tests/unit/` | Yes | Library logic under mocks |
 | Contract (VCR) | `tests/contract/` | Yes | Recorded caps / plan locks |
 | Live / soak | `tests/integration/` (`@net` / `@slow`) | Nightly only | Real hosts; discovery + plot-ready smoke |
 | Docs journey | `scripts/docs_journey_smoke.py` | Manual / local | Opaque inspect + palette decode without Jupyter |
 
-**PR green ≠ stage-gate notebooks pass.** Coverage ≥ 85% is a floor, not the definition of product readiness.
+**PR green ≠ stage-gate notebooks pass.** Coverage ≥ 85% is a floor, not the definition of product readiness. Unit tests assert on library behaviour, not docs prose.
 
-### Adding a URL-shape row
+### Adding a URL-shape or inspect case
 
-1. Prefer a taxonomy case in `test_product_contracts.py` (opaque path, `SERVICE=` query, token path, XYZ, unknowable → message) over a host-named test.
+1. Prefer a taxonomy case in `tests/unit/` (opaque path, `SERVICE=` query, token path, XYZ, unknowable → message) over a host-named test.
 2. For inspect journeys, feed **real-shaped caps XML** under an opaque `base_url` via respx — typed `WMTSConfig.from_url` live smoke does **not** cover discovery.
 3. Record a VCR cassette only when locking live HTTP shapes; share one GetCapabilities cassette across methods when bodies are equivalent for asserts.
 

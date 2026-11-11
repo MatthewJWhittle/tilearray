@@ -1,4 +1,4 @@
-"""Hostile product-contract tests — expected to go red and expose bugs.
+"""Hostile unit tests — expected to go red and expose library bugs.
 
 These are deliberately aggressive. A first-run green result is suspicious:
 strengthen the assertion or document why the behaviour is intentionally OK.
