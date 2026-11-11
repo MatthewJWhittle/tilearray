@@ -1,5 +1,7 @@
 # Install
 
+Get tilearray onto your machine so you can run the first live mosaic from PyPI (or a checkout). Documented against **0.3.1**.
+
 Python **3.9+**. Prefer [uv](https://github.com/astral-sh/uv):
 
 ```bash
@@ -12,7 +14,7 @@ or:
 pip install tilearray
 ```
 
-Documented against **tilearray 0.3.1** (`compute_mosaic`, `preview_array`, `bbox_crs=`, `attrs["mosaic_crs"]`).
+Public names in the docs: `compute_mosaic`, `preview_array`, `bbox_crs=`, `attrs["mosaic_crs"]`.
 
 Plotting with xarray (`arr.plot.imshow` and similar) needs **matplotlib**. It is not a core tilearray dependency — install it separately before the quickstart plot:
 

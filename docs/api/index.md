@@ -29,7 +29,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 
 Before a large fetch, {py:func}`~tilearray.preview_array` returns a read-only {py:class}`~tilearray.ArrayPreview` (request count, planned bbox, `bbox_crs` / `mosaic_crs`, `matrix_id`, concurrency ceiling, cache warm/cold). {py:func}`~tilearray.recommend_grid_shape` sizes `(rows, cols)` from bbox × chunk × resolution. WMTS happy path: {py:func}`~tilearray.inspect_endpoint` → `build_config(..., target_resolution=...)`. After preview or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters.
 
-**Query CRS:** `bbox_crs=` on `create_array` / `preview_array` / `load_array`. `attrs["bbox_crs"]` records the query; `attrs["mosaic_crs"]` is the mosaic CRS (WCS/WMS match the query; XYZ/slippy → `EPSG:3857`; metadata WMTS → matrix SupportedCRS). No client-side raster warp. Soft-fail / progress / `band_policy` / `cache_dir` are named parameters. `**service_options` key families: {doc}`../polite-fetch`.
+**Query CRS:** `bbox_crs=` on `create_array` / `preview_array` / `load_array`. `attrs["bbox_crs"]` records the query; `attrs["mosaic_crs"]` is the mosaic CRS (WCS/WMS match the query; XYZ/slippy → `EPSG:3857`; metadata WMTS → matrix SupportedCRS). No client-side raster warp. Soft-fail / progress / `band_policy` / `cache_dir` are named parameters. ``**service_options`` key families: {doc}`../polite-fetch`.
 
 ## Configs
 

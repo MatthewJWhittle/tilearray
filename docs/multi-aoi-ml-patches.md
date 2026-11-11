@@ -1,10 +1,8 @@
 # Multi-AOI / ML sample patches
 
-How-to: fetch **many small, noncontiguous bboxes** (training chips, sample sites) without building one country-wide mosaic.
+Training chips and sample sites are usually **many small, noncontiguous bboxes**. Unioning them into one country-wide `bbox=` builds a huge empty mosaic (or floods the host). Fetch each box as its own mosaic instead.
 
-Loop `create_array` per bbox, then `compute_mosaic`, save, and release. Stay polite under the shared host ceiling. Do **not** union distant boxes into one `bbox=`. Assumes you already completed a single-AOI first run ({doc}`quickstart`).
-
-Host ceilings and concurrency names: {doc}`polite-fetch`. Copy-paste hosts: {doc}`example-sources`.
+Loop `create_array` per bbox, then `compute_mosaic`, save, and release. Stay polite under the shared host ceiling. Assumes a single-AOI first run ({doc}`quickstart`). Host ceilings: {doc}`polite-fetch`. Copy-paste hosts: {doc}`example-sources`.
 
 ---
 

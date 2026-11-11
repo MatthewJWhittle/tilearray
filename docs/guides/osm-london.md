@@ -1,6 +1,6 @@
 # OpenStreetMap XYZ — central London
 
-Load a small slippy-map window, compute it, plot the mosaic, and read CRS / transform / extent.
+XYZ / slippy mosaics are labelled **EPSG:3857** even when you query in lon/lat — easy to miss until you print attrs. This guide is a small London window you can plot and check.
 
 Uses `XYZConfig.from_url(OSM_TILE_TEMPLATE, …, **osm_fetch_defaults())` (identifiable User-Agent, max 2 in-flight, ~2 req/s). Include **© OpenStreetMap contributors** when displaying the imagery.
 

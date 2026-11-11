@@ -1,6 +1,6 @@
 # Quick start
 
-Five minutes from install to a plotted, georeferenced OpenStreetMap mosaic. Prefer {py:func}`tilearray.compute_mosaic` so Dask thread workers match the fetch ceiling. Visual walkthrough: {doc}`guides/osm-london`.
+Prove the live path once — install → fetch → plot a georeferenced mosaic — before you try other hosts or tune concurrency. This five-minute OpenStreetMap run is that first success. Prefer {py:func}`tilearray.compute_mosaic` so Dask thread workers match the fetch ceiling. Visual walkthrough: {doc}`guides/osm-london`.
 
 ```{note}
 This path needs **network** access to the OSM tile host. If the fetch fails (403, timeout, offline), see {doc}`troubleshooting` or try another public host from {doc}`example-sources`.

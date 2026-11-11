@@ -1,6 +1,8 @@
 # Troubleshooting
 
-How-to: short answers for the failures that show up first with public hosts. Pipeline: {doc}`how-it-works`. Host ceilings / soft-fail / scaling: {doc}`polite-fetch`. Endpoints: {doc}`example-sources`.
+Public tile hosts fail in familiar ways — 403/429 pressure, wrong CoverageIds, CRS attrs that look “off,” hung multi-tile computes. Use this page when a fetch or mosaic does not match what you expected.
+
+Symptom → cause → action below. Pipeline: {doc}`how-it-works`. Host ceilings / soft-fail / scaling: {doc}`polite-fetch`. Endpoints: {doc}`example-sources`.
 
 ## Prefer `compute_mosaic`
 

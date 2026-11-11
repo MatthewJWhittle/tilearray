@@ -1,6 +1,8 @@
 # Polite fetch and scaling
 
-Tune host ceilings, soft-fail, and `**service_options` without flooding a tile server. Assumes you already have a working `create_array` → `compute_mosaic` path ({doc}`quickstart`). Pipeline overview: {doc}`how-it-works`. Symptom tables: {doc}`troubleshooting`.
+Large AOIs mean dozens or thousands of tile requests. Without a shared concurrency ceiling — and without knowing how soft-fail and process-local gates behave — a laptop-sized demo turns into 403s, 429s, or a flooded public host when you widen the window or add workers.
+
+This how-to covers host ceilings (AIMD / rate limits), soft-fail phases, the ``**service_options`` keyword bag on `create_array`, and multi-process limits. Assumes a working `create_array` → `compute_mosaic` path ({doc}`quickstart`). Pipeline overview: {doc}`how-it-works`. Symptom tables: {doc}`troubleshooting`.
 
 ## Host ceilings and AIMD
 
@@ -34,11 +36,11 @@ Opt-in `on_tile_error` / `soft_fail=True` can soft-fill exhausted tile-local fai
 | Post-graph tile load | Mosaic tiles after the Dask graph exists | Soft-fill exhausted tile-local 404 / 5xx / transport; record `attrs["tilearray_tile_errors"]` |
 | Auth / rate-limit | HTTP 401 or exhausted 429 | **Hard abort** (siblings stop) |
 
-Soft-fail knobs (`on_tile_error`, `soft_fail`, `soft_fill_value`, `soft_fail_max_fraction`) are **named** parameters on `create_array` / `load_array`, not `**service_options` keys.
+Soft-fail knobs (`on_tile_error`, `soft_fail`, `soft_fill_value`, `soft_fail_max_fraction`) are **named** parameters on `create_array` / `load_array`, not keys in the ``**service_options`` bag.
 
-## `**service_options` name map
+## ``**service_options`` name map
 
-`create_array(..., **service_options)` is one bag. Keys fall into three families — know which family you are editing:
+``create_array(..., **service_options)`` is one bag. Keys fall into three families — know which family you are editing:
 
 | Family | Keys (illustrative) | What consumes them |
 |--------|---------------------|--------------------|

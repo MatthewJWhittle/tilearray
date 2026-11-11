@@ -1,6 +1,8 @@
 # User terms
 
-Short definitions for words the docs and API use constantly. Agent-oriented domain notes live in the repository `GLOSSARY.md` (not this site). Deeper CRS contract: {doc}`design-principles`.
+Docs and the API reuse a small set of words — AOI, query CRS, mosaic CRS, CoverageId, TileMatrixSet. Mixing them up (especially query vs mosaic CRS, or CoverageId vs URL slug) is the usual source of “wrong CRS” and empty fetches.
+
+Short definitions below. Deeper CRS contract: {doc}`design-principles`. Agent-oriented domain notes live in the repository `GLOSSARY.md` (not this site).
 
 ## AOI
 

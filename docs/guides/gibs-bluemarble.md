@@ -1,8 +1,8 @@
 # NASA GIBS XYZ — Blue Marble
 
-Load a small mid-Atlantic window from NASA GIBS as JPEG RGB tiles. Uses `XYZConfig.from_url` with a template where the path is `{z}/{y}/{x}` (row before column) — not the OSM `{z}/{x}/{y}` order.
+GIBS XYZ templates use `{z}/{y}/{x}` (row before column). Copying an OSM-style `{z}/{x}/{y}` path yields empty or scrambled mosaics. This guide is a small mid-Atlantic Blue Marble window so you can verify RGB + Web Mercator georef.
 
-Query the AOI in lon/lat; the mosaic is labelled **EPSG:3857** (native Web Mercator tile union), same contract as other XYZ / slippy sources.
+Uses `XYZConfig.from_url` with that GIBS template. Query the AOI in lon/lat; the mosaic is labelled **EPSG:3857** (native Web Mercator tile union), same contract as other XYZ / slippy sources.
 
 ## Code
 

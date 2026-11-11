@@ -1,8 +1,8 @@
 # Which guide for which job
 
-How-to index: pick a published host guide (or related how-to) by the job you need. Each guide is a visual tutorial with a figure and a success check. Interactive notebook (optional): `notebooks/community_worked_examples.ipynb` in the repository.
+You should not have to read every tutorial to find the one that matches your job (XYZ street mosaic vs WCS elevation vs native-grid WMTS). Use this index to jump straight there.
 
-Stay polite: modest bboxes, fetch presets where they exist, no bulk OSM scrape. Attribution where the host requires it.
+Each guide is a visual tutorial with a figure and a success check. Interactive notebook (optional): `notebooks/community_worked_examples.ipynb` in the repository. Stay polite: modest bboxes, fetch presets where they exist, no bulk OSM scrape. Attribution where the host requires it.
 
 | Job | Go to |
 |-----|-------|

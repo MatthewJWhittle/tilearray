@@ -1,5 +1,7 @@
 # How it works
 
+Wrong CRS labels, silent warps, and “why did this hang?” usually come from not knowing what `create_array` does. This page is the short mental model: **plan → fetch → decode → place → mosaic → lazy / `compute_mosaic`**.
+
 tilearray turns **tiled** WCS / WMS / WMTS / XYZ sources into analysis-ready [xarray](https://docs.xarray.dev/) arrays. You pass a bounding box and a service config; the library plans the tile grid, fetches under a concurrency ceiling, decodes, and assembles a mosaic.
 
 ```{image} _static/guides/how-it-works-pipeline.png

@@ -1,6 +1,6 @@
 # EA Lidar WCS — elevation + analysis
 
-Fetch a small British National Grid window from the Environment Agency Lidar composite DTM (WCS), plot elevation, and summarise the distribution.
+Rendered map tiles are pictures; WCS Lidar is a **numerical** elevation coverage (GeoTIFF, nodata → NaN). This guide fetches a small British National Grid window, plots elevation, and summarises the distribution.
 
 Uses `WCSConfig.from_url(..., **ea_dsp_fetch_defaults())` (AIMD under a hard ceiling, pressure circuit breaker). Keep large cold mosaics at or below the preset ceiling — higher limits can trip gateway pressure.
 

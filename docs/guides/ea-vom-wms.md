@@ -1,8 +1,8 @@
 # EA Vegetation Object Model — WMS
 
-Load a small British National Grid window from the Environment Agency Vegetation Object Model (WMS), compute it, and plot the mosaic.
+WMS layers are often year-suffixed and return transparent PNG GetMap responses as **RGBA** — easy to hard-code the wrong year or expect three bands. This guide loads a small British National Grid window and plots the mosaic.
 
-Uses `WMSConfig.from_url` with a year-suffixed layer id from GetCapabilities (confirm the year before hard-coding). No WMS fetch preset — stay polite with modest `grid_shape` / concurrency. Transparent GetMap PNGs often decode as **RGBA** (4 bands).
+Uses `WMSConfig.from_url` with a layer id from GetCapabilities (confirm the year before hard-coding). No WMS fetch preset — stay polite with modest `grid_shape` / concurrency.
 
 ```{note}
 Plotting needs matplotlib (`pip install matplotlib` — not a core tilearray dependency); see {doc}`../install`.

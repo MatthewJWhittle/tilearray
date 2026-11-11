@@ -1,6 +1,8 @@
 # Usage guides
 
-Visual tutorials: load tiles from a public host, plot the result, and confirm CRS / shape. Each guide has one job, one figure path, and a success check. Needs network access to the live host. Background: {doc}`../how-it-works`. First success without a host choice: {doc}`../quickstart`.
+Live hosts are where protocol quirks and CRS surprises show up. Each guide walks one host job to a plotted mosaic with a figure you can check against — better than reading API shapes alone.
+
+Needs network access. Each guide has one job, one figure path, and a success check. Background: {doc}`../how-it-works`. First success without choosing a host: {doc}`../quickstart`.
 
 ```{toctree}
 :maxdepth: 1
