@@ -92,6 +92,10 @@ class WMTSLayerInfo:
     matrix_limits: dict[str, dict[str, WMTSTileMatrixLimits]] = field(
         default_factory=dict
     )
+    formats: tuple[str, ...] = ()
+    styles: tuple[str, ...] = ()
+    default_style: str | None = None
+    dimensions: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -202,6 +206,32 @@ class WMTSParser:
                 if resource_template:
                     break
 
+        formats: list[str] = []
+        for format_elem in element.findall("wmts:Format", self.namespaces):
+            if format_elem.text and format_elem.text.strip():
+                formats.append(format_elem.text.strip())
+
+        styles: list[str] = []
+        default_style: str | None = None
+        for style_elem in element.findall("wmts:Style", self.namespaces):
+            style_id = self._text(style_elem, "ows:Identifier")
+            if not style_id:
+                continue
+            styles.append(style_id)
+            if style_elem.get("isDefault", "").lower() in {"true", "1"}:
+                default_style = style_id
+        if default_style is None and styles:
+            default_style = styles[0]
+
+        dimensions: dict[str, str] = {}
+        for dim_elem in element.findall("wmts:Dimension", self.namespaces):
+            dim_id = self._text(dim_elem, "ows:Identifier")
+            if not dim_id:
+                continue
+            default_value = self._text(dim_elem, "wmts:Default")
+            if default_value:
+                dimensions[dim_id] = default_value
+
         tms_links: list[str] = []
         matrix_limits: dict[str, dict[str, WMTSTileMatrixLimits]] = {}
         for link_elem in element.findall("wmts:TileMatrixSetLink", self.namespaces):
@@ -219,6 +249,10 @@ class WMTSParser:
             resource_url_template=resource_template,
             tile_matrix_set_links=tms_links,
             matrix_limits=matrix_limits,
+            formats=tuple(formats),
+            styles=tuple(styles),
+            default_style=default_style,
+            dimensions=dimensions,
         )
 
     def _text(self, element: ET.Element, xpath: str) -> str | None:
@@ -243,6 +277,7 @@ class WMTSService(BaseService):
         output_format: Format | None = Format.PNG,
         crs: CRS | None = CRS.EPSG_4326,
         url_template: str | None = None,
+        dimensions: dict[str, str] | None = None,
         version: str = "1.0.0",
         client: httpx.Client | None = None,
         **config: Any,
@@ -272,6 +307,12 @@ class WMTSService(BaseService):
         )
         self.native_crs = CRS.parse(crs or config.get("crs") or CRS.EPSG_4326)
         self.url_template = url_template or config.get("url_template")
+        raw_dimensions = (
+            dimensions if dimensions is not None else config.get("dimensions")
+        )
+        self.dimensions: dict[str, str] = (
+            dict(raw_dimensions) if isinstance(raw_dimensions, dict) else {}
+        )
         self._client = client
         self.parser = WMTSParser()
         self._capabilities: WMTSCapabilities | None = None
@@ -327,8 +368,20 @@ class WMTSService(BaseService):
             self._capabilities = caps
 
         layer_info = caps.layers.get(self.layer)
-        if layer_info and self.url_template is None:
+        if layer_info is None:
+            return
+        if self.url_template is None:
             self.url_template = layer_info.resource_url_template
+        if not self.style and layer_info.default_style:
+            self.style = layer_info.default_style
+        if self.output_format == Format.PNG and layer_info.formats:
+            preferred = layer_info.formats[0]
+            try:
+                self.output_format = Format(preferred)
+            except ValueError:
+                pass
+        for name, value in layer_info.dimensions.items():
+            self.dimensions.setdefault(name, value)
 
     def plan_tiles(
         self,
@@ -419,6 +472,7 @@ class WMTSService(BaseService):
         )
         fmt = self._coerce_format(options.get("output_format") or self.output_format)
         crs = CRS.parse(options.get("crs") or tile.crs or self.native_crs)
+        dimensions = _resolve_dimensions(self.dimensions, options.get("dimensions"))
 
         tile_col = _require_index(tile.tile_x, options.get("tile_col"))
         tile_row = _require_index(tile.tile_y, options.get("tile_row"))
@@ -443,6 +497,7 @@ class WMTSService(BaseService):
             "url_template",
             "tile_col",
             "tile_row",
+            "dimensions",
         )
         if template:
             url = _format_rest_template(
@@ -454,6 +509,7 @@ class WMTSService(BaseService):
                 tile_row=str(tile_row),
                 tile_col=str(tile_col),
                 fmt=fmt,
+                dimensions=dimensions,
             )
             return self.compose_tile_request(
                 tile,
@@ -475,6 +531,8 @@ class WMTSService(BaseService):
             "TileRow": str(tile_row),
             "TileCol": str(tile_col),
         }
+        for name, value in dimensions.items():
+            protocol_params.setdefault(name, value)
 
         return self.compose_tile_request(
             tile,
@@ -828,6 +886,16 @@ def _require_index(value: int | None, override: object) -> int:
     return int(resolved)
 
 
+def _resolve_dimensions(base: dict[str, str], override: object) -> dict[str, str]:
+    merged = dict(base)
+    if isinstance(override, dict):
+        for key, value in override.items():
+            if value is None:
+                continue
+            merged[str(key)] = str(value)
+    return merged
+
+
 def _format_rest_template(
     template: str,
     *,
@@ -838,6 +906,7 @@ def _format_rest_template(
     tile_row: str,
     tile_col: str,
     fmt: Format,
+    dimensions: dict[str, str] | None = None,
 ) -> str:
     extension = _format_extension(fmt)
     replacements = {
@@ -854,6 +923,13 @@ def _format_rest_template(
         url = url.replace(token, value)
     if "{FormatExtension}" in url:
         url = url.replace("{FormatExtension}", extension)
+    for name, value in (dimensions or {}).items():
+        url = url.replace("{" + name + "}", quote(str(value), safe=""))
+    if "{" in url:
+        raise ValidationError(
+            "WMTS REST template has unfilled placeholder after substituting "
+            f"Layer/Style/TileMatrix*/Format and Dimension defaults: {url!r}"
+        )
     return url
 
 

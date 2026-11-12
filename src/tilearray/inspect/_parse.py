@@ -294,7 +294,11 @@ def _from_wmts_capabilities(
             identifier=layer.identifier,
             tile_matrix_sets=tuple(layer.tile_matrix_set_links),
             resource_url_template=layer.resource_url_template,
-            formats=_formats_from_template(layer.resource_url_template),
+            formats=layer.formats
+            or _formats_from_template(layer.resource_url_template),
+            styles=layer.styles,
+            default_style=layer.default_style,
+            dimensions=dict(layer.dimensions),
         )
         for layer in caps.layers.values()
     )
