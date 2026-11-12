@@ -14,7 +14,7 @@ from .._http_client import peel_url_query
 from ..error_messages import undetectable_service_type_message
 from ..errors import ConfigurationError, ValidationError
 from ..mosaic_plan import MosaicPlan
-from ..tiles import snap_bbox_outward
+from ..tiles import resolution_axis_tile_sizes, snap_bbox_outward
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .requests import compose_tile_request as _compose_tile_request
 from .requests import merge_str_mappings
@@ -123,8 +123,8 @@ class BaseService(ABC):
             snapped = snap_bbox_outward(bbox, (res_x, res_y), origin)
             n_px = max(1, int(round((snapped.max_x - snapped.min_x) / res_x)))
             n_py = max(1, int(round((snapped.max_y - snapped.min_y) / res_y)))
-            cols = max(1, (n_px + width - 1) // width)
-            rows = max(1, (n_py + height - 1) // height)
+            cols = len(resolution_axis_tile_sizes(n_px, width))
+            rows = len(resolution_axis_tile_sizes(n_py, height))
             return int(rows * cols)
 
         rows, cols = _grid_shape_from_options(options)
@@ -165,19 +165,21 @@ class BaseService(ABC):
 
             # Index-walk on the snapped pixel grid so every request spans at
             # least one native pixel (no epsilon drop / sub-pixel leftover).
+            # Mosaic order is north-first / west-first; only the trailing size
+            # on each axis may differ (remainder absorbed into the last tile).
             n_px = max(1, int(round((snapped.max_x - snapped.min_x) / res_x)))
             n_py = max(1, int(round((snapped.max_y - snapped.min_y) / res_y)))
+            x_sizes = resolution_axis_tile_sizes(n_px, width)
+            y_sizes = resolution_axis_tile_sizes(n_py, height)
 
-            y0 = 0
-            while y0 < n_py:
-                tile_h = min(height, n_py - y0)
-                min_y = snapped.min_y + y0 * res_y
-                max_y = snapped.min_y + (y0 + tile_h) * res_y
-                x0 = 0
-                while x0 < n_px:
-                    tile_w = min(width, n_px - x0)
-                    min_x = snapped.min_x + x0 * res_x
-                    max_x = snapped.min_x + (x0 + tile_w) * res_x
+            y_cursor = snapped.max_y
+            for tile_h in y_sizes:
+                max_y = y_cursor
+                min_y = y_cursor - tile_h * res_y
+                x_cursor = snapped.min_x
+                for tile_w in x_sizes:
+                    min_x = x_cursor
+                    max_x = x_cursor + tile_w * res_x
                     yield TileGeometry(
                         bbox=BoundingBox(
                             min_x=min_x,
@@ -190,8 +192,8 @@ class BaseService(ABC):
                         height=tile_h,
                         crs=bbox.crs,
                     )
-                    x0 += tile_w
-                y0 += tile_h
+                    x_cursor = max_x
+                y_cursor = min_y
             return
 
         rows, cols = _grid_shape_from_options(options)

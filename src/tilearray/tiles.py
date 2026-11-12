@@ -28,6 +28,7 @@ __all__ = [
     "create_tile_grid",
     "fetch_tile",
     "get_fetcher",
+    "resolution_axis_tile_sizes",
     "save_tile",
     "snap_bbox_outward",
 ]
@@ -92,35 +93,52 @@ def snap_bbox_outward(
     origin: tuple[float, float] = (0.0, 0.0),
 ) -> BoundingBox:
     """
-    Expand ``bbox`` outward to the nearest pixel edges on an origin-aligned grid.
+    Align ``bbox`` onto an origin-aligned pixel grid without changing pixel count.
 
-    Uses the same floor/ceil index arithmetic as :func:`create_tile_grid` with
-    ``tile_size=(1, 1)``, so the snapped box is exactly the union of native
-    pixels that intersect the request. Already-aligned boxes are unchanged.
+    Pixel counts come from the *requested* span via ``round(span / resolution)``
+    (minimum 1), not from the union of grid cells that intersect the box. The
+    minimum corner is snapped down onto the grid and the maximum is set to
+    ``min + n_px * resolution``, so an exact N-pixel ground span stays N pixels
+    even when the request is not origin-aligned. Already-aligned integer spans
+    are unchanged. Sub-pixel requests still expand to one native pixel.
     """
     res_x, res_y = resolution
     if res_x <= 0 or res_y <= 0:
         raise ValidationError("resolution values must be positive")
 
     origin_x, origin_y = origin
+    n_px = max(1, int(round((bbox.max_x - bbox.min_x) / res_x)))
+    n_py = max(1, int(round((bbox.max_y - bbox.min_y) / res_y)))
     col_min = math.floor((bbox.min_x - origin_x) / res_x)
-    col_max = math.ceil((bbox.max_x - origin_x) / res_x) - 1
     row_min = math.floor((bbox.min_y - origin_y) / res_y)
-    row_max = math.ceil((bbox.max_y - origin_y) / res_y) - 1
-
-    # Point-like remnants still need at least one native pixel of coverage.
-    if col_max < col_min:
-        col_max = col_min
-    if row_max < row_min:
-        row_max = row_min
 
     return BoundingBox(
         min_x=origin_x + col_min * res_x,
         min_y=origin_y + row_min * res_y,
-        max_x=origin_x + (col_max + 1) * res_x,
-        max_y=origin_y + (row_max + 1) * res_y,
+        max_x=origin_x + (col_min + n_px) * res_x,
+        max_y=origin_y + (row_min + n_py) * res_y,
         crs=bbox.crs,
     )
+
+
+def resolution_axis_tile_sizes(n_px: int, chunk: int) -> list[int]:
+    """
+    Split ``n_px`` into tile sizes of at most ``chunk``.
+
+    Only the final size may be shorter than ``chunk`` (for example 513 at 256
+    → ``[256, 256, 1]``). Callers that organise tiles north-first / west-first
+    must place this list in mosaic order so the short chunk stays last — the
+    layout Zarr accepts — rather than as a leading sliver.
+    """
+    if chunk <= 0:
+        raise ValidationError("chunk size must be positive")
+    n_px = max(1, int(n_px))
+    if n_px <= chunk:
+        return [n_px]
+    full, rem = divmod(n_px, chunk)
+    if rem == 0:
+        return [chunk] * full
+    return [chunk] * full + [rem]
 
 
 def create_tile_grid(
