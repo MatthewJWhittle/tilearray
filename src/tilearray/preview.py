@@ -296,16 +296,6 @@ def preview_array(
 
     # Estimate-only path (#161): huge plans skip materialising TileRequests.
     if not tile_requests and entry.request_count > 0:
-        unknowns = (
-            "pixel shape (tile requests not materialised for this estimate)",
-            "in-memory array bytes (depends on band count and pixel shape)",
-        )
-        notes = (
-            "request_count is an O(1) estimate; tile_requests were not "
-            "materialised because the plan exceeds max_tile_requests",
-            "estimates exclude HTTP overhead, retries, and decode peaks; "
-            "no transfer time or provider cost is claimed",
-        )
         return ArrayPreview(
             requested_bbox=requested,
             planned_bbox=request.bbox,
@@ -329,8 +319,16 @@ def preview_array(
             fetch_policy=fetch_policy_summary(fetch_policy),
             service_type=service_type_str,
             output_format=format_value,
-            unknowns=unknowns,
-            notes=notes,
+            unknowns=(
+                "pixel shape (tile requests not materialised for this estimate)",
+                "in-memory array bytes (depends on band count and pixel shape)",
+            ),
+            notes=(
+                "request_count is an O(1) estimate; tile_requests were not "
+                "materialised because the plan exceeds max_tile_requests",
+                "estimates exclude HTTP overhead, retries, and decode peaks; "
+                "no transfer time or provider cost is claimed",
+            ),
             tile_requests=(),
         )
 

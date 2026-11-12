@@ -627,9 +627,7 @@ def test_opaque_inspect_names_302_when_caps_redirect() -> None:
                 302, headers={"Location": dest + "?" + str(request.url.query)}
             )
         if target == dest.rstrip("/"):
-            return httpx.Response(
-                200, text=caps, headers={"content-type": "text/xml"}
-            )
+            return httpx.Response(200, text=caps, headers={"content-type": "text/xml"})
         return httpx.Response(404, text="no")
 
     respx.route(method="GET").mock(side_effect=_route)

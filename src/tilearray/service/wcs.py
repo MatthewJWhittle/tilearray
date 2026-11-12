@@ -633,9 +633,7 @@ class WCSService(BaseService):
             "format": fmt.value,
             "width": str(tile.width),
             "height": str(tile.height),
-            "scaleSize": self._format_scale_size(
-                axis_labels, tile.width, tile.height
-            ),
+            "scaleSize": self._format_scale_size(axis_labels, tile.width, tile.height),
         }
         if metadata.native_crs is None or subset_crs != metadata.native_crs:
             protocol_params["subsettingCRS"] = subset_crs.value
@@ -736,9 +734,9 @@ class WCSService(BaseService):
             return False
         if crs is not None:
             try:
-                axes = CRS.parse(crs).to_pyproj().axis_info
+                axes = list(CRS.parse(crs).to_pyproj().axis_info)
             except Exception:  # pragma: no cover - defensive
-                axes = ()
+                axes = []
             for axis in axes:
                 name = (axis.name or "").lower()
                 abbrev = (axis.abbrev or "").lower()

@@ -37,9 +37,18 @@ def test_missing_float_predictor_codec_is_configuration_error(
         read_geotiff_bytes(PRED3_TIF.read_bytes())
 
 
-def test_predictor3_fixture_raises_configuration_error_without_imagecodecs() -> None:
-    """Real PREDICTOR=3 body: without imagecodecs, public decode is ConfigurationError."""
+def test_predictor3_fixture_decodes_or_configuration_error() -> None:
+    """Real PREDICTOR=3 body: decode when imagecodecs is present, else ConfigurationError.
+
+    Never a bare ValueError — that is the durable #153 contract.
+    """
     raw = PRED3_TIF.read_bytes()
     assert len(raw) == 314
-    with pytest.raises(ConfigurationError, match="imagecodecs"):
-        read_geotiff_bytes(raw)
+    try:
+        import imagecodecs  # noqa: F401
+    except ImportError:
+        with pytest.raises(ConfigurationError, match="imagecodecs"):
+            read_geotiff_bytes(raw)
+        return
+    arr = read_geotiff_bytes(raw)
+    assert arr.size > 0
