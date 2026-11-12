@@ -24,6 +24,8 @@ from .http import (
 )
 from .requests import tile_option_passthrough
 from .xyz import (
+    _refuse_outside_slippy_domain,
+    _refuse_tile_indices_outside_zoom,
     _tile_bounds_3857,
     _tile_range_for_bbox,
 )
@@ -608,7 +610,9 @@ class WMTSService(BaseService):
         tile_height: int,
     ) -> Iterable[TileGeometry]:
         working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
+        _refuse_outside_slippy_domain(working_bbox)
         x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
+        _refuse_tile_indices_outside_zoom(x_min, y_min, x_max, y_max, zoom)
 
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
@@ -642,6 +646,14 @@ class WMTSService(BaseService):
                 "is compatible."
             ) from exc
 
+        # Geographic matrices: refuse lon outside [-180, 180] rather than clamp (#164).
+        if matrix_crs.is_geographic:
+            if working_bbox.min_x < -180.0 or working_bbox.max_x > 180.0:
+                raise ValidationError(
+                    "AOI longitude is outside [-180, 180] for this WMTS geographic "
+                    "TileMatrixSet (out-of-domain boxes are refused, not clipped)"
+                )
+
         pixel_size = _pixel_size_in_crs_units(matrix.scale_denominator, matrix_crs)
         span_x = abs(pixel_size * matrix.tile_width)
         span_y = abs(pixel_size * matrix.tile_height)
@@ -651,36 +663,49 @@ class WMTSService(BaseService):
                 "tile span from ScaleDenominator; check the capabilities document."
             )
 
-        min_col = _matrix_index(
+        # Raw matrix indices — do not clamp into the matrix; refuse out-of-domain (#164).
+        min_col = _raw_matrix_index(
             working_bbox.min_x,
             matrix.top_left_x,
             span_x,
-            matrix.matrix_width,
             reverse=False,
         )
-        max_col = _matrix_index(
+        max_col = _raw_matrix_index(
             working_bbox.max_x,
             matrix.top_left_x,
             span_x,
-            matrix.matrix_width,
             reverse=False,
         )
         # TileRow 0 starts at TopLeftCorner; rows increase away from the top
         # (decreasing Y in always_xy / north-up coordinates).
-        min_row = _matrix_index(
+        min_row = _raw_matrix_index(
             working_bbox.max_y,
             matrix.top_left_y,
             span_y,
-            matrix.matrix_height,
             reverse=True,
         )
-        max_row = _matrix_index(
+        max_row = _raw_matrix_index(
             working_bbox.min_y,
             matrix.top_left_y,
             span_y,
-            matrix.matrix_height,
             reverse=True,
         )
+
+        if (
+            min_col < 0
+            or max_col < 0
+            or min_row < 0
+            or max_row < 0
+            or min_col >= matrix.matrix_width
+            or max_col >= matrix.matrix_width
+            or min_row >= matrix.matrix_height
+            or max_row >= matrix.matrix_height
+        ):
+            raise ValidationError(
+                f"Request bbox falls outside WMTS TileMatrix {matrix.identifier!r} "
+                f"domain ({matrix.matrix_width}×{matrix.matrix_height} tiles) and "
+                "is refused (not clipped)"
+            )
 
         if limits is not None:
             min_col = max(min_col, limits.min_tile_col)
@@ -943,6 +968,24 @@ def _format_extension(fmt: Format) -> str:
     raise ValidationError(f"Unsupported format: {fmt}")
 
 
+def _raw_matrix_index(
+    coordinate: float,
+    origin: float,
+    span: float,
+    *,
+    reverse: bool,
+) -> int:
+    """Return the unclamped matrix index for ``coordinate`` (#164 refuse, not clip)."""
+
+    if span <= 0:
+        return 0
+    if reverse:
+        raw = math.floor((origin - coordinate) / span)
+    else:
+        raw = math.floor((coordinate - origin) / span)
+    return int(raw)
+
+
 def _matrix_index(
     coordinate: float,
     origin: float,
@@ -951,10 +994,7 @@ def _matrix_index(
     *,
     reverse: bool,
 ) -> int:
-    if span <= 0:
-        return 0
-    if reverse:
-        raw = math.floor((origin - coordinate) / span)
-    else:
-        raw = math.floor((coordinate - origin) / span)
-    return max(0, min(int(raw), limit - 1))
+    """Legacy clamped index helper (tests / callers that still expect clamp)."""
+
+    raw = _raw_matrix_index(coordinate, origin, span, reverse=reverse)
+    return max(0, min(raw, limit - 1))

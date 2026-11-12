@@ -40,6 +40,7 @@ class ArrayEntry:
     fetch_policy: FetchPolicy
     tile_requests: tuple[TileRequest, ...]
     tile_options: Mapping[str, Any]
+    request_count: int
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "tile_requests", tuple(self.tile_requests))
@@ -57,12 +58,16 @@ def from_public_args(
     output_format: Format | None = None,
     cache_dir: str | Path | None = None,
     output_crs: CRS | str | int | None = None,
+    materialize_tiles: bool = True,
     **service_options: Any,
 ) -> ArrayEntry:
     """Build the shared create/preview entry from the public argument bag.
 
     Returns ``(request, service, fetch_policy, tile_requests, tile_options)``
     bundled as :class:`ArrayEntry`. Does not decode tiles or build a mosaic.
+
+    When ``materialize_tiles=False`` (preview), huge plans may return an empty
+    ``tile_requests`` tuple with ``request_count`` set from an O(1) estimate.
     """
 
     service_config = (
@@ -108,8 +113,12 @@ def from_public_args(
         service_options_input=options,
     )
     service = request.build_service(service_type)
-    tile_requests, tile_options = request.plan_tile_requests(service)
-    if not tile_requests:
+    tile_requests, tile_options, request_count = request.plan_tile_requests(
+        service,
+        max_tile_requests=fetch_policy.max_tile_requests,
+        allow_estimate_only=not materialize_tiles,
+    )
+    if not tile_requests and request_count == 0:
         raise ValidationError("Planning produced no tile requests for this AOI")
 
     return ArrayEntry(
@@ -118,6 +127,7 @@ def from_public_args(
         fetch_policy=fetch_policy,
         tile_requests=tuple(tile_requests),
         tile_options=tile_options,
+        request_count=request_count,
     )
 
 

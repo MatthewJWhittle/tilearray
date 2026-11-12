@@ -127,8 +127,14 @@ def test_array_request_infers_grid_from_resolution() -> None:
         service_options_input={"resolution": (1.0, 1.0)},
     )
 
-    assert request.grid_shape == (2, 2)
+    # Grid inference is deferred until mosaic-CRS resolution apply (#160).
+    assert request.resolution_grid_pending is True
+    assert request.grid_shape == (1, 1)
     assert request.resolution == (1.0, 1.0)
+    tile_options = request.tile_options()
+    request._apply_mosaic_crs_resolution(tile_options)
+    assert request.grid_shape == (2, 2)
+    assert request.resolution_grid_pending is False
 
 
 def test_array_request_snaps_resolution_bbox_outward() -> None:
@@ -147,6 +153,12 @@ def test_array_request_snaps_resolution_bbox_outward() -> None:
         cache_dir_input=None,
         service_options_input={"resolution": (1.0, 1.0)},
     )
+
+    # Snapping is deferred until mosaic-CRS resolution apply (#160).
+    assert request.bbox_snap_delta is None
+    assert request.bbox.max_x == pytest.approx(1024.1)
+    tile_options = request.tile_options()
+    request._apply_mosaic_crs_resolution(tile_options)
 
     assert request.bbox.max_x == 1025.0
     assert request.bbox.max_y == 513.0

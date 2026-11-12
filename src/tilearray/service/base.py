@@ -105,6 +105,16 @@ class BaseService(ABC):
         ]
         return MosaicPlan.from_planning(tiles, tile_geoms)
 
+    def estimate_tile_count(
+        self,
+        bbox: BoundingBox,
+        chunk_size: tuple[int, int],
+        **options: object,
+    ) -> int | None:
+        """O(1) tile-count estimate when the service can compute one; else ``None``."""
+
+        return None
+
     def plan_tiles(
         self,
         bbox: BoundingBox,

@@ -130,7 +130,7 @@ def test_array_request_applies_mosaic_plan_without_service_attrs() -> None:
     assert not hasattr(service, "inferred_grid_shape")
     assert not hasattr(service, "inferred_mosaic_bbox")
 
-    tiles, _options = request.plan_tile_requests(service)
+    tiles, _options, _count = request.plan_tile_requests(service)
     assert len(tiles) > 1
     assert request.grid_shape[0] * request.grid_shape[1] == len(tiles)
     assert request.bbox.crs == CRS.EPSG_3857

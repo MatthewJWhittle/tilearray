@@ -478,12 +478,21 @@ class FetchPolicy(BaseModel):
     forbidden_cooldown_seconds: float = Field(default=15.0, gt=0)
     pressure_classifier: PressureClassifier | None = None
     call_max_concurrent: int | None = Field(default=None, ge=1)
+    max_tile_requests: int = Field(
+        default=10_000,
+        ge=1,
+        description=(
+            "Refuse (create) or estimate-only (preview) when a tile plan would "
+            "exceed this many requests"
+        ),
+    )
 
     def cache_key(self) -> tuple[Any, ...]:
         """Hashable key for sharing fetcher instances (shared gate identity).
 
         Excludes ``call_max_concurrent`` so per-call limits do not create a
         separate process-wide gate or collide siblings onto a Semaphore(1).
+        Excludes ``max_tile_requests`` (planning guard, not HTTP identity).
         """
 
         return (
