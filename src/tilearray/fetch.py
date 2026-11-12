@@ -462,7 +462,14 @@ class FetchPolicy(BaseModel):
 
     max_concurrent: int = Field(default=_DEFAULT_MAX_CONCURRENT, ge=1)
     max_connections: int | None = Field(default=None, ge=1)
-    retries: int = Field(default=3, ge=0)
+    retries: int = Field(
+        default=3,
+        ge=0,
+        description=(
+            "Retry budget for retryable HTTP/network failures (attempts = "
+            "retries + 1). Authoritative over TileRequest.retries."
+        ),
+    )
     timeout: float = Field(default=30.0, gt=0)
     rate_limit_per_second: float | None = _DEFAULT_RATE_LIMIT_PER_SECOND
     rate_limiter: HostRateLimiter | None = None
@@ -916,7 +923,10 @@ class TileFetcher:
             headers.setdefault("Accept", request.output_format.value)
 
         host = urlparse(request.url).netloc or request.url
-        attempts = max(request.retries, self._policy.retries) + 1
+        # FetchPolicy.retries (from fetch_retries= on configs) is the single
+        # source of truth. Do not max() with TileRequest.retries — that default
+        # (3) silently overrode fetch_retries=0 into four attempts.
+        attempts = self._policy.retries + 1
 
         def _before_sleep(retry_state: RetryCallState) -> None:
             if progress is not None:

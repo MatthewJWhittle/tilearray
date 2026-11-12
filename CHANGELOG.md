@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- HTTP 404 responses (including OGC `ExceptionReport` bodies such as `InvalidSubsetting`, `InvalidParameterValue`, and `NoSuchCoverage`) fail fast with a single attempt instead of being retried as transient pressure (#170)
+- `fetch_retries=0` is honoured: `TileFetcher` uses `FetchPolicy.retries` alone for the attempt budget, so the `TileRequest.retries` default no longer forces four attempts (#170)
 - Lazy mosaics no longer hang a live `FetchProgress` (with `threading.Lock`) on `DataArray.attrs`; attrs store a JSON-safe registry token so `deepcopy` / `pickle` / `to_zarr` work. Combined with trailing chunk remainders from the snap fix, Zarr accepts the dask chunk layout (#169)
 - Resolution mosaics keep the requested pixel count when the AOI is not origin-aligned: `snap_bbox_outward` uses `round(span / resolution)` and floor-aligns the minimum corner instead of taking the intersecting pixel-union (which added a 1-px sliver, e.g. 513 for a 512-px request). Tile walks place any chunk remainder on the mosaic-trailing edge (south / east) so a short leftover is never the leading dask/Zarr chunk (#171)
 - WMS / WCS / WMTS-KVP `params=` no longer raises `TypeError` (protocol query keys and caller params used the same keyword). Caller API keys and vendor query params merge into the tile request alongside GetMap / GetCoverage / GetTile keys (#151)
