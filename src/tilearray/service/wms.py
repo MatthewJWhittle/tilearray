@@ -10,6 +10,7 @@ from ..error_messages import unsupported_format_message
 from ..errors import ParseError, ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
+from .requests import tile_option_passthrough
 
 
 @dataclass
@@ -223,7 +224,7 @@ class WMSService(BaseService):
                 "when output_crs= is set), or omit output_crs=."
             )
 
-        params: dict[str, Any] = {
+        protocol_params: dict[str, Any] = {
             "service": "WMS",
             "request": "GetMap",
             "version": version,
@@ -237,27 +238,20 @@ class WMSService(BaseService):
             "transparent": "true",
         }
 
-        passthrough = {
-            key: value
-            for key, value in options.items()
-            if key
-            not in {
-                "output_format",
-                "crs",
+        return self.compose_tile_request(
+            tile,
+            url=self.base_url,
+            protocol_params=protocol_params,
+            output_format=fmt,
+            crs=crs,
+            **tile_option_passthrough(
+                options,
                 "output_crs",
                 "supported_crs",
                 "layers",
                 "styles",
                 "version",
-            }
-        }
-        return self.compose_tile_request(
-            tile,
-            url=self.base_url,
-            params=params,
-            output_format=fmt,
-            crs=crs,
-            **passthrough,
+            ),
         )
 
     def _coerce_format(self, fmt: Any) -> Format:

@@ -9,6 +9,7 @@ from typing import Any
 from ..errors import ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
+from .requests import tile_option_passthrough
 
 # Spherical Web Mercator half-world extent (π · WGS84 semi-major axis).
 _WEB_MERCATOR_ORIGIN = math.pi * 6378137.0
@@ -94,14 +95,11 @@ class XYZService(BaseService):
         if isinstance(fmt, str):
             fmt = Format(fmt)
 
-        passthrough = {
-            key: value for key, value in options.items() if key != "output_format"
-        }
         return self.compose_tile_request(
             tile,
             url=url,
             output_format=fmt,
-            **passthrough,
+            **tile_option_passthrough(options, "x", "y", "zoom"),
         )
 
 

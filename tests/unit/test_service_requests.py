@@ -64,7 +64,7 @@ def test_compose_tile_request_wires_config_headers_and_params() -> None:
         width=tile.width,
         height=tile.height,
         crs=tile.crs,
-        params={"service": "xyz"},
+        protocol_params={"service": "xyz"},
         output_format=Format.PNG,
     )
 
