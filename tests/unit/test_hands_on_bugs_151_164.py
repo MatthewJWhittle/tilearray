@@ -187,9 +187,7 @@ def _geometry(
     height: int = 256,
 ) -> TileGeometry:
     return TileGeometry(
-        bbox=BoundingBox(
-            min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, crs=crs
-        ),
+        bbox=BoundingBox(min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y, crs=crs),
         width=width,
         height=height,
         crs=crs,
@@ -207,8 +205,10 @@ def test_151_wms_caller_params_merge_into_tile_request() -> None:
         "https://example.com/wms", layers="a", output_format=Format.PNG
     ).build_tile_request(_geometry(), params={"key": "x"})
     assert req.params.get("key") == "x"
-    assert req.params.get("service") == "WMS" or req.params.get("REQUEST") == "GetMap" or "GetMap" in str(
-        req.params.get("request")
+    assert (
+        req.params.get("service") == "WMS"
+        or req.params.get("REQUEST") == "GetMap"
+        or "GetMap" in str(req.params.get("request"))
     )
 
 
@@ -237,9 +237,7 @@ def test_151_wcs_caller_params_merge_into_tile_request() -> None:
 
 def test_151_wmts_kvp_caller_params_merge_into_tile_request() -> None:
     geom = TileGeometry(
-        bbox=BoundingBox(
-            min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326
-        ),
+        bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326),
         width=256,
         height=256,
         crs=CRS.EPSG_4326,
@@ -260,9 +258,7 @@ def test_151_wmts_kvp_caller_params_merge_into_tile_request() -> None:
 def test_151_xyz_params_still_carry() -> None:
     """Regression guard: XYZ already worked — keep key once."""
     geom = TileGeometry(
-        bbox=BoundingBox(
-            min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326
-        ),
+        bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=1, crs=CRS.EPSG_4326),
         width=256,
         height=256,
         crs=CRS.EPSG_4326,
@@ -274,6 +270,7 @@ def test_151_xyz_params_still_carry() -> None:
         "https://tiles.example.com/{z}/{x}/{y}.png", zoom=3
     ).build_tile_request(geom, params={"key": "x"})
     assert req.params.get("key") == "x" or "key=x" in req.url
+
 
 # ---------------------------------------------------------------------------
 # #152 — thin RGB(A) tiles keep (y, x[, band]) layout
@@ -311,9 +308,7 @@ def test_152_thin_png_decodes_band_last(height: int, bands: int) -> None:
         crs=CRS.EPSG_4326,
         width=256,
         height=height,
-        bbox=BoundingBox(
-            min_x=0, min_y=0, max_x=1, max_y=0.01, crs=CRS.EPSG_4326
-        ),
+        bbox=BoundingBox(min_x=0, min_y=0, max_x=1, max_y=0.01, crs=CRS.EPSG_4326),
     )
     arr = decoder_for_format(Format.PNG)(resp, req)
     if bands == 1:
@@ -340,9 +335,7 @@ def test_152_thin_png_narrow_width_band_last(width: int) -> None:
         crs=CRS.EPSG_4326,
         width=width,
         height=256,
-        bbox=BoundingBox(
-            min_x=0, min_y=0, max_x=0.01, max_y=1, crs=CRS.EPSG_4326
-        ),
+        bbox=BoundingBox(min_x=0, min_y=0, max_x=0.01, max_y=1, crs=CRS.EPSG_4326),
     )
     assert decoder_for_format(Format.PNG)(resp, req).shape == (256, width, 3)
 
@@ -473,6 +466,7 @@ def test_156_wmts_time_dimension_filled_from_default() -> None:
     assert "{Time}" not in url
     assert "{" not in url
     assert "2026-07-15" in url
+
 
 # ---------------------------------------------------------------------------
 # #157 — WMTS Format/Style from caps
@@ -631,9 +625,7 @@ def test_161_preview_does_not_build_every_tile_request(
         )
 
     monkeypatch.setattr(XYZService, "build_tile_request", boom)
-    cfg = XYZConfig.from_url(
-        "https://tiles.example.com/{z}/{x}/{y}.png", zoom=14
-    )
+    cfg = XYZConfig.from_url("https://tiles.example.com/{z}/{x}/{y}.png", zoom=14)
     pv = preview_array(cfg, (-6, 50, 2, 56), bbox_crs="EPSG:4326")
     # GB @ z14 ≈ 166_896 tiles (exact count from index range).
     assert pv.request_count > 100_000
@@ -648,9 +640,7 @@ def test_161_create_array_refuses_huge_request_count(
         )
 
     monkeypatch.setattr(XYZService, "build_tile_request", boom)
-    cfg = XYZConfig.from_url(
-        "https://tiles.example.com/{z}/{x}/{y}.png", zoom=14
-    )
+    cfg = XYZConfig.from_url("https://tiles.example.com/{z}/{x}/{y}.png", zoom=14)
     with pytest.raises(ValidationError, match=r"(?i)request|tile|limit|too many"):
         create_array(cfg, (-6, 50, 2, 56), bbox_crs="EPSG:4326")
 
@@ -661,27 +651,21 @@ def test_161_create_array_refuses_huge_request_count(
 
 
 def test_162_zero_area_bbox_is_tilearray_validation_error() -> None:
-    cfg = XYZConfig.from_url(
-        "https://tiles.example.com/{z}/{x}/{y}.png", zoom=3
-    )
+    cfg = XYZConfig.from_url("https://tiles.example.com/{z}/{x}/{y}.png", zoom=3)
     with pytest.raises(ValidationError) as ei:
         create_array(cfg, (1, 1, 1, 1), bbox_crs="EPSG:4326")
     assert isinstance(ei.value, TileArrayError)
 
 
 def test_162_inverted_bbox_is_tilearray_validation_error() -> None:
-    cfg = XYZConfig.from_url(
-        "https://tiles.example.com/{z}/{x}/{y}.png", zoom=3
-    )
+    cfg = XYZConfig.from_url("https://tiles.example.com/{z}/{x}/{y}.png", zoom=3)
     with pytest.raises(ValidationError) as ei:
         create_array(cfg, (10, 0, 0, 10), bbox_crs="EPSG:4326")
     assert isinstance(ei.value, TileArrayError)
 
 
 def test_162_json_200_body_is_tilearray_error() -> None:
-    cfg = XYZConfig.from_url(
-        "https://tiles.example.com/{z}/{x}/{y}.png", zoom=3
-    )
+    cfg = XYZConfig.from_url("https://tiles.example.com/{z}/{x}/{y}.png", zoom=3)
     with respx.mock(assert_all_called=False) as mock:
         mock.get(url__regex=r".*").mock(
             return_value=httpx.Response(
@@ -691,9 +675,7 @@ def test_162_json_200_body_is_tilearray_error() -> None:
             )
         )
         with pytest.raises(TileArrayError):
-            compute_mosaic(
-                create_array(cfg, (0, 0, 10, 10), bbox_crs="EPSG:4326")
-            )
+            compute_mosaic(create_array(cfg, (0, 0, 10, 10), bbox_crs="EPSG:4326"))
 
 
 # ---------------------------------------------------------------------------
@@ -721,9 +703,7 @@ def test_163_wmts_caps_with_versioned_urn_parses() -> None:
         service_type=ServiceTypeEnum.WMTS,
         base_url="https://example.com/wmts",
     )
-    cfg = ins.build_config(
-        layer="layer", tile_matrix_set="google3857", tile_matrix=1
-    )
+    cfg = ins.build_config(layer="layer", tile_matrix_set="google3857", tile_matrix=1)
     # Must not raise ValidationError about SupportedCRS / EPSG:6.
     entry = from_public_args(cfg, (-10, 40, 10, 60), "EPSG:4326")
     assert entry.tile_requests
@@ -736,9 +716,7 @@ def test_163_wmts_caps_with_versioned_urn_parses() -> None:
 
 def test_164_xyz_antimeridian_no_invalid_tile_x() -> None:
     service = XYZService("https://tiles.example.com/{z}/{x}/{y}.png", zoom=6)
-    bbox = BoundingBox(
-        min_x=175, min_y=-20, max_x=185, max_y=-15, crs=CRS.EPSG_4326
-    )
+    bbox = BoundingBox(min_x=175, min_y=-20, max_x=185, max_y=-15, crs=CRS.EPSG_4326)
     try:
         tiles = list(service.plan_tiles(bbox, (256, 256)))
     except ValidationError:
@@ -750,9 +728,7 @@ def test_164_xyz_antimeridian_no_invalid_tile_x() -> None:
 
 def test_164_xyz_polar_no_negative_tile_y() -> None:
     service = XYZService("https://tiles.example.com/{z}/{x}/{y}.png", zoom=6)
-    bbox = BoundingBox(
-        min_x=-10, min_y=80, max_x=10, max_y=89.9, crs=CRS.EPSG_4326
-    )
+    bbox = BoundingBox(min_x=-10, min_y=80, max_x=10, max_y=89.9, crs=CRS.EPSG_4326)
     try:
         tiles = list(service.plan_tiles(bbox, (256, 256)))
     except ValidationError:
@@ -768,15 +744,11 @@ def test_164_wmts_past_180_not_silent() -> None:
         service_type=ServiceTypeEnum.WMTS,
         base_url="https://example.com/wmts",
     )
-    cfg = ins.build_config(
-        layer="world", tile_matrix_set="EPSG4326", tile_matrix=0
-    )
+    cfg = ins.build_config(layer="world", tile_matrix_set="EPSG4326", tile_matrix=0)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
-            entry = from_public_args(
-                cfg, (178, -20, 182, -15), "EPSG:4326"
-            )
+            entry = from_public_args(cfg, (178, -20, 182, -15), "EPSG:4326")
         except ValidationError:
             return  # refuse policy OK
         # If planning succeeds, a warning or attr must record the clamp.
@@ -793,4 +765,3 @@ def test_164_wmts_past_180_not_silent() -> None:
             "WMTS plan past 180° succeeded with no truncation/clamp signal "
             f"(requests={len(entry.tile_requests)})"
         )
-
