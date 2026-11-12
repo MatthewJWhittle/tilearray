@@ -12,7 +12,11 @@ from urllib.parse import quote
 
 import httpx
 
-from ..error_messages import format_http_failure, unsupported_format_message
+from ..error_messages import (
+    config_params_for_errors,
+    format_http_failure,
+    unsupported_format_message,
+)
 from ..errors import NetworkError, ParseError, ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
@@ -354,6 +358,7 @@ class WMTSService(BaseService):
                     url=self.base_url,
                     protocol="WMTS",
                     layer=self.layer,
+                    params=config_params_for_errors(self.config),
                 ),
                 cause=exc,
             ) from exc
@@ -385,39 +390,54 @@ class WMTSService(BaseService):
         for name, value in layer_info.dimensions.items():
             self.dimensions.setdefault(name, value)
 
+    def estimate_tile_count(
+        self,
+        bbox: BoundingBox,
+        chunk_size: tuple[int, int],
+        **options: object,
+    ) -> int | None:
+        """O(1) tile count matching :meth:`plan_tiles` (no TileRequest build)."""
+
+        tile_matrix_id, tms_id, matrix_override, query_crs = self._plan_options(options)
+        self._ensure_capabilities_for_plan(tms_id, query_crs, matrix_override)
+        has_caps = self._capabilities is not None or matrix_override is not None
+
+        if has_caps:
+            tms, matrix = self._require_matrix(
+                tms_id, tile_matrix_id, matrix_override=matrix_override
+            )
+            matrix_crs = (
+                tms.supported_crs
+                if tms is not None
+                else self._matrix_override_crs(options)
+            )
+            limits = self._layer_limits(tms_id, matrix.identifier)
+            min_col, max_col, min_row, max_row = self._matrix_tile_range(
+                bbox, matrix, matrix_crs, limits=limits
+            )
+            return int((max_col - min_col + 1) * (max_row - min_row + 1))
+
+        if _allows_slippy_fallback(tms_id, query_crs):
+            zoom = self._slippy_zoom_from_tile_matrix(tile_matrix_id)
+            x_min, y_min, x_max, y_max = self._web_mercator_tile_range(bbox, zoom)
+            return int((x_max - x_min + 1) * (y_max - y_min + 1))
+
+        raise ValidationError(
+            f"WMTS TileMatrixSet {tms_id!r} needs native matrix metadata "
+            f"(SupportedCRS / ScaleDenominator / TopLeftCorner). Load "
+            "GetCapabilities via get_capabilities()/apply_capabilities(), or pass "
+            "matrix= with those fields. tilearray will not guess a Web Mercator grid."
+        )
+
     def plan_tiles(
         self,
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
-        tile_matrix_id = _coerce_tile_matrix_id(
-            options.get("tile_matrix", self.tile_matrix)
-        )
-        tms_id = str(options.get("tile_matrix_set") or self.tile_matrix_set)
-
-        matrix_override = None
-        if isinstance(options, dict):
-            maybe_override = options.get("matrix")
-            if isinstance(maybe_override, WMTSTileMatrix):
-                matrix_override = maybe_override
-
-        query_crs = options.get("crs", self.native_crs)
-        if not isinstance(query_crs, CRS):
-            query_crs = self.native_crs
-
-        # Native / non-slippy grids need TileMatrixSet metadata. Load
-        # GetCapabilities once so create_array(config, bbox, crs) works without a
-        # separate apply_capabilities() step (same habit as WCS DescribeCoverage).
-        if (
-            matrix_override is None
-            and self._capabilities is None
-            and not _allows_slippy_fallback(tms_id, query_crs)
-        ):
-            self.apply_capabilities()
-
-        caps = self._capabilities
-        has_caps = caps is not None or matrix_override is not None
+        tile_matrix_id, tms_id, matrix_override, query_crs = self._plan_options(options)
+        self._ensure_capabilities_for_plan(tms_id, query_crs, matrix_override)
+        has_caps = self._capabilities is not None or matrix_override is not None
 
         if has_caps:
             tms, matrix = self._require_matrix(
@@ -441,15 +461,7 @@ class WMTSService(BaseService):
         if _allows_slippy_fallback(tms_id, query_crs):
             tile_width = chunk_size[0]
             tile_height = chunk_size[1]
-            try:
-                zoom = int(tile_matrix_id)
-            except ValueError as exc:
-                raise ValidationError(
-                    f"WMTS tile_matrix {tile_matrix_id!r} is not numeric and no "
-                    "GetCapabilities TileMatrix metadata is loaded. Call "
-                    "get_capabilities()/apply_capabilities() or pass matrix= with "
-                    "native TileMatrix fields."
-                ) from exc
+            zoom = self._slippy_zoom_from_tile_matrix(tile_matrix_id)
             # query_crs only gates slippy fallback eligibility above; mosaic
             # georef is always native EPSG:3857 (same as XYZ).
             return self._plan_web_mercator_tiles(
@@ -465,6 +477,50 @@ class WMTSService(BaseService):
             "GetCapabilities via get_capabilities()/apply_capabilities(), or pass "
             "matrix= with those fields. tilearray will not guess a Web Mercator grid."
         )
+
+    def _plan_options(
+        self, options: dict[str, object]
+    ) -> tuple[str, str, WMTSTileMatrix | None, CRS]:
+        tile_matrix_id = _coerce_tile_matrix_id(
+            options.get("tile_matrix", self.tile_matrix)
+        )
+        tms_id = str(options.get("tile_matrix_set") or self.tile_matrix_set)
+        matrix_override = None
+        maybe_override = options.get("matrix")
+        if isinstance(maybe_override, WMTSTileMatrix):
+            matrix_override = maybe_override
+        query_crs = options.get("crs", self.native_crs)
+        if not isinstance(query_crs, CRS):
+            query_crs = self.native_crs
+        return tile_matrix_id, tms_id, matrix_override, query_crs
+
+    def _ensure_capabilities_for_plan(
+        self,
+        tms_id: str,
+        query_crs: CRS,
+        matrix_override: WMTSTileMatrix | None,
+    ) -> None:
+        # Native / non-slippy grids need TileMatrixSet metadata. Load
+        # GetCapabilities once so create_array(config, bbox, crs) works without a
+        # separate apply_capabilities() step (same habit as WCS DescribeCoverage).
+        if (
+            matrix_override is None
+            and self._capabilities is None
+            and not _allows_slippy_fallback(tms_id, query_crs)
+        ):
+            self.apply_capabilities()
+
+    @staticmethod
+    def _slippy_zoom_from_tile_matrix(tile_matrix_id: str) -> int:
+        try:
+            return int(tile_matrix_id)
+        except ValueError as exc:
+            raise ValidationError(
+                f"WMTS tile_matrix {tile_matrix_id!r} is not numeric and no "
+                "GetCapabilities TileMatrix metadata is loaded. Call "
+                "get_capabilities()/apply_capabilities() or pass matrix= with "
+                "native TileMatrix fields."
+            ) from exc
 
     def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
         layer = str(options.get("layer") or self.layer)
@@ -602,6 +658,15 @@ class WMTSService(BaseService):
             return None
         return by_matrix.get(tile_matrix)
 
+    def _web_mercator_tile_range(
+        self, bbox: BoundingBox, zoom: int
+    ) -> tuple[int, int, int, int]:
+        working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
+        _refuse_outside_slippy_domain(working_bbox)
+        x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
+        _refuse_tile_indices_outside_zoom(x_min, y_min, x_max, y_max, zoom)
+        return x_min, y_min, x_max, y_max
+
     def _plan_web_mercator_tiles(
         self,
         bbox: BoundingBox,
@@ -609,10 +674,7 @@ class WMTSService(BaseService):
         tile_width: int,
         tile_height: int,
     ) -> Iterable[TileGeometry]:
-        working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
-        _refuse_outside_slippy_domain(working_bbox)
-        x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
-        _refuse_tile_indices_outside_zoom(x_min, y_min, x_max, y_max, zoom)
+        x_min, y_min, x_max, y_max = self._web_mercator_tile_range(bbox, zoom)
 
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
@@ -628,14 +690,14 @@ class WMTSService(BaseService):
                     tile_matrix_id=str(zoom),
                 )
 
-    def _plan_matrix_tiles(
+    def _matrix_tile_range(
         self,
         bbox: BoundingBox,
         matrix: WMTSTileMatrix,
         matrix_crs: CRS,
         *,
         limits: WMTSTileMatrixLimits | None = None,
-    ) -> Iterable[TileGeometry]:
+    ) -> tuple[int, int, int, int]:
         try:
             working_bbox = bbox if bbox.crs == matrix_crs else bbox.to_crs(matrix_crs)
         except Exception as exc:
@@ -664,6 +726,7 @@ class WMTSService(BaseService):
             )
 
         # Raw matrix indices — do not clamp into the matrix; refuse out-of-domain (#164).
+        # Max edges use half-open end semantics (exact far boundary → previous tile).
         min_col = _raw_matrix_index(
             working_bbox.min_x,
             matrix.top_left_x,
@@ -675,6 +738,7 @@ class WMTSService(BaseService):
             matrix.top_left_x,
             span_x,
             reverse=False,
+            end=True,
         )
         # TileRow 0 starts at TopLeftCorner; rows increase away from the top
         # (decreasing Y in always_xy / north-up coordinates).
@@ -689,6 +753,7 @@ class WMTSService(BaseService):
             matrix.top_left_y,
             span_y,
             reverse=True,
+            end=True,
         )
 
         if (
@@ -724,6 +789,24 @@ class WMTSService(BaseService):
                 )
                 + "."
             )
+
+        return min_col, max_col, min_row, max_row
+
+    def _plan_matrix_tiles(
+        self,
+        bbox: BoundingBox,
+        matrix: WMTSTileMatrix,
+        matrix_crs: CRS,
+        *,
+        limits: WMTSTileMatrixLimits | None = None,
+    ) -> Iterable[TileGeometry]:
+        min_col, max_col, min_row, max_row = self._matrix_tile_range(
+            bbox, matrix, matrix_crs, limits=limits
+        )
+
+        pixel_size = _pixel_size_in_crs_units(matrix.scale_denominator, matrix_crs)
+        span_x = abs(pixel_size * matrix.tile_width)
+        span_y = abs(pixel_size * matrix.tile_height)
 
         zoom: int | None = (
             int(matrix.identifier) if matrix.identifier.isdigit() else None
@@ -974,16 +1057,24 @@ def _raw_matrix_index(
     span: float,
     *,
     reverse: bool,
+    end: bool = False,
 ) -> int:
-    """Return the unclamped matrix index for ``coordinate`` (#164 refuse, not clip)."""
+    """Return the unclamped matrix index for ``coordinate`` (#164 refuse, not clip).
+
+    When ``end`` is true and the coordinate lands exactly on a tile boundary,
+    return the previous index (half-open matrix space — same as XYZ slippy).
+    """
 
     if span <= 0:
         return 0
     if reverse:
-        raw = math.floor((origin - coordinate) / span)
+        pos = (origin - coordinate) / span
     else:
-        raw = math.floor((coordinate - origin) / span)
-    return int(raw)
+        pos = (coordinate - origin) / span
+    idx = int(math.floor(pos))
+    if end and pos == float(idx) and idx > 0:
+        return idx - 1
+    return idx
 
 
 def _matrix_index(

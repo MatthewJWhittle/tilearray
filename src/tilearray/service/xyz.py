@@ -174,24 +174,40 @@ def _refuse_tile_indices_outside_zoom(
 
 
 def _tile_range_for_bbox(bbox: BoundingBox, zoom: int) -> tuple[int, int, int, int]:
+    # Slippy tile space is half-open: exact max-edge boundaries belong to the
+    # previous in-domain tile (so lon=180 / southern matrix edge stay valid).
     x_min = _lon_to_tile_x(bbox.min_x, zoom)
-    x_max = _lon_to_tile_x(bbox.max_x, zoom)
+    x_max = _lon_to_tile_x(bbox.max_x, zoom, end=True)
     y_min = _lat_to_tile_y(bbox.max_y, zoom)
-    y_max = _lat_to_tile_y(bbox.min_y, zoom)
+    y_max = _lat_to_tile_y(bbox.min_y, zoom, end=True)
     return x_min, y_min, x_max, y_max
 
 
-def _lon_to_tile_x(lon: float, zoom: int) -> int:
+def _half_open_tile_index(pos: float, *, end: bool) -> int:
+    """Map a continuous tile-space position to an index.
+
+    When ``end`` is true and ``pos`` lands exactly on an integer boundary, return
+    the previous index so the exclusive domain edge (e.g. lon ``180``) selects
+    the last in-domain tile instead of ``2**zoom``.
+    """
+
+    idx = int(math.floor(pos))
+    if end and pos == float(idx) and idx > 0:
+        return idx - 1
+    return idx
+
+
+def _lon_to_tile_x(lon: float, zoom: int, *, end: bool = False) -> int:
     scale = 2**zoom
-    return int(math.floor((lon + 180.0) / 360.0 * scale))
+    pos = (lon + 180.0) / 360.0 * scale
+    return _half_open_tile_index(pos, end=end)
 
 
-def _lat_to_tile_y(lat: float, zoom: int) -> int:
+def _lat_to_tile_y(lat: float, zoom: int, *, end: bool = False) -> int:
     scale = 2**zoom
     lat_rad = math.radians(lat)
-    return int(
-        math.floor((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * scale)
-    )
+    pos = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * scale
+    return _half_open_tile_index(pos, end=end)
 
 
 def _tile_span_3857(zoom: int) -> float:

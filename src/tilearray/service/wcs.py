@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from ..error_messages import (
+    config_params_for_errors,
     describe_coverage_parse_message,
     format_http_failure,
     looks_like_html,
@@ -488,6 +489,7 @@ class WCSService(BaseService):
                     request_name="GetCapabilities",
                     url=self.base_url,
                     protocol="WCS",
+                    params=config_params_for_errors(self.config),
                 ),
                 cause=exc,
             ) from exc
@@ -515,6 +517,7 @@ class WCSService(BaseService):
                     url=self.base_url,
                     protocol="WCS",
                     coverage_id=coverage,
+                    params=config_params_for_errors(self.config),
                 ),
                 cause=exc,
             ) from exc
@@ -567,7 +570,9 @@ class WCSService(BaseService):
             "format": fmt.value,
             "width": str(width),
             "height": str(height),
-            "scaleSize": self._format_scale_size(axis_labels, width, height),
+            "scaleSize": self._format_scale_size(
+                axis_labels, width, height, crs=subset_crs
+            ),
         }
         if metadata.native_crs is None or subset_crs != metadata.native_crs:
             request_params["subsettingCRS"] = subset_crs.value
@@ -633,7 +638,9 @@ class WCSService(BaseService):
             "format": fmt.value,
             "width": str(tile.width),
             "height": str(tile.height),
-            "scaleSize": self._format_scale_size(axis_labels, tile.width, tile.height),
+            "scaleSize": self._format_scale_size(
+                axis_labels, tile.width, tile.height, crs=subset_crs
+            ),
         }
         if metadata.native_crs is None or subset_crs != metadata.native_crs:
             protocol_params["subsettingCRS"] = subset_crs.value
@@ -767,15 +774,24 @@ class WCSService(BaseService):
         return parts
 
     def _format_scale_size(
-        self, axis_labels: tuple[str, str], width: int, height: int
+        self,
+        axis_labels: tuple[str, str],
+        width: int,
+        height: int,
+        *,
+        crs: CRS | None = None,
     ) -> str:
-        """WCS 2 Scaling ``scaleSize`` using the same labels as subsets."""
+        """WCS 2 Scaling ``scaleSize`` using the same labels/meaning as subsets."""
 
         parts: list[str] = []
         for index, label in enumerate(axis_labels):
-            northing = self._label_is_northing(label)
+            northing = self._label_is_northing(label, crs)
             if northing is None:
-                northing = index == 1
+                # Match `_format_subset`: CRS axis order when labels are opaque.
+                north_first = (
+                    CRS.parse(crs).north_axis_first if crs is not None else False
+                )
+                northing = (index == 0) if north_first else (index == 1)
             size = height if northing else width
             parts.append(f"{label}({size})")
         return ",".join(parts)

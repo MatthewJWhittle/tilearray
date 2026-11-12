@@ -86,7 +86,7 @@ interactions:
       User-Agent:
       - python-requests/2.32.5
     method: GET
-    uri: https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs?service=WCS&version=2.0.1&request=GetCoverage&coverageId=13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m&subset=E%28431900.0%2C431964.0%29&subset=N%28382700.0%2C382764.0%29&format=image%2Ftiff&width=64&height=64&subsettingCRS=EPSG%3A27700
+    uri: https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wcs?service=WCS&version=2.0.1&request=GetCoverage&coverageId=13787b9a-26a4-4775-8523-806d13af58fc__Lidar_Composite_Elevation_DTM_1m&subset=E%28431900.0%2C431964.0%29&subset=N%28382700.0%2C382764.0%29&format=image%2Ftiff&width=64&height=64&scaleSize=E%2864%29%2CN%2864%29
   response:
     body:
       string: !!binary |

@@ -111,9 +111,24 @@ class BaseService(ABC):
         chunk_size: tuple[int, int],
         **options: object,
     ) -> int | None:
-        """O(1) tile-count estimate when the service can compute one; else ``None``."""
+        """O(1) tile-count estimate for resolution / grid_shape plans (WMS/WCS)."""
 
-        return None
+        width, height = chunk_size
+        resolution = options.get("resolution")
+        if resolution:
+            res_x, res_y = cast(tuple[float, float], resolution)
+            if res_x <= 0 or res_y <= 0:
+                raise ValidationError("resolution values must be positive")
+            origin = _coerce_grid_origin(options.get("origin"))
+            snapped = snap_bbox_outward(bbox, (res_x, res_y), origin)
+            n_px = max(1, int(round((snapped.max_x - snapped.min_x) / res_x)))
+            n_py = max(1, int(round((snapped.max_y - snapped.min_y) / res_y)))
+            cols = max(1, (n_px + width - 1) // width)
+            rows = max(1, (n_py + height - 1) // height)
+            return int(rows * cols)
+
+        rows, cols = _grid_shape_from_options(options)
+        return int(rows * cols)
 
     def plan_tiles(
         self,
@@ -179,23 +194,7 @@ class BaseService(ABC):
                 y0 += tile_h
             return
 
-        grid_shape_option = options.get("grid_shape")
-        if grid_shape_option is None:
-            rows, cols = 1, 1
-        elif isinstance(grid_shape_option, tuple):
-            try:
-                grid_tuple_raw = cast(tuple[Any, Any], grid_shape_option)
-                row_raw, col_raw = grid_tuple_raw
-            except ValueError as exc:  # pragma: no cover - guard
-                raise ValidationError(
-                    "grid_shape must be a tuple of two integers"
-                ) from exc
-
-            rows, cols = int(row_raw), int(col_raw)
-        else:
-            raise ValidationError("grid_shape must be a tuple of two integers")
-        if rows <= 0 or cols <= 0:
-            raise ValidationError("grid_shape dimensions must be positive integers")
+        rows, cols = _grid_shape_from_options(options)
 
         x_span = float(bbox.max_x - bbox.min_x)
         y_span = float(bbox.max_y - bbox.min_y)
@@ -278,6 +277,26 @@ def _coerce_grid_origin(value: object) -> tuple[float, float]:
         origin_y = value[1]
         return (float(origin_x), float(origin_y))
     raise ValidationError("origin must be a tuple of two numbers")
+
+
+def _grid_shape_from_options(options: dict[str, object]) -> tuple[int, int]:
+    """Parse ``grid_shape`` from plan options; default ``(1, 1)``."""
+
+    grid_shape_option = options.get("grid_shape")
+    if grid_shape_option is None:
+        return 1, 1
+    if isinstance(grid_shape_option, tuple):
+        try:
+            grid_tuple_raw = cast(tuple[Any, Any], grid_shape_option)
+            row_raw, col_raw = grid_tuple_raw
+        except ValueError as exc:  # pragma: no cover - guard
+            raise ValidationError("grid_shape must be a tuple of two integers") from exc
+        rows, cols = int(row_raw), int(col_raw)
+    else:
+        raise ValidationError("grid_shape must be a tuple of two integers")
+    if rows <= 0 or cols <= 0:
+        raise ValidationError("grid_shape dimensions must be positive integers")
+    return rows, cols
 
 
 # ----------------------------------------------------------------------
