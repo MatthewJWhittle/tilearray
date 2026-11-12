@@ -410,6 +410,10 @@ class WMTSConfig(ServiceConfig):
         default=None,
         description="REST GetTile URL template from GetCapabilities",
     )
+    dimensions: dict[str, str] = Field(
+        default_factory=dict,
+        description="WMTS Dimension defaults (identifier → Default value)",
+    )
     version: str = Field(default="1.0.0", description="WMTS protocol version")
     service_type: ServiceTypeEnum = Field(
         default=ServiceTypeEnum.WMTS, init=False, description="Service type constant"
@@ -448,6 +452,8 @@ class WMTSConfig(ServiceConfig):
         kwargs.setdefault("version", self.version)
         if self.url_template is not None:
             kwargs.setdefault("url_template", self.url_template)
+        if self.dimensions:
+            kwargs.setdefault("dimensions", dict(self.dimensions))
         return WMTSService(self.base_url, **kwargs)
 
     def service_kwargs(self) -> dict[str, Any]:
@@ -459,6 +465,8 @@ class WMTSConfig(ServiceConfig):
         kwargs.setdefault("version", self.version)
         if self.url_template is not None:
             kwargs.setdefault("url_template", self.url_template)
+        if self.dimensions:
+            kwargs.setdefault("dimensions", dict(self.dimensions))
         return kwargs
 
     def tile_kwargs(self) -> dict[str, Any]:
@@ -469,4 +477,6 @@ class WMTSConfig(ServiceConfig):
         kwargs["style"] = self.style
         if self.url_template is not None:
             kwargs["url_template"] = self.url_template
+        if self.dimensions:
+            kwargs["dimensions"] = dict(self.dimensions)
         return kwargs

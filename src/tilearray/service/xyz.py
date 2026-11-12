@@ -9,9 +9,12 @@ from typing import Any
 from ..errors import ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
+from .requests import tile_option_passthrough
 
 # Spherical Web Mercator half-world extent (π · WGS84 semi-major axis).
 _WEB_MERCATOR_ORIGIN = math.pi * 6378137.0
+# Max |latitude| for EPSG:3857 / slippy maps (atan(sinh(π))).
+_WEB_MERCATOR_MAX_LAT = 85.05112878
 
 
 @register_service(ServiceTypeEnum.XYZ)
@@ -33,7 +36,8 @@ class XYZService(BaseService):
             raise ValidationError("zoom must be non-negative")
         if tile_size <= 0:
             raise ValidationError("tile_size must be positive")
-        self.url_template = base_url
+        # Use peeled base_url so template query strings are not double-applied.
+        self.url_template = self.base_url
         self.zoom = zoom
         self.tile_size = tile_size
         self.output_format = output_format or Format.PNG
@@ -48,15 +52,27 @@ class XYZService(BaseService):
             raise ValidationError("XYZ services require a zoom level")
         return cls(url, **config)
 
+    def estimate_tile_count(
+        self,
+        bbox: BoundingBox,
+        chunk_size: tuple[int, int],
+        **options: object,
+    ) -> int | None:
+        zoom = self._resolve_zoom(options)
+        working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
+        _refuse_outside_slippy_domain(working_bbox)
+        x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
+        _refuse_tile_indices_outside_zoom(x_min, y_min, x_max, y_max, zoom)
+        return int((x_max - x_min + 1) * (y_max - y_min + 1))
+
     def plan_tiles(
         self,
         bbox: BoundingBox,
         chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
-        zoom_value = options.get("zoom", self.zoom)
+        zoom = self._resolve_zoom(options)
         tile_size_value = options.get("tile_size", self.tile_size)
-        zoom = int(zoom_value) if isinstance(zoom_value, (int, str)) else self.zoom
         tile_size = (
             int(tile_size_value)
             if isinstance(tile_size_value, (int, str))
@@ -67,7 +83,9 @@ class XYZService(BaseService):
         # (indexed tile union) — do not label TileGeometry with the query CRS.
 
         working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
+        _refuse_outside_slippy_domain(working_bbox)
         x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
+        _refuse_tile_indices_outside_zoom(x_min, y_min, x_max, y_max, zoom)
 
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
@@ -94,15 +112,16 @@ class XYZService(BaseService):
         if isinstance(fmt, str):
             fmt = Format(fmt)
 
-        passthrough = {
-            key: value for key, value in options.items() if key != "output_format"
-        }
         return self.compose_tile_request(
             tile,
             url=url,
             output_format=fmt,
-            **passthrough,
+            **tile_option_passthrough(options, "x", "y", "zoom"),
         )
+
+    def _resolve_zoom(self, options: dict[str, object]) -> int:
+        zoom_value = options.get("zoom", self.zoom)
+        return int(zoom_value) if isinstance(zoom_value, (int, str)) else self.zoom
 
 
 def _require_tile_index(tile_index: int | None, override: int | None) -> int:
@@ -112,25 +131,83 @@ def _require_tile_index(tile_index: int | None, override: int | None) -> int:
     return int(value)
 
 
+def _refuse_outside_slippy_domain(bbox_4326: BoundingBox) -> None:
+    """Refuse AOIs outside Web Mercator / slippy lon/lat domain (#164)."""
+
+    if (
+        bbox_4326.min_x < -180.0
+        or bbox_4326.max_x > 180.0
+        or bbox_4326.min_x >= bbox_4326.max_x
+    ):
+        raise ValidationError(
+            "AOI longitude is outside the slippy-map domain [-180, 180] "
+            "(antimeridian-crossing or out-of-range boxes are refused, not clipped)"
+        )
+    if (
+        bbox_4326.min_y < -_WEB_MERCATOR_MAX_LAT
+        or bbox_4326.max_y > _WEB_MERCATOR_MAX_LAT
+    ):
+        raise ValidationError(
+            f"AOI latitude is outside the Web Mercator domain "
+            f"±{_WEB_MERCATOR_MAX_LAT} (polar extents are refused, not clipped)"
+        )
+
+
+def _refuse_tile_indices_outside_zoom(
+    x_min: int, y_min: int, x_max: int, y_max: int, zoom: int
+) -> None:
+    scale = 2**zoom
+    if (
+        x_min < 0
+        or y_min < 0
+        or x_max < 0
+        or y_max < 0
+        or x_min >= scale
+        or y_min >= scale
+        or x_max >= scale
+        or y_max >= scale
+    ):
+        raise ValidationError(
+            f"Slippy tile indices fall outside [0, {scale}) at zoom {zoom} "
+            "(AOI is outside the tile domain and is refused, not clipped)"
+        )
+
+
 def _tile_range_for_bbox(bbox: BoundingBox, zoom: int) -> tuple[int, int, int, int]:
+    # Slippy tile space is half-open: exact max-edge boundaries belong to the
+    # previous in-domain tile (so lon=180 / southern matrix edge stay valid).
     x_min = _lon_to_tile_x(bbox.min_x, zoom)
-    x_max = _lon_to_tile_x(bbox.max_x, zoom)
+    x_max = _lon_to_tile_x(bbox.max_x, zoom, end=True)
     y_min = _lat_to_tile_y(bbox.max_y, zoom)
-    y_max = _lat_to_tile_y(bbox.min_y, zoom)
+    y_max = _lat_to_tile_y(bbox.min_y, zoom, end=True)
     return x_min, y_min, x_max, y_max
 
 
-def _lon_to_tile_x(lon: float, zoom: int) -> int:
+def _half_open_tile_index(pos: float, *, end: bool) -> int:
+    """Map a continuous tile-space position to an index.
+
+    When ``end`` is true and ``pos`` lands exactly on an integer boundary, return
+    the previous index so the exclusive domain edge (e.g. lon ``180``) selects
+    the last in-domain tile instead of ``2**zoom``.
+    """
+
+    idx = int(math.floor(pos))
+    if end and pos == float(idx) and idx > 0:
+        return idx - 1
+    return idx
+
+
+def _lon_to_tile_x(lon: float, zoom: int, *, end: bool = False) -> int:
     scale = 2**zoom
-    return int(math.floor((lon + 180.0) / 360.0 * scale))
+    pos = (lon + 180.0) / 360.0 * scale
+    return _half_open_tile_index(pos, end=end)
 
 
-def _lat_to_tile_y(lat: float, zoom: int) -> int:
+def _lat_to_tile_y(lat: float, zoom: int, *, end: bool = False) -> int:
     scale = 2**zoom
     lat_rad = math.radians(lat)
-    return int(
-        math.floor((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * scale)
-    )
+    pos = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * scale
+    return _half_open_tile_index(pos, end=end)
 
 
 def _tile_span_3857(zoom: int) -> float:

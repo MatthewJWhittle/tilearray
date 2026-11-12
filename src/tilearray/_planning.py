@@ -190,6 +190,9 @@ def resolve_fetch_policy(
             "forbidden_cooldown_seconds", base.forbidden_cooldown_seconds
         ),
         call_max_concurrent=call_max_concurrent,
+        max_tile_requests=int(
+            service_options.pop("max_tile_requests", base.max_tile_requests)
+        ),
     )
 
 
@@ -332,7 +335,13 @@ def normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
                 f"bbox_crs=."
             )
         return bbox
-    return BoundingBox.from_tuple(bbox, crs)
+    try:
+        return BoundingBox.from_tuple(bbox, crs)
+    except ValidationError:
+        raise
+    except Exception as exc:
+        # Pydantic / ValueError from zero-area or inverted corners → public boundary.
+        raise ValidationError(str(exc), cause=exc) from exc
 
 
 def validate_grid_shape(grid: tuple[int, int]) -> tuple[int, int]:
@@ -431,6 +440,7 @@ class ArrayRequest(BaseModel):
     service_options: dict[str, Any] = Field(default_factory=dict)
     requested_bbox: BoundingBox | None = None
     bbox_snap_delta: dict[str, float] | None = None
+    resolution_grid_pending: bool = False
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -512,39 +522,22 @@ class ArrayRequest(BaseModel):
         user_resolution = user_options.pop("resolution", None)
         resolution = user_resolution or defaults.get("resolution")
 
-        requested_bbox = normalized_bbox
-        bbox_snap_delta: dict[str, float] | None = None
+        # Snap / recommend_grid_shape run in mosaic CRS after _prepare_crs_roles
+        # (#160) — do not apply resolution maths in the query CRS here.
         if resolution is not None:
             res_x, res_y = resolution
             if res_x <= 0 or res_y <= 0:
                 raise ValidationError("resolution values must be positive")
-            origin = coerce_array_origin(user_options.get("origin"))
-            snapped_bbox = snap_bbox_outward(normalized_bbox, resolution, origin)
-            bbox_snap_delta = {
-                "min_x": snapped_bbox.min_x - normalized_bbox.min_x,
-                "min_y": snapped_bbox.min_y - normalized_bbox.min_y,
-                "max_x": snapped_bbox.max_x - normalized_bbox.max_x,
-                "max_y": snapped_bbox.max_y - normalized_bbox.max_y,
-            }
-            if any(abs(delta) > 0.0 for delta in bbox_snap_delta.values()):
-                normalized_bbox = snapped_bbox
-            else:
-                bbox_snap_delta = None
+            # Validate origin at construction; snap still deferred to mosaic CRS.
+            coerce_array_origin(user_options.get("origin"))
 
         fallback_grid = defaults.get("grid_shape")
         grid = resolve_grid_shape(grid_shape_input, fallback_grid)
-        if (
+        resolution_grid_pending = (
             grid_shape_input is None
             and fallback_grid is None
             and resolution is not None
-        ):
-            origin = coerce_array_origin(user_options.get("origin"))
-            grid = recommend_grid_shape(
-                normalized_bbox,
-                chunk_size=(chunk_width, chunk_height),
-                resolution=resolution,
-                origin=origin,
-            )
+        )
 
         cache_candidate = cache_dir_input or defaults.get("cache_dir")
         cache_path = (
@@ -571,8 +564,9 @@ class ArrayRequest(BaseModel):
             output_format=effective_format,
             cache_dir=cache_path,
             service_options=user_options,
-            requested_bbox=requested_bbox,
-            bbox_snap_delta=bbox_snap_delta,
+            requested_bbox=normalized_bbox,
+            bbox_snap_delta=None,
+            resolution_grid_pending=resolution_grid_pending,
         )
 
     def build_service(self, service_type: ServiceTypeEnum | None) -> BaseService:
@@ -663,17 +657,87 @@ class ArrayRequest(BaseModel):
                 ) from exc
         self.target_crs = mosaic_crs
 
+    def _apply_mosaic_crs_resolution(self, tile_options: dict[str, Any]) -> None:
+        """Snap bbox / infer grid_shape using resolution in the mosaic CRS (#160)."""
+
+        if self.resolution is None:
+            self.resolution_grid_pending = False
+            return
+
+        origin = coerce_array_origin(self.service_options.get("origin"))
+        snapped_bbox = snap_bbox_outward(self.bbox, self.resolution, origin)
+        bbox_snap_delta = {
+            "min_x": snapped_bbox.min_x - self.bbox.min_x,
+            "min_y": snapped_bbox.min_y - self.bbox.min_y,
+            "max_x": snapped_bbox.max_x - self.bbox.max_x,
+            "max_y": snapped_bbox.max_y - self.bbox.max_y,
+        }
+        if any(abs(delta) > 0.0 for delta in bbox_snap_delta.values()):
+            if self.requested_bbox is None:
+                self.requested_bbox = self.bbox
+            self.bbox = snapped_bbox
+            self.bbox_snap_delta = bbox_snap_delta
+        else:
+            self.bbox_snap_delta = None
+
+        if self.resolution_grid_pending:
+            self.grid_shape = recommend_grid_shape(
+                self.bbox,
+                chunk_size=(self.chunk_width, self.chunk_height),
+                resolution=self.resolution,
+                origin=origin,
+            )
+            self.resolution_grid_pending = False
+
+        tile_options["grid_shape"] = self.grid_shape
+        tile_options.setdefault("resolution", self.resolution)
+
     def plan_tile_requests(
-        self, service: BaseService
-    ) -> tuple[list[TileRequest], dict[str, Any]]:
+        self,
+        service: BaseService,
+        *,
+        max_tile_requests: int | None = None,
+        allow_estimate_only: bool = False,
+    ) -> tuple[list[TileRequest], dict[str, Any], int]:
         tile_options = self.tile_options()
         self._prepare_crs_roles(service, tile_options)
+        self._apply_mosaic_crs_resolution(tile_options)
+
+        estimate_fn = getattr(service, "estimate_tile_count", None)
+        estimated = (
+            estimate_fn(self.bbox, self.chunk_pixels, **dict(tile_options))
+            if callable(estimate_fn)
+            else None
+        )
+        if (
+            max_tile_requests is not None
+            and estimated is not None
+            and estimated > max_tile_requests
+        ):
+            if allow_estimate_only:
+                return [], tile_options, int(estimated)
+            raise ValidationError(
+                f"Tile plan of {estimated} requests exceeds max_tile_requests="
+                f"{max_tile_requests} (too many tiles for this AOI / zoom); "
+                "shrink the bbox, lower zoom, or raise max_tile_requests"
+            )
+
         plan = service.generate_tile_requests(
             self.bbox,
             self.chunk_pixels,
             **dict(tile_options),
         )
         tile_requests = list(plan.tiles)
+        request_count = len(tile_requests)
+
+        if max_tile_requests is not None and request_count > max_tile_requests:
+            if allow_estimate_only:
+                return [], tile_options, request_count
+            raise ValidationError(
+                f"Tile plan of {request_count} requests exceeds max_tile_requests="
+                f"{max_tile_requests} (too many tiles for this AOI / zoom); "
+                "shrink the bbox, lower zoom, or raise max_tile_requests"
+            )
 
         if (
             plan.grid_shape is not None
@@ -691,7 +755,7 @@ class ArrayRequest(BaseModel):
             self.bbox = plan.mosaic_bbox
             self.target_crs = plan.mosaic_bbox.crs
 
-        return tile_requests, tile_options
+        return tile_requests, tile_options, request_count
 
     def array_attrs(
         self,

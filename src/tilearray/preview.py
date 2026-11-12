@@ -272,6 +272,7 @@ def preview_array(
         output_format=output_format,
         cache_dir=cache_dir,
         output_crs=output_crs,
+        materialize_tiles=False,
         **service_options,
     )
     request = entry.request
@@ -280,16 +281,63 @@ def preview_array(
     tile_requests = list(entry.tile_requests)
     tile_options = dict(entry.tile_options)
     options = dict(request.service_options)
+    chunk_height, chunk_width = request.chunk_size
+    dtype_np = np.dtype(dtype)
+    effective_format = request.effective_format(service)
+
+    service_type_value = getattr(service, "service_type", None)
+    service_type_str = (
+        service_type_value.value
+        if isinstance(service_type_value, ServiceTypeEnum)
+        else str(service_type_value or "unknown")
+    )
+    requested = request.requested_bbox or request.bbox
+    format_value = effective_format.value if effective_format is not None else None
+
+    # Estimate-only path (#161): huge plans skip materialising TileRequests.
+    if not tile_requests and entry.request_count > 0:
+        return ArrayPreview(
+            requested_bbox=requested,
+            planned_bbox=request.bbox,
+            bbox_snap_delta=request.bbox_snap_delta,
+            mosaic_crs=request.target_crs.value,
+            bbox_crs=request.bbox_crs.value,
+            chunk_size=(chunk_width, chunk_height),
+            grid_shape=request.grid_shape,
+            resolution=request.resolution,
+            planned_pixel_size=None,
+            matrix_id=_matrix_or_zoom_id(service, tile_options),
+            pixel_height=0,
+            pixel_width=0,
+            request_count=entry.request_count,
+            dtype=str(dtype_np),
+            bands=None,
+            bands_source="unknown",
+            estimated_nbytes=None,
+            cache_dir=request.cache_path,
+            cached_tiles=None,
+            fetch_policy=fetch_policy_summary(fetch_policy),
+            service_type=service_type_str,
+            output_format=format_value,
+            unknowns=(
+                "pixel shape (tile requests not materialised for this estimate)",
+                "in-memory array bytes (depends on band count and pixel shape)",
+            ),
+            notes=(
+                "request_count is an O(1) estimate; tile_requests were not "
+                "materialised because the plan exceeds max_tile_requests",
+                "estimates exclude HTTP overhead, retries, and decode peaks; "
+                "no transfer time or provider cost is claimed",
+            ),
+            tile_requests=(),
+        )
 
     rows, cols = request.grid_shape
     tile_grid = organize_tiles(tile_requests, rows, cols)
-    chunk_height, chunk_width = request.chunk_size
     pixel_height, pixel_width = _mosaic_pixel_size(
         tile_grid, chunk_height=chunk_height, chunk_width=chunk_width
     )
 
-    dtype_np = np.dtype(dtype)
-    effective_format = request.effective_format(service)
     bands: int | None
     bands_source: BandsSource
     unknowns: list[str] = []
@@ -337,14 +385,6 @@ def preview_array(
             1 for tile in tile_requests if _cache_tile_exists(cache_path, tile)
         )
 
-    service_type_value = getattr(service, "service_type", None)
-    service_type_str = (
-        service_type_value.value
-        if isinstance(service_type_value, ServiceTypeEnum)
-        else str(service_type_value or "unknown")
-    )
-
-    requested = request.requested_bbox or request.bbox
     if request.bbox_snap_delta is not None:
         notes.append(
             "planned bbox was snapped outward onto the resolution grid "
@@ -374,8 +414,6 @@ def preview_array(
         "no transfer time or provider cost is claimed"
     )
 
-    format_value = effective_format.value if effective_format is not None else None
-
     matrix_id = _matrix_or_zoom_id(service, tile_options)
     planned_pixel_size = _planned_pixel_size_from_extent(
         planned_bbox=request.bbox,
@@ -403,7 +441,7 @@ def preview_array(
         matrix_id=matrix_id,
         pixel_height=pixel_height,
         pixel_width=pixel_width,
-        request_count=len(tile_requests),
+        request_count=entry.request_count or len(tile_requests),
         dtype=str(dtype_np),
         bands=bands,
         bands_source=bands_source,

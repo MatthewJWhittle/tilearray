@@ -52,6 +52,7 @@ def test_recommend_grid_shape_matches_array_request() -> None:
         cache_dir_input=None,
         service_options_input={"resolution": resolution},
     )
+    request._apply_mosaic_crs_resolution(request.tile_options())
     assert request.grid_shape == grid
 
 

@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0" xmlns:ows="http://www.opengis.net/ows/1.1">
+  <Contents>
+    <Layer>
+      <ows:Identifier>layer</ows:Identifier>
+      <Style isDefault="true"><ows:Identifier>default</ows:Identifier></Style>
+      <Format>image/png</Format>
+      <TileMatrixSetLink><TileMatrixSet>google3857</TileMatrixSet></TileMatrixSetLink>
+      <ResourceURL format="image/png" resourceType="tile"
+        template="https://example.com/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.png"/>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>google3857</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG:6.18.3:3857</ows:SupportedCRS>
+      <TileMatrix>
+        <ows:Identifier>1</ows:Identifier>
+        <ScaleDenominator>279541132.0143589</ScaleDenominator>
+        <TopLeftCorner>-20037508.34278925 20037508.34278925</TopLeftCorner>
+        <TileWidth>256</TileWidth><TileHeight>256</TileHeight>
+        <MatrixWidth>2</MatrixWidth><MatrixHeight>2</MatrixHeight>
+      </TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>

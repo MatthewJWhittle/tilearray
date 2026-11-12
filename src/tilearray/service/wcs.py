@@ -10,6 +10,7 @@ from typing import Any
 import httpx
 
 from ..error_messages import (
+    config_params_for_errors,
     describe_coverage_parse_message,
     format_http_failure,
     looks_like_html,
@@ -36,6 +37,7 @@ from .http import (
     http_get,
     resolve_timeout,
 )
+from .requests import tile_option_passthrough
 
 logger = logging.getLogger(__name__)
 
@@ -487,6 +489,7 @@ class WCSService(BaseService):
                     request_name="GetCapabilities",
                     url=self.base_url,
                     protocol="WCS",
+                    params=config_params_for_errors(self.config),
                 ),
                 cause=exc,
             ) from exc
@@ -514,6 +517,7 @@ class WCSService(BaseService):
                     url=self.base_url,
                     protocol="WCS",
                     coverage_id=coverage,
+                    params=config_params_for_errors(self.config),
                 ),
                 cause=exc,
             ) from exc
@@ -552,12 +556,12 @@ class WCSService(BaseService):
             or metadata.native_format
             or Format.GEOTIFF
         )
-        subset_crs, subset_bbox, subset_parts = self._resolve_subset(
+        subset_crs, subset_bbox, subset_parts, axis_labels = self._resolve_subset(
             bbox, crs or self.subsetting_crs, metadata
         )
         output_raw = params.pop("output_crs", None)
 
-        request_params = {
+        request_params: dict[str, Any] = {
             "service": "WCS",
             "version": self.version,
             "request": "GetCoverage",
@@ -566,8 +570,12 @@ class WCSService(BaseService):
             "format": fmt.value,
             "width": str(width),
             "height": str(height),
-            "subsettingCRS": subset_crs.value,
+            "scaleSize": self._format_scale_size(
+                axis_labels, width, height, crs=subset_crs
+            ),
         }
+        if metadata.native_crs is None or subset_crs != metadata.native_crs:
+            request_params["subsettingCRS"] = subset_crs.value
         if output_raw is not None:
             request_params["outputCRS"] = CRS.parse(output_raw).value
 
@@ -606,7 +614,7 @@ class WCSService(BaseService):
             options.get("output_format") or self.output_format or metadata.native_format
         )
         requested_crs = CRS.parse(options.get("crs") or tile.crs)
-        subset_crs, subset_bbox, subset_parts = self._resolve_subset(
+        subset_crs, subset_bbox, subset_parts, axis_labels = self._resolve_subset(
             tile.bbox, requested_crs, metadata
         )
         output_raw = options.get("output_crs")
@@ -621,7 +629,7 @@ class WCSService(BaseService):
             zoom=tile.zoom,
         )
 
-        params: dict[str, Any] = {
+        protocol_params: dict[str, Any] = {
             "service": "WCS",
             "version": self.version,
             "request": "GetCoverage",
@@ -630,23 +638,27 @@ class WCSService(BaseService):
             "format": fmt.value,
             "width": str(tile.width),
             "height": str(tile.height),
-            "subsettingCRS": subset_crs.value,
+            "scaleSize": self._format_scale_size(
+                axis_labels, tile.width, tile.height, crs=subset_crs
+            ),
         }
+        if metadata.native_crs is None or subset_crs != metadata.native_crs:
+            protocol_params["subsettingCRS"] = subset_crs.value
         if output_raw is not None:
-            params["outputCRS"] = result_crs.value
+            protocol_params["outputCRS"] = result_crs.value
 
-        passthrough = {
-            key: value
-            for key, value in options.items()
-            if key not in {"output_format", "crs", "output_crs", "supported_crs"}
-        }
         return self.compose_tile_request(
             subset_tile,
             url=self.base_url,
-            params=params,
+            protocol_params=protocol_params,
             output_format=fmt,
             crs=result_crs,
-            **passthrough,
+            **tile_option_passthrough(
+                options,
+                "output_crs",
+                "supported_crs",
+                "coverage_id",
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -688,7 +700,7 @@ class WCSService(BaseService):
         bbox: BoundingBox,
         requested_crs: CRS,
         metadata: CoverageDescription,
-    ) -> tuple[CRS, BoundingBox, list[str]]:
+    ) -> tuple[CRS, BoundingBox, list[str], tuple[str, str]]:
         subset_crs = requested_crs
         subset_bbox = bbox if bbox.crs == requested_crs else bbox.to_crs(requested_crs)
         axis_labels = metadata.axis_labels.get(requested_crs.value)
@@ -704,16 +716,82 @@ class WCSService(BaseService):
         if axis_labels is None:
             axis_labels = self._default_subset_axes(subset_crs)
 
-        return subset_crs, subset_bbox, self._format_subset(subset_bbox, axis_labels)
+        return (
+            subset_crs,
+            subset_bbox,
+            self._format_subset(subset_bbox, axis_labels),
+            axis_labels,
+        )
 
     def _default_subset_axes(self, crs: CRS) -> tuple[str, str]:
         return CRS.parse(crs).default_subset_axes()
 
+    @staticmethod
+    def _label_is_northing(label: str, crs: CRS | None = None) -> bool | None:
+        """Classify a subset/scale axis label as northing/lat when possible.
+
+        Returns ``True`` / ``False`` when the name is unambiguous, else ``None``
+        so callers can fall back to CRS axis order.
+        """
+
+        key = label.strip().lower()
+        if key in {"lat", "latitude", "n", "north", "northing", "y"}:
+            return True
+        if key in {"lon", "long", "longitude", "e", "east", "easting", "x"}:
+            return False
+        if crs is not None:
+            try:
+                axes = list(CRS.parse(crs).to_pyproj().axis_info)
+            except Exception:  # pragma: no cover - defensive
+                axes = []
+            for axis in axes:
+                name = (axis.name or "").lower()
+                abbrev = (axis.abbrev or "").lower()
+                if key in {name, abbrev} or key == abbrev.replace(" ", ""):
+                    direction = (axis.direction or "").lower()
+                    if direction in {"north", "south"}:
+                        return True
+                    if direction in {"east", "west"}:
+                        return False
+        return None
+
     def _format_subset(
         self, bbox: BoundingBox, axis_labels: tuple[str, str]
     ) -> list[str]:
-        axis_x, axis_y = axis_labels
-        return [
-            f"{axis_x}({bbox.min_x},{bbox.max_x})",
-            f"{axis_y}({bbox.min_y},{bbox.max_y})",
-        ]
+        # BoundingBox is always_xy; map each label by axis meaning so lat-first
+        # caps labels like ("y", "x") get northing under y and easting under x.
+        parts: list[str] = []
+        for index, label in enumerate(axis_labels):
+            northing = self._label_is_northing(label, bbox.crs)
+            if northing is None:
+                # Fall back: CRS axis order when labels are opaque.
+                north_first = CRS.parse(bbox.crs).north_axis_first
+                northing = (index == 0) if north_first else (index == 1)
+            if northing:
+                parts.append(f"{label}({bbox.min_y},{bbox.max_y})")
+            else:
+                parts.append(f"{label}({bbox.min_x},{bbox.max_x})")
+        return parts
+
+    def _format_scale_size(
+        self,
+        axis_labels: tuple[str, str],
+        width: int,
+        height: int,
+        *,
+        crs: CRS | None = None,
+    ) -> str:
+        """WCS 2 Scaling ``scaleSize`` using the same labels/meaning as subsets."""
+
+        parts: list[str] = []
+        for index, label in enumerate(axis_labels):
+            northing = self._label_is_northing(label, crs)
+            if northing is None:
+                # Match `_format_subset`: CRS axis order when labels are opaque.
+                north_first = (
+                    CRS.parse(crs).north_axis_first if crs is not None else False
+                )
+                northing = (index == 0) if north_first else (index == 1)
+            size = height if northing else width
+            parts.append(f"{label}({size})")
+        return ",".join(parts)

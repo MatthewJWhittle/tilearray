@@ -12,7 +12,11 @@ from urllib.parse import quote
 
 import httpx
 
-from ..error_messages import format_http_failure, unsupported_format_message
+from ..error_messages import (
+    config_params_for_errors,
+    format_http_failure,
+    unsupported_format_message,
+)
 from ..errors import NetworkError, ParseError, ValidationError
 from ..types import CRS, BoundingBox, Format, ServiceTypeEnum, TileRequest
 from .base import BaseService, TileGeometry, register_service
@@ -22,7 +26,10 @@ from .http import (
     http_get,
     resolve_timeout,
 )
+from .requests import tile_option_passthrough
 from .xyz import (
+    _refuse_outside_slippy_domain,
+    _refuse_tile_indices_outside_zoom,
     _tile_bounds_3857,
     _tile_range_for_bbox,
 )
@@ -91,6 +98,10 @@ class WMTSLayerInfo:
     matrix_limits: dict[str, dict[str, WMTSTileMatrixLimits]] = field(
         default_factory=dict
     )
+    formats: tuple[str, ...] = ()
+    styles: tuple[str, ...] = ()
+    default_style: str | None = None
+    dimensions: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -201,6 +212,32 @@ class WMTSParser:
                 if resource_template:
                     break
 
+        formats: list[str] = []
+        for format_elem in element.findall("wmts:Format", self.namespaces):
+            if format_elem.text and format_elem.text.strip():
+                formats.append(format_elem.text.strip())
+
+        styles: list[str] = []
+        default_style: str | None = None
+        for style_elem in element.findall("wmts:Style", self.namespaces):
+            style_id = self._text(style_elem, "ows:Identifier")
+            if not style_id:
+                continue
+            styles.append(style_id)
+            if style_elem.get("isDefault", "").lower() in {"true", "1"}:
+                default_style = style_id
+        if default_style is None and styles:
+            default_style = styles[0]
+
+        dimensions: dict[str, str] = {}
+        for dim_elem in element.findall("wmts:Dimension", self.namespaces):
+            dim_id = self._text(dim_elem, "ows:Identifier")
+            if not dim_id:
+                continue
+            default_value = self._text(dim_elem, "wmts:Default")
+            if default_value:
+                dimensions[dim_id] = default_value
+
         tms_links: list[str] = []
         matrix_limits: dict[str, dict[str, WMTSTileMatrixLimits]] = {}
         for link_elem in element.findall("wmts:TileMatrixSetLink", self.namespaces):
@@ -218,6 +255,10 @@ class WMTSParser:
             resource_url_template=resource_template,
             tile_matrix_set_links=tms_links,
             matrix_limits=matrix_limits,
+            formats=tuple(formats),
+            styles=tuple(styles),
+            default_style=default_style,
+            dimensions=dimensions,
         )
 
     def _text(self, element: ET.Element, xpath: str) -> str | None:
@@ -242,6 +283,7 @@ class WMTSService(BaseService):
         output_format: Format | None = Format.PNG,
         crs: CRS | None = CRS.EPSG_4326,
         url_template: str | None = None,
+        dimensions: dict[str, str] | None = None,
         version: str = "1.0.0",
         client: httpx.Client | None = None,
         **config: Any,
@@ -271,6 +313,12 @@ class WMTSService(BaseService):
         )
         self.native_crs = CRS.parse(crs or config.get("crs") or CRS.EPSG_4326)
         self.url_template = url_template or config.get("url_template")
+        raw_dimensions = (
+            dimensions if dimensions is not None else config.get("dimensions")
+        )
+        self.dimensions: dict[str, str] = (
+            dict(raw_dimensions) if isinstance(raw_dimensions, dict) else {}
+        )
         self._client = client
         self.parser = WMTSParser()
         self._capabilities: WMTSCapabilities | None = None
@@ -310,6 +358,7 @@ class WMTSService(BaseService):
                     url=self.base_url,
                     protocol="WMTS",
                     layer=self.layer,
+                    params=config_params_for_errors(self.config),
                 ),
                 cause=exc,
             ) from exc
@@ -326,8 +375,59 @@ class WMTSService(BaseService):
             self._capabilities = caps
 
         layer_info = caps.layers.get(self.layer)
-        if layer_info and self.url_template is None:
+        if layer_info is None:
+            return
+        if self.url_template is None:
             self.url_template = layer_info.resource_url_template
+        if not self.style and layer_info.default_style:
+            self.style = layer_info.default_style
+        if self.output_format == Format.PNG and layer_info.formats:
+            preferred = layer_info.formats[0]
+            try:
+                self.output_format = Format(preferred)
+            except ValueError:
+                pass
+        for name, value in layer_info.dimensions.items():
+            self.dimensions.setdefault(name, value)
+
+    def estimate_tile_count(
+        self,
+        bbox: BoundingBox,
+        chunk_size: tuple[int, int],
+        **options: object,
+    ) -> int | None:
+        """O(1) tile count matching :meth:`plan_tiles` (no TileRequest build)."""
+
+        tile_matrix_id, tms_id, matrix_override, query_crs = self._plan_options(options)
+        self._ensure_capabilities_for_plan(tms_id, query_crs, matrix_override)
+        has_caps = self._capabilities is not None or matrix_override is not None
+
+        if has_caps:
+            tms, matrix = self._require_matrix(
+                tms_id, tile_matrix_id, matrix_override=matrix_override
+            )
+            matrix_crs = (
+                tms.supported_crs
+                if tms is not None
+                else self._matrix_override_crs(options)
+            )
+            limits = self._layer_limits(tms_id, matrix.identifier)
+            min_col, max_col, min_row, max_row = self._matrix_tile_range(
+                bbox, matrix, matrix_crs, limits=limits
+            )
+            return int((max_col - min_col + 1) * (max_row - min_row + 1))
+
+        if _allows_slippy_fallback(tms_id, query_crs):
+            zoom = self._slippy_zoom_from_tile_matrix(tile_matrix_id)
+            x_min, y_min, x_max, y_max = self._web_mercator_tile_range(bbox, zoom)
+            return int((x_max - x_min + 1) * (y_max - y_min + 1))
+
+        raise ValidationError(
+            f"WMTS TileMatrixSet {tms_id!r} needs native matrix metadata "
+            f"(SupportedCRS / ScaleDenominator / TopLeftCorner). Load "
+            "GetCapabilities via get_capabilities()/apply_capabilities(), or pass "
+            "matrix= with those fields. tilearray will not guess a Web Mercator grid."
+        )
 
     def plan_tiles(
         self,
@@ -335,33 +435,9 @@ class WMTSService(BaseService):
         chunk_size: tuple[int, int],
         **options: object,
     ) -> Iterable[TileGeometry]:
-        tile_matrix_id = _coerce_tile_matrix_id(
-            options.get("tile_matrix", self.tile_matrix)
-        )
-        tms_id = str(options.get("tile_matrix_set") or self.tile_matrix_set)
-
-        matrix_override = None
-        if isinstance(options, dict):
-            maybe_override = options.get("matrix")
-            if isinstance(maybe_override, WMTSTileMatrix):
-                matrix_override = maybe_override
-
-        query_crs = options.get("crs", self.native_crs)
-        if not isinstance(query_crs, CRS):
-            query_crs = self.native_crs
-
-        # Native / non-slippy grids need TileMatrixSet metadata. Load
-        # GetCapabilities once so create_array(config, bbox, crs) works without a
-        # separate apply_capabilities() step (same habit as WCS DescribeCoverage).
-        if (
-            matrix_override is None
-            and self._capabilities is None
-            and not _allows_slippy_fallback(tms_id, query_crs)
-        ):
-            self.apply_capabilities()
-
-        caps = self._capabilities
-        has_caps = caps is not None or matrix_override is not None
+        tile_matrix_id, tms_id, matrix_override, query_crs = self._plan_options(options)
+        self._ensure_capabilities_for_plan(tms_id, query_crs, matrix_override)
+        has_caps = self._capabilities is not None or matrix_override is not None
 
         if has_caps:
             tms, matrix = self._require_matrix(
@@ -385,15 +461,7 @@ class WMTSService(BaseService):
         if _allows_slippy_fallback(tms_id, query_crs):
             tile_width = chunk_size[0]
             tile_height = chunk_size[1]
-            try:
-                zoom = int(tile_matrix_id)
-            except ValueError as exc:
-                raise ValidationError(
-                    f"WMTS tile_matrix {tile_matrix_id!r} is not numeric and no "
-                    "GetCapabilities TileMatrix metadata is loaded. Call "
-                    "get_capabilities()/apply_capabilities() or pass matrix= with "
-                    "native TileMatrix fields."
-                ) from exc
+            zoom = self._slippy_zoom_from_tile_matrix(tile_matrix_id)
             # query_crs only gates slippy fallback eligibility above; mosaic
             # georef is always native EPSG:3857 (same as XYZ).
             return self._plan_web_mercator_tiles(
@@ -410,6 +478,50 @@ class WMTSService(BaseService):
             "matrix= with those fields. tilearray will not guess a Web Mercator grid."
         )
 
+    def _plan_options(
+        self, options: dict[str, object]
+    ) -> tuple[str, str, WMTSTileMatrix | None, CRS]:
+        tile_matrix_id = _coerce_tile_matrix_id(
+            options.get("tile_matrix", self.tile_matrix)
+        )
+        tms_id = str(options.get("tile_matrix_set") or self.tile_matrix_set)
+        matrix_override = None
+        maybe_override = options.get("matrix")
+        if isinstance(maybe_override, WMTSTileMatrix):
+            matrix_override = maybe_override
+        query_crs = options.get("crs", self.native_crs)
+        if not isinstance(query_crs, CRS):
+            query_crs = self.native_crs
+        return tile_matrix_id, tms_id, matrix_override, query_crs
+
+    def _ensure_capabilities_for_plan(
+        self,
+        tms_id: str,
+        query_crs: CRS,
+        matrix_override: WMTSTileMatrix | None,
+    ) -> None:
+        # Native / non-slippy grids need TileMatrixSet metadata. Load
+        # GetCapabilities once so create_array(config, bbox, crs) works without a
+        # separate apply_capabilities() step (same habit as WCS DescribeCoverage).
+        if (
+            matrix_override is None
+            and self._capabilities is None
+            and not _allows_slippy_fallback(tms_id, query_crs)
+        ):
+            self.apply_capabilities()
+
+    @staticmethod
+    def _slippy_zoom_from_tile_matrix(tile_matrix_id: str) -> int:
+        try:
+            return int(tile_matrix_id)
+        except ValueError as exc:
+            raise ValidationError(
+                f"WMTS tile_matrix {tile_matrix_id!r} is not numeric and no "
+                "GetCapabilities TileMatrix metadata is loaded. Call "
+                "get_capabilities()/apply_capabilities() or pass matrix= with "
+                "native TileMatrix fields."
+            ) from exc
+
     def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
         layer = str(options.get("layer") or self.layer)
         tms = str(options.get("tile_matrix_set") or self.tile_matrix_set)
@@ -418,6 +530,7 @@ class WMTSService(BaseService):
         )
         fmt = self._coerce_format(options.get("output_format") or self.output_format)
         crs = CRS.parse(options.get("crs") or tile.crs or self.native_crs)
+        dimensions = _resolve_dimensions(self.dimensions, options.get("dimensions"))
 
         tile_col = _require_index(tile.tile_x, options.get("tile_col"))
         tile_row = _require_index(tile.tile_y, options.get("tile_row"))
@@ -434,6 +547,16 @@ class WMTSService(BaseService):
             )
 
         template = options.get("url_template") or self.url_template
+        consumed = (
+            "layer",
+            "style",
+            "tile_matrix_set",
+            "tile_matrix",
+            "url_template",
+            "tile_col",
+            "tile_row",
+            "dimensions",
+        )
         if template:
             url = _format_rest_template(
                 template,
@@ -444,30 +567,17 @@ class WMTSService(BaseService):
                 tile_row=str(tile_row),
                 tile_col=str(tile_col),
                 fmt=fmt,
+                dimensions=dimensions,
             )
-            passthrough = {
-                key: value
-                for key, value in options.items()
-                if key
-                not in {
-                    "output_format",
-                    "crs",
-                    "layer",
-                    "style",
-                    "tile_matrix_set",
-                    "tile_matrix",
-                    "url_template",
-                }
-            }
             return self.compose_tile_request(
                 tile,
                 url=url,
                 output_format=fmt,
                 crs=crs,
-                **passthrough,
+                **tile_option_passthrough(options, *consumed),
             )
 
-        params: dict[str, Any] = {
+        protocol_params: dict[str, Any] = {
             "service": "WMTS",
             "request": "GetTile",
             "version": self.version,
@@ -479,28 +589,16 @@ class WMTSService(BaseService):
             "TileRow": str(tile_row),
             "TileCol": str(tile_col),
         }
+        for name, value in dimensions.items():
+            protocol_params.setdefault(name, value)
 
-        passthrough = {
-            key: value
-            for key, value in options.items()
-            if key
-            not in {
-                "output_format",
-                "crs",
-                "layer",
-                "style",
-                "tile_matrix_set",
-                "tile_matrix",
-                "url_template",
-            }
-        }
         return self.compose_tile_request(
             tile,
             url=self.base_url,
-            params=params,
+            protocol_params=protocol_params,
             output_format=fmt,
             crs=crs,
-            **passthrough,
+            **tile_option_passthrough(options, *consumed),
         )
 
     def _require_matrix(
@@ -560,6 +658,15 @@ class WMTSService(BaseService):
             return None
         return by_matrix.get(tile_matrix)
 
+    def _web_mercator_tile_range(
+        self, bbox: BoundingBox, zoom: int
+    ) -> tuple[int, int, int, int]:
+        working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
+        _refuse_outside_slippy_domain(working_bbox)
+        x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
+        _refuse_tile_indices_outside_zoom(x_min, y_min, x_max, y_max, zoom)
+        return x_min, y_min, x_max, y_max
+
     def _plan_web_mercator_tiles(
         self,
         bbox: BoundingBox,
@@ -567,8 +674,7 @@ class WMTSService(BaseService):
         tile_width: int,
         tile_height: int,
     ) -> Iterable[TileGeometry]:
-        working_bbox = bbox if bbox.crs == CRS.EPSG_4326 else bbox.to_crs(CRS.EPSG_4326)
-        x_min, y_min, x_max, y_max = _tile_range_for_bbox(working_bbox, zoom)
+        x_min, y_min, x_max, y_max = self._web_mercator_tile_range(bbox, zoom)
 
         for tile_y in range(y_min, y_max + 1):
             for tile_x in range(x_min, x_max + 1):
@@ -584,14 +690,14 @@ class WMTSService(BaseService):
                     tile_matrix_id=str(zoom),
                 )
 
-    def _plan_matrix_tiles(
+    def _matrix_tile_range(
         self,
         bbox: BoundingBox,
         matrix: WMTSTileMatrix,
         matrix_crs: CRS,
         *,
         limits: WMTSTileMatrixLimits | None = None,
-    ) -> Iterable[TileGeometry]:
+    ) -> tuple[int, int, int, int]:
         try:
             working_bbox = bbox if bbox.crs == matrix_crs else bbox.to_crs(matrix_crs)
         except Exception as exc:
@@ -602,6 +708,14 @@ class WMTSService(BaseService):
                 "is compatible."
             ) from exc
 
+        # Geographic matrices: refuse lon outside [-180, 180] rather than clamp (#164).
+        if matrix_crs.is_geographic:
+            if working_bbox.min_x < -180.0 or working_bbox.max_x > 180.0:
+                raise ValidationError(
+                    "AOI longitude is outside [-180, 180] for this WMTS geographic "
+                    "TileMatrixSet (out-of-domain boxes are refused, not clipped)"
+                )
+
         pixel_size = _pixel_size_in_crs_units(matrix.scale_denominator, matrix_crs)
         span_x = abs(pixel_size * matrix.tile_width)
         span_y = abs(pixel_size * matrix.tile_height)
@@ -611,36 +725,52 @@ class WMTSService(BaseService):
                 "tile span from ScaleDenominator; check the capabilities document."
             )
 
-        min_col = _matrix_index(
+        # Raw matrix indices — do not clamp into the matrix; refuse out-of-domain (#164).
+        # Max edges use half-open end semantics (exact far boundary → previous tile).
+        min_col = _raw_matrix_index(
             working_bbox.min_x,
             matrix.top_left_x,
             span_x,
-            matrix.matrix_width,
             reverse=False,
         )
-        max_col = _matrix_index(
+        max_col = _raw_matrix_index(
             working_bbox.max_x,
             matrix.top_left_x,
             span_x,
-            matrix.matrix_width,
             reverse=False,
+            end=True,
         )
         # TileRow 0 starts at TopLeftCorner; rows increase away from the top
         # (decreasing Y in always_xy / north-up coordinates).
-        min_row = _matrix_index(
+        min_row = _raw_matrix_index(
             working_bbox.max_y,
             matrix.top_left_y,
             span_y,
-            matrix.matrix_height,
             reverse=True,
         )
-        max_row = _matrix_index(
+        max_row = _raw_matrix_index(
             working_bbox.min_y,
             matrix.top_left_y,
             span_y,
-            matrix.matrix_height,
             reverse=True,
+            end=True,
         )
+
+        if (
+            min_col < 0
+            or max_col < 0
+            or min_row < 0
+            or max_row < 0
+            or min_col >= matrix.matrix_width
+            or max_col >= matrix.matrix_width
+            or min_row >= matrix.matrix_height
+            or max_row >= matrix.matrix_height
+        ):
+            raise ValidationError(
+                f"Request bbox falls outside WMTS TileMatrix {matrix.identifier!r} "
+                f"domain ({matrix.matrix_width}×{matrix.matrix_height} tiles) and "
+                "is refused (not clipped)"
+            )
 
         if limits is not None:
             min_col = max(min_col, limits.min_tile_col)
@@ -659,6 +789,24 @@ class WMTSService(BaseService):
                 )
                 + "."
             )
+
+        return min_col, max_col, min_row, max_row
+
+    def _plan_matrix_tiles(
+        self,
+        bbox: BoundingBox,
+        matrix: WMTSTileMatrix,
+        matrix_crs: CRS,
+        *,
+        limits: WMTSTileMatrixLimits | None = None,
+    ) -> Iterable[TileGeometry]:
+        min_col, max_col, min_row, max_row = self._matrix_tile_range(
+            bbox, matrix, matrix_crs, limits=limits
+        )
+
+        pixel_size = _pixel_size_in_crs_units(matrix.scale_denominator, matrix_crs)
+        span_x = abs(pixel_size * matrix.tile_width)
+        span_y = abs(pixel_size * matrix.tile_height)
 
         zoom: int | None = (
             int(matrix.identifier) if matrix.identifier.isdigit() else None
@@ -846,6 +994,16 @@ def _require_index(value: int | None, override: object) -> int:
     return int(resolved)
 
 
+def _resolve_dimensions(base: dict[str, str], override: object) -> dict[str, str]:
+    merged = dict(base)
+    if isinstance(override, dict):
+        for key, value in override.items():
+            if value is None:
+                continue
+            merged[str(key)] = str(value)
+    return merged
+
+
 def _format_rest_template(
     template: str,
     *,
@@ -856,6 +1014,7 @@ def _format_rest_template(
     tile_row: str,
     tile_col: str,
     fmt: Format,
+    dimensions: dict[str, str] | None = None,
 ) -> str:
     extension = _format_extension(fmt)
     replacements = {
@@ -872,6 +1031,13 @@ def _format_rest_template(
         url = url.replace(token, value)
     if "{FormatExtension}" in url:
         url = url.replace("{FormatExtension}", extension)
+    for name, value in (dimensions or {}).items():
+        url = url.replace("{" + name + "}", quote(str(value), safe=""))
+    if "{" in url:
+        raise ValidationError(
+            "WMTS REST template has unfilled placeholder after substituting "
+            f"Layer/Style/TileMatrix*/Format and Dimension defaults: {url!r}"
+        )
     return url
 
 
@@ -885,6 +1051,32 @@ def _format_extension(fmt: Format) -> str:
     raise ValidationError(f"Unsupported format: {fmt}")
 
 
+def _raw_matrix_index(
+    coordinate: float,
+    origin: float,
+    span: float,
+    *,
+    reverse: bool,
+    end: bool = False,
+) -> int:
+    """Return the unclamped matrix index for ``coordinate`` (#164 refuse, not clip).
+
+    When ``end`` is true and the coordinate lands exactly on a tile boundary,
+    return the previous index (half-open matrix space — same as XYZ slippy).
+    """
+
+    if span <= 0:
+        return 0
+    if reverse:
+        pos = (origin - coordinate) / span
+    else:
+        pos = (coordinate - origin) / span
+    idx = int(math.floor(pos))
+    if end and pos == float(idx) and idx > 0:
+        return idx - 1
+    return idx
+
+
 def _matrix_index(
     coordinate: float,
     origin: float,
@@ -893,10 +1085,7 @@ def _matrix_index(
     *,
     reverse: bool,
 ) -> int:
-    if span <= 0:
-        return 0
-    if reverse:
-        raw = math.floor((origin - coordinate) / span)
-    else:
-        raw = math.floor((coordinate - origin) / span)
-    return max(0, min(int(raw), limit - 1))
+    """Legacy clamped index helper (tests / callers that still expect clamp)."""
+
+    raw = _raw_matrix_index(coordinate, origin, span, reverse=reverse)
+    return max(0, min(raw, limit - 1))

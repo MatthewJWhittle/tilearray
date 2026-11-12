@@ -501,7 +501,8 @@ def test_wcs_query_differs_from_output_crs_sends_outputCRS(
         coverage_id="cov",
         output_format=Format.GEOTIFF,
     )
-    assert requests[0].params["subsettingCRS"] == "EPSG:4326"
+    # Native CRS subsetting omits subsettingCRS; outputCRS still records the warp.
+    assert "subsettingCRS" not in requests[0].params
     assert requests[0].params["outputCRS"] == "EPSG:3857"
     assert requests[0].crs == CRS.EPSG_3857
 

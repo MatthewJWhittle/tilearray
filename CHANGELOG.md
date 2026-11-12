@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- WMS / WCS / WMTS-KVP `params=` no longer raises `TypeError` (protocol query keys and caller params used the same keyword). Caller API keys and vendor query params merge into the tile request alongside GetMap / GetCoverage / GetTile keys (#151)
+- Versioned OGC EPSG URNs with multi-dot versions (e.g. `urn:ogc:def:crs:EPSG:6.18.3:3857`) canonicalise to `EPSG:3857` instead of truncating to `EPSG:6` (#163)
+- Sync HTTP clients follow redirects (`follow_redirects=True`) so caps/tile GETs through a 301/302 succeed (#159)
+- Query strings on service `base_url` (e.g. MapServer `?map=/path/to.map`) peel into request `params` and survive GetMap / inspect / tile fetch (#155)
+- Thin RGB PNG tiles (e.g. height=1, shape `(1,256,3)`) keep band-last layout using request width/height instead of a bands-first heuristic (#152)
+- GeoTIFF PREDICTOR / missing-`imagecodecs` failures raise `ConfigurationError` naming imagecodecs instead of a bare `ValueError` (#153)
+- WCS 2 GetCoverage emits Scaling `scaleSize` (e.g. `x(256),y(256)`); lat-first axis labels map ranges by axis meaning; `subsettingCRS` is omitted when subsetting in the coverage native CRS (#154, #158)
+- Public create/compute surfaces wrap zero-area / inverted bbox and decode failures as `ValidationError` / `ParseError` (not bare pydantic / PIL) (#162)
+- Ground `resolution=` is snapped / used to infer `grid_shape` in the **mosaic** CRS after `output_crs=` transforms the AOI — lon/lat queries no longer produce ~1e5 one-pixel tiles when targeting a projected mosaic (#160)
+- Huge tile plans: `FetchPolicy.max_tile_requests` (default 10_000) refuses `create_array` with `ValidationError`; `preview_array` returns an O(1) estimate with empty `tile_requests` instead of materialising every `TileRequest`. WMS/WCS resolution/grid plans and WMTS slippy/matrix ranges all estimate in O(1) (#161)
+- World-edge / out-of-domain AOIs (XYZ antimeridian or polar, WMTS past ±180) raise `ValidationError` instead of silently clamping tile indices; exact domain edges (e.g. lon ``180``) stay inclusive of the last in-domain tile via half-open tile ranging (#164)
+- WCS `scaleSize` uses the same CRS-aware axis meaning as subsets for opaque labels under lat-first CRSs (#154/#158)
+- Caps/DescribeCoverage error text still shows redacted secrets (e.g. `api_key=***`) after base-URL query peeling into `params` (#155)
+- WMTS GetCapabilities Dimension / Style / Format defaults flow into KVP and REST GetTile URLs (#156, #157)
+
 ## [0.3.1] - 2026-11-10
 
 ### Breaking

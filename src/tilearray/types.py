@@ -20,8 +20,10 @@ from .errors import ValidationError
 
 # OGC HTTP URIs and URNs that spell EPSG codes pyproj may not accept verbatim.
 _OGC_EPSG_URI_RE = re.compile(r"/EPSG/(?:0/)?(\d+)/?$", re.I)
+# Versioned URN/authority forms: last digits-only colon component is the code
+# (version may be empty, ``6.3``, or multi-dot ``6.18.3``).
 _URN_EPSG_RE = re.compile(
-    r"(?:URN:OGC:DEF:CRS:)?EPSG(?::+(?:\d+\.?\d*:)?)?:*?(\d+)",
+    r"(?:URN:OGC:DEF:CRS:)?EPSG(?::[^:]*)*:(?P<code>\d+)\s*$",
     re.I,
 )
 
@@ -29,8 +31,9 @@ _URN_EPSG_RE = re.compile(
 def canonicalize_crs_input(value: str) -> str:
     """Rewrite common OGC URN/URI CRS spellings to forms pyproj accepts.
 
-    Handles ``EPSG:NNNN``, ``urn:ogc:def:crs:EPSG::NNNN``, OpenGIS EPSG HTTP
-    URIs, and CRS84 aliases (``OGC:CRS84``). Other strings are returned stripped
+    Handles ``EPSG:NNNN``, ``urn:ogc:def:crs:EPSG::NNNN``, versioned URNs
+    (``…EPSG:6.18.3:3857`` → ``EPSG:3857``), OpenGIS EPSG HTTP URIs, and
+    CRS84 aliases (``OGC:CRS84``). Other strings are returned stripped
     unchanged so :meth:`CRS.parse` can still try pyproj / raise clearly.
     """
 
@@ -38,15 +41,22 @@ def canonicalize_crs_input(value: str) -> str:
     if not text:
         return text
     upper = text.upper()
-    if upper.startswith("EPSG:"):
-        code = text.split(":", 1)[1].split("/")[0].strip()
-        return f"EPSG:{code}" if code else text
     uri_match = _OGC_EPSG_URI_RE.search(text)
     if uri_match:
         return f"EPSG:{uri_match.group(1)}"
-    urn_match = _URN_EPSG_RE.search(upper.replace(" ", ""))
+    # Structural parse: authority token EPSG, then optional version segments,
+    # then a digits-only code as the last colon component.
+    compact = upper.replace(" ", "")
+    urn_match = _URN_EPSG_RE.search(compact)
     if urn_match:
-        return f"EPSG:{urn_match.group(1)}"
+        return f"EPSG:{urn_match.group('code')}"
+    if compact.startswith("EPSG:"):
+        parts = compact.split(":")
+        for part in reversed(parts[1:]):
+            if part.isdigit():
+                return f"EPSG:{part}"
+        code = text.split(":", 1)[1].split("/")[0].strip()
+        return f"EPSG:{code}" if code else text
     if "CRS84" in upper or upper.endswith(":84") or "CRS:84" in upper:
         return "OGC:CRS84"
     return text

@@ -6,9 +6,9 @@ and what to check next. No new public exception types.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
-from urllib.parse import parse_qsl, quote, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -57,6 +57,37 @@ def redact_url(url: str) -> str:
     return urlunsplit(
         (parts.scheme, parts.netloc, parts.path, "&".join(encoded), parts.fragment)
     )
+
+
+def config_params_for_errors(
+    config: Mapping[str, Any] | object,
+) -> dict[str, Any] | None:
+    """Return ``config[\"params\"]`` when it is a mapping; else ``None``."""
+
+    if not isinstance(config, Mapping):
+        return None
+    value = config.get("params")
+    if isinstance(value, Mapping):
+        return dict(value)
+    return None
+
+
+def endpoint_url_for_errors(url: str, params: Mapping[str, Any] | None = None) -> str:
+    """Rebuild ``url`` with config query params for redacted error display.
+
+    BaseService peels ``?api_key=…`` into ``config[\"params\"]`` so the bare
+    ``base_url`` alone would hide secrets from :func:`redact_url`. Fold params
+    back onto the URL before redaction so operators still see ``api_key=***``.
+    """
+
+    if not params:
+        return url
+    parts = urlsplit(url)
+    merged = dict(parse_qsl(parts.query, keep_blank_values=True))
+    for key, value in params.items():
+        merged[str(key)] = "" if value is None else str(value)
+    query = urlencode(list(merged.items()), doseq=True)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
 
 
 def looks_like_html(
@@ -227,10 +258,11 @@ def format_http_failure(
     protocol: str,
     coverage_id: str | None = None,
     layer: str | None = None,
+    params: Mapping[str, Any] | None = None,
 ) -> str:
     """Outer NetworkError text for caps / DescribeCoverage HTTP failures."""
 
-    safe_url = redact_url(url)
+    safe_url = redact_url(endpoint_url_for_errors(url, params))
     root = _httpx_root(exc)
     status = _http_status(exc)
     identity = ""

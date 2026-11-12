@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from .._http_client import DEFAULT_HTTP_TIMEOUT, make_sync_client
+from .._http_client import DEFAULT_HTTP_TIMEOUT, make_sync_client, peel_url_query
 from ..fetch_presets import tilearray_user_agent
 from .requests import merge_params, merge_str_mappings
 
@@ -99,10 +99,11 @@ def http_get(
     timeout_value = DEFAULT_HTTP_TIMEOUT if timeout is None else timeout
     owns_client = client is None
     http = client or make_sync_client(timeout=timeout_value)
+    bare_url, merged_params = peel_url_query(url, params)
     try:
         response = http.get(
-            url,
-            params=dict(params) if params is not None else None,
+            bare_url,
+            params=merged_params or None,
             headers=dict(headers) if headers is not None else None,
             timeout=timeout_value,
         )

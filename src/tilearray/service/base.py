@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, Callable, cast
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from .._http_client import peel_url_query
 from ..error_messages import undetectable_service_type_message
 from ..errors import ConfigurationError, ValidationError
 from ..mosaic_plan import MosaicPlan
@@ -65,7 +66,20 @@ class BaseService(ABC):
     service_type: ServiceTypeEnum
 
     def __init__(self, base_url: str, **config: object) -> None:
-        self.base_url = base_url.rstrip("/?")
+        bare, query_params = peel_url_query(base_url)
+        # URL query first; existing config params win (e.g. map= overrides).
+        existing = config.get("params")
+        if isinstance(existing, Mapping):
+            merged_params: dict[str, object] = {
+                **query_params,
+                **dict(existing),
+            }
+        else:
+            merged_params = dict(query_params)
+        if merged_params:
+            config = {**config, "params": merged_params}
+        # Keep rstrip behaviour for legacy trailing slash / stray '?'.
+        self.base_url = bare.rstrip("/?") or bare
         self.config = config
 
     @classmethod
@@ -90,6 +104,31 @@ class BaseService(ABC):
             self.build_tile_request(tile_geom, **options) for tile_geom in tile_geoms
         ]
         return MosaicPlan.from_planning(tiles, tile_geoms)
+
+    def estimate_tile_count(
+        self,
+        bbox: BoundingBox,
+        chunk_size: tuple[int, int],
+        **options: object,
+    ) -> int | None:
+        """O(1) tile-count estimate for resolution / grid_shape plans (WMS/WCS)."""
+
+        width, height = chunk_size
+        resolution = options.get("resolution")
+        if resolution:
+            res_x, res_y = cast(tuple[float, float], resolution)
+            if res_x <= 0 or res_y <= 0:
+                raise ValidationError("resolution values must be positive")
+            origin = _coerce_grid_origin(options.get("origin"))
+            snapped = snap_bbox_outward(bbox, (res_x, res_y), origin)
+            n_px = max(1, int(round((snapped.max_x - snapped.min_x) / res_x)))
+            n_py = max(1, int(round((snapped.max_y - snapped.min_y) / res_y)))
+            cols = max(1, (n_px + width - 1) // width)
+            rows = max(1, (n_py + height - 1) // height)
+            return int(rows * cols)
+
+        rows, cols = _grid_shape_from_options(options)
+        return int(rows * cols)
 
     def plan_tiles(
         self,
@@ -155,23 +194,7 @@ class BaseService(ABC):
                 y0 += tile_h
             return
 
-        grid_shape_option = options.get("grid_shape")
-        if grid_shape_option is None:
-            rows, cols = 1, 1
-        elif isinstance(grid_shape_option, tuple):
-            try:
-                grid_tuple_raw = cast(tuple[Any, Any], grid_shape_option)
-                row_raw, col_raw = grid_tuple_raw
-            except ValueError as exc:  # pragma: no cover - guard
-                raise ValidationError(
-                    "grid_shape must be a tuple of two integers"
-                ) from exc
-
-            rows, cols = int(row_raw), int(col_raw)
-        else:
-            raise ValidationError("grid_shape must be a tuple of two integers")
-        if rows <= 0 or cols <= 0:
-            raise ValidationError("grid_shape dimensions must be positive integers")
+        rows, cols = _grid_shape_from_options(options)
 
         x_span = float(bbox.max_x - bbox.min_x)
         y_span = float(bbox.max_y - bbox.min_y)
@@ -212,18 +235,22 @@ class BaseService(ABC):
         tile: TileGeometry,
         *,
         url: str,
-        params: dict[str, Any] | None = None,
+        protocol_params: dict[str, Any] | None = None,
         output_format: Format | None = None,
         crs: CRS | None = None,
         **options: object,
     ) -> TileRequest:
-        """Build a tile request with config headers/params applied."""
+        """Build a tile request with config headers/params applied.
+
+        ``protocol_params`` are the OGC/service query keys (GetMap, GetTile,
+        …). Caller ``params`` travel via ``**options`` and merge after.
+        """
 
         return _compose_tile_request(
             config=self.config,
             options=dict(options),
             url=url,
-            params=params,
+            protocol_params=protocol_params,
             bbox=tile.bbox,
             width=tile.width,
             height=tile.height,
@@ -250,6 +277,26 @@ def _coerce_grid_origin(value: object) -> tuple[float, float]:
         origin_y = value[1]
         return (float(origin_x), float(origin_y))
     raise ValidationError("origin must be a tuple of two numbers")
+
+
+def _grid_shape_from_options(options: dict[str, object]) -> tuple[int, int]:
+    """Parse ``grid_shape`` from plan options; default ``(1, 1)``."""
+
+    grid_shape_option = options.get("grid_shape")
+    if grid_shape_option is None:
+        return 1, 1
+    if isinstance(grid_shape_option, tuple):
+        try:
+            grid_tuple_raw = cast(tuple[Any, Any], grid_shape_option)
+            row_raw, col_raw = grid_tuple_raw
+        except ValueError as exc:  # pragma: no cover - guard
+            raise ValidationError("grid_shape must be a tuple of two integers") from exc
+        rows, cols = int(row_raw), int(col_raw)
+    else:
+        raise ValidationError("grid_shape must be a tuple of two integers")
+    if rows <= 0 or cols <= 0:
+        raise ValidationError("grid_shape dimensions must be positive integers")
+    return rows, cols
 
 
 # ----------------------------------------------------------------------

@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0" xmlns:ows="http://www.opengis.net/ows/1.1">
+  <Contents>
+    <Layer>
+      <ows:Identifier>daily</ows:Identifier>
+      <Style isDefault="true"><ows:Identifier>default</ows:Identifier></Style>
+      <Format>image/jpeg</Format>
+      <Dimension>
+        <ows:Identifier>Time</ows:Identifier>
+        <Default>2026-07-15</Default>
+        <Value>2026-07-15</Value>
+      </Dimension>
+      <TileMatrixSetLink><TileMatrixSet>GoogleMapsCompatible</TileMatrixSet></TileMatrixSetLink>
+      <ResourceURL format="image/jpeg" resourceType="tile"
+        template="https://example.com/wmts/daily/{Style}/{Time}/{TileMatrixSet}/{TileMatrix}/{TileRow}/{TileCol}.jpg"/>
+    </Layer>
+    <TileMatrixSet>
+      <ows:Identifier>GoogleMapsCompatible</ows:Identifier>
+      <ows:SupportedCRS>urn:ogc:def:crs:EPSG::3857</ows:SupportedCRS>
+      <TileMatrix>
+        <ows:Identifier>1</ows:Identifier>
+        <ScaleDenominator>279541132.0143589</ScaleDenominator>
+        <TopLeftCorner>-20037508.34278925 20037508.34278925</TopLeftCorner>
+        <TileWidth>256</TileWidth><TileHeight>256</TileHeight>
+        <MatrixWidth>2</MatrixWidth><MatrixHeight>2</MatrixHeight>
+      </TileMatrix>
+    </TileMatrixSet>
+  </Contents>
+</Capabilities>

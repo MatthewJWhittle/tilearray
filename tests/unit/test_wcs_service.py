@@ -490,7 +490,8 @@ def test_wcs_service_reprojects_to_native_crs_for_arcgis_metadata() -> None:
     )
     request = service.build_tile_request(geometry)
 
-    assert request.params["subsettingCRS"] == "EPSG:3857"
+    # Subsetting in the coverage native CRS: omit subsettingCRS (WCS 2 default).
+    assert "subsettingCRS" not in request.params
     subsets = request.params["subset"]
     assert subsets[0].startswith("x(")
     assert subsets[1].startswith("y(")

@@ -44,6 +44,8 @@ class ResourceSummary:
     tile_matrix_sets: tuple[str, ...] = ()
     styles: tuple[str, ...] = ()
     resource_url_template: str | None = None
+    default_style: str | None = None
+    dimensions: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -459,6 +461,11 @@ class EndpointInspection:
             advertised=resource.formats or self.formats,
             default_when_unique=True,
         )
+        style = choices.pop("style", None)
+        if style is None:
+            style = resource.default_style
+            if style is None and resource.styles:
+                style = resource.styles[0]
         crs = _resolve_crs(
             choices.pop("crs", None),
             advertised=tuple(
@@ -473,6 +480,10 @@ class EndpointInspection:
             kwargs["url_template"] = resource.resource_url_template
         if output_format is not None:
             kwargs["output_format"] = output_format
+        if style is not None:
+            kwargs["style"] = style
+        if resource.dimensions and "dimensions" not in kwargs:
+            kwargs["dimensions"] = dict(resource.dimensions)
         if crs is not None:
             kwargs["crs"] = crs
         return WMTSConfig.from_url(
