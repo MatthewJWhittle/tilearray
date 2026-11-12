@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-import importlib.util
+import re
+from importlib.metadata import requires
 from io import BytesIO
 from pathlib import Path
 
@@ -274,9 +275,25 @@ def test_decode_rgb_geotiff_first_band_policy_keeps_band0() -> None:
 
 @pytest.mark.unit
 def test_runtime_does_not_require_geotiff_zarr_pin_cage() -> None:
-    """Clean installs must not need the geotiff → zarr/numcodecs pin cage."""
+    """Runtime Requires-Dist must not pull the geotiff → zarr/numcodecs pin cage.
 
-    assert importlib.util.find_spec("tifffile") is not None
-    assert importlib.util.find_spec("geotiff") is None
-    assert importlib.util.find_spec("zarr") is None
-    assert importlib.util.find_spec("numcodecs") is None
+    Dev-only tools (e.g. zarr for write tests) may be installed in CI; judge the
+    published runtime graph, not whatever happens to be importable locally.
+    """
+
+    reqs = requires("tilearray") or []
+    names: set[str] = set()
+    for item in reqs:
+        if not item:
+            continue
+        # Runtime Requires-Dist only (skip `; extra == 'dev'` / docs markers).
+        if ";" in item and "extra" in item.split(";", 1)[1]:
+            continue
+        base = item.split(";", 1)[0].strip()
+        match = re.match(r"([A-Za-z0-9_.-]+)", base)
+        if match:
+            names.add(match.group(1).lower())
+    assert "tifffile" in names
+    assert "geotiff" not in names
+    assert "zarr" not in names
+    assert "numcodecs" not in names

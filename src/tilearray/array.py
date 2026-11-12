@@ -62,7 +62,14 @@ from .decode import (
 )
 from .error_messages import tile_fetch_failure_message
 from .errors import NetworkError, ParseError, TileArrayError, ValidationError
-from .fetch import FetchPolicy, FetchProgress, ProgressCallback
+from .fetch import (
+    FetchPolicy,
+    FetchProgress,
+    ProgressCallback,
+    lookup_fetch_progress,
+    register_fetch_progress,
+    unregister_fetch_progress,
+)
 from .placement import fit_tile_to_request
 from .progress import resolve_on_progress
 from .service.config import ServiceConfig as ServiceConfigModel
@@ -215,10 +222,14 @@ def compute_mosaic(
                 continue
             if _TILE_ERRORS_ATTR in target_attrs:
                 _refresh_tile_errors_attr_from_progress(target_attrs, progress)
-            # Drop the internal handle from computed results; keep on lazy source
+            # Drop the internal token from computed results; keep on lazy source
             # only when the result is a distinct object (re-inspect after compute).
             if target is result:
-                target_attrs.pop(_PROGRESS_REF_ATTR, None)
+                token = target_attrs.pop(_PROGRESS_REF_ATTR, None)
+                # Eager create_array(compute=True) returns the same object; drop
+                # the registry entry once nothing on attrs points at it.
+                if obj is result:
+                    unregister_fetch_progress(token)
 
     return result
 
@@ -286,10 +297,7 @@ def _progress_from_attrs(obj: Any) -> FetchProgress | None:
     attrs = _attrs_from_compute_target(obj)
     if attrs is None:
         return None
-    progress = attrs.get(_PROGRESS_REF_ATTR)
-    if isinstance(progress, FetchProgress):
-        return progress
-    return None
+    return lookup_fetch_progress(attrs.get(_PROGRESS_REF_ATTR))
 
 
 def _refresh_tile_errors_attr_from_progress(
@@ -585,8 +593,10 @@ def create_array(
         else None,
         progress=None,
     )
-    # Shared with delayed tile loads; compute_mosaic refreshes counters from it.
-    attrs[_PROGRESS_REF_ATTR] = progress
+    # Token only on attrs (JSON-/pickle-safe); live session stays in the registry
+    # and in delayed tile closures. compute_mosaic resolves the token to refresh
+    # tilearray_tile_errors.
+    attrs[_PROGRESS_REF_ATTR] = register_fetch_progress(progress)
 
     normalized_bbox = request.bbox
     height = int(data.shape[0])
@@ -634,7 +644,8 @@ def create_array(
             else None,
             progress=progress,
         )
-        computed.attrs.pop(_PROGRESS_REF_ATTR, None)
+        token = computed.attrs.pop(_PROGRESS_REF_ATTR, None)
+        unregister_fetch_progress(token)
         return computed
     return data_array
 

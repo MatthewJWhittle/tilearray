@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol, runtime_checkable
@@ -513,6 +514,36 @@ class FetchPolicy(BaseModel):
         )
 
 
+# Lazy mosaics store a JSON-safe token in attrs; the live session lives here so
+# DataArray copy / pickle / to_zarr never have to serialise a Lock.
+_PROGRESS_REGISTRY: dict[str, FetchProgress] = {}
+
+
+def register_fetch_progress(progress: FetchProgress) -> str:
+    """Register ``progress`` and return a JSON-safe lookup token."""
+
+    token = uuid.uuid4().hex
+    _PROGRESS_REGISTRY[token] = progress
+    return token
+
+
+def lookup_fetch_progress(token: object) -> FetchProgress | None:
+    """Resolve a progress token (or legacy in-attrs handle) to a live session."""
+
+    if isinstance(token, FetchProgress):
+        return token
+    if isinstance(token, str):
+        return _PROGRESS_REGISTRY.get(token)
+    return None
+
+
+def unregister_fetch_progress(token: object) -> None:
+    """Drop a registry entry when the mosaic no longer needs the live session."""
+
+    if isinstance(token, str):
+        _PROGRESS_REGISTRY.pop(token, None)
+
+
 @dataclass
 class FetchProgress:
     """Thread-safe progress tracker for tile acquisition.
@@ -520,6 +551,10 @@ class FetchProgress:
     Optional ``call_max_concurrent`` limits in-flight fetches for **this**
     progress session only (one mosaic / one logical call). It does not redefine
     the process-wide :class:`TileFetcher` gate.
+
+    Not meant to live on ``DataArray.attrs``: use :func:`register_fetch_progress`
+    and store the returned token. Pickle / deepcopy rebuild a fresh lock and drop
+    the callback / semaphore so graph clones cannot fail on ``_thread.lock``.
     """
 
     total: int
@@ -539,6 +574,36 @@ class FetchProgress:
     )
 
     def __post_init__(self) -> None:
+        if self.call_max_concurrent is not None:
+            if self.call_max_concurrent < 1:
+                raise ValidationError("call_max_concurrent must be >= 1")
+            self._call_semaphore = threading.Semaphore(self.call_max_concurrent)
+
+    def __getstate__(self) -> dict[str, Any]:
+        return {
+            "total": self.total,
+            "on_progress": None,
+            "call_max_concurrent": self.call_max_concurrent,
+            "done": self.done,
+            "errors": list(self.errors),
+            "soft_failed": self.soft_failed,
+            "soft_failed_urls": list(self.soft_failed_urls),
+            "_aborted": self._aborted,
+            "_abort_reason": self._abort_reason,
+        }
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.total = int(state["total"])
+        self.on_progress = state.get("on_progress")
+        self.call_max_concurrent = state.get("call_max_concurrent")
+        self.done = int(state.get("done", 0))
+        self.errors = list(state.get("errors") or [])
+        self.soft_failed = int(state.get("soft_failed", 0))
+        self.soft_failed_urls = list(state.get("soft_failed_urls") or [])
+        self._aborted = bool(state.get("_aborted", False))
+        self._abort_reason = state.get("_abort_reason")
+        self._lock = threading.Lock()
+        self._call_semaphore = None
         if self.call_max_concurrent is not None:
             if self.call_max_concurrent < 1:
                 raise ValidationError("call_max_concurrent must be >= 1")
