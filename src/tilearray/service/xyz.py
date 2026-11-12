@@ -34,7 +34,8 @@ class XYZService(BaseService):
             raise ValidationError("zoom must be non-negative")
         if tile_size <= 0:
             raise ValidationError("tile_size must be positive")
-        self.url_template = base_url
+        # Use peeled base_url so template query strings are not double-applied.
+        self.url_template = self.base_url
         self.zoom = zoom
         self.tile_size = tile_size
         self.output_format = output_format or Format.PNG

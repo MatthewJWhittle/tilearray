@@ -332,7 +332,13 @@ def normalize_bbox(bbox: BoundingBox | BBoxTuple, crs: CRS) -> BoundingBox:
                 f"bbox_crs=."
             )
         return bbox
-    return BoundingBox.from_tuple(bbox, crs)
+    try:
+        return BoundingBox.from_tuple(bbox, crs)
+    except ValidationError:
+        raise
+    except Exception as exc:
+        # Pydantic / ValueError from zero-area or inverted corners → public boundary.
+        raise ValidationError(str(exc), cause=exc) from exc
 
 
 def validate_grid_shape(grid: tuple[int, int]) -> tuple[int, int]:

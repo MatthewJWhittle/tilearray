@@ -600,28 +600,43 @@ def test_build_config_wms_multi_layer_styles_arity_must_match() -> None:
 
 @respx.mock
 def test_opaque_inspect_names_302_when_caps_redirect() -> None:
-    """httpx defaults to no redirect follow — probe must surface 302, not silent empty."""
+    """Clients follow redirects; inspect succeeds when the target serves caps."""
 
     url = "https://agency.example.org/spatialdata/mapper"
     dest = "https://agency.example.org/spatialdata/mapper/wms"
+    caps = """<?xml version='1.0' encoding='UTF-8'?>
+<WMS_Capabilities version="1.3.0">
+  <Capability>
+    <Request>
+      <GetMap>
+        <Format>image/png</Format>
+      </GetMap>
+    </Request>
+    <Layer>
+      <Name>demo</Name>
+      <Title>Demo</Title>
+      <CRS>EPSG:4326</CRS>
+    </Layer>
+  </Capability>
+</WMS_Capabilities>"""
 
     def _route(request: httpx.Request) -> httpx.Response:
-        target = str(request.url).split("?")[0]
-        if target.rstrip("/") == url.rstrip("/"):
+        target = str(request.url).split("?")[0].rstrip("/")
+        if target == url.rstrip("/"):
             return httpx.Response(
                 302, headers={"Location": dest + "?" + str(request.url.query)}
             )
+        if target == dest.rstrip("/"):
+            return httpx.Response(
+                200, text=caps, headers={"content-type": "text/xml"}
+            )
         return httpx.Response(404, text="no")
 
-    respx.get(url).mock(side_effect=_route)
+    respx.route(method="GET").mock(side_effect=_route)
 
-    with pytest.raises(ConfigurationError) as ei:
-        inspect_endpoint(url)
-    message = str(ei.value).lower()
-    # Today we do not auto-follow; failure must still name the 302 so operators
-    # can fix the base_url (not "0 layers" / silent empty WMTS).
-    assert "302" in message
-    assert "unable to detect" in message or "probe" in message
+    inspection = inspect_endpoint(url)
+    assert inspection.service_type == ServiceTypeEnum.WMS
+    assert any(layer.identifier == "demo" for layer in inspection.layers)
 
 
 def test_soft_fill_multiband_png_preserves_band_axis(

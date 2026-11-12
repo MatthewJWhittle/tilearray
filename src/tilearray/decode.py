@@ -164,10 +164,27 @@ def bands_first_layout(array: NDArrayAny) -> bool:
     )
 
 
-def ensure_band_last(array: NDArrayAny) -> NDArrayAny:
-    """Return ``(y, x)`` or ``(y, x, band)`` regardless of band-first source layout."""
+def ensure_band_last(
+    array: NDArrayAny,
+    *,
+    height: int | None = None,
+    width: int | None = None,
+) -> NDArrayAny:
+    """Return ``(y, x)`` or ``(y, x, band)`` regardless of band-first source layout.
 
-    if array.ndim == 3 and bands_first_layout(array):
+    When ``height`` / ``width`` from the tile request are known, prefer those over
+    the heuristic so thin RGB rows like ``(1, 256, 3)`` are not mistaken for
+    band-first ``(bands, y, x)``.
+    """
+
+    if array.ndim != 3:
+        return array
+    if height is not None and width is not None:
+        if array.shape[0] == height and array.shape[1] == width:
+            return array
+        if array.shape[1] == height and array.shape[2] == width:
+            return cast(NDArrayAny, np.moveaxis(array, 0, -1))
+    if bands_first_layout(array):
         return cast(NDArrayAny, np.moveaxis(array, 0, -1))
     return array
 
@@ -179,6 +196,7 @@ def decode_tile_bytes(
     band_policy: BandPolicy,
     unwrapper: ResponseUnwrapper | None = None,
     response: TileResponse | None = None,
+    request: TileRequest | None = None,
     cast_float32: bool = True,
 ) -> NDArrayAny:
     """
@@ -211,7 +229,9 @@ def decode_tile_bytes(
     payload = (unwrapper or identity_unwrapper)(raw_bytes, effective_response)
     data = reader(payload)
     data = apply_band_policy(data, band_policy)
-    data = ensure_band_last(data)
+    req_h = request.height if request is not None else None
+    req_w = request.width if request is not None else None
+    data = ensure_band_last(data, height=req_h, width=req_w)
     if cast_float32:
         return cast(NDArrayAny, np.asarray(data, dtype=np.float32))
     return cast(NDArrayAny, np.asarray(data))
@@ -246,7 +266,18 @@ def _read_geotiff_source(source: str | BytesIO) -> NDArrayFloat:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
             with tifffile.TiffFile(source) as tif_file:
-                data = np.asarray(tif_file.asarray(), dtype=np.float64)
+                try:
+                    data = np.asarray(tif_file.asarray(), dtype=np.float64)
+                except ValueError as exc:
+                    message = str(exc)
+                    lowered = message.lower()
+                    if "imagecodecs" in lowered or "predictor" in lowered:
+                        raise ConfigurationError(
+                            "GeoTIFF PREDICTOR decoding requires the "
+                            "'imagecodecs' package. Install imagecodecs to "
+                            f"read this raster. ({message})"
+                        ) from exc
+                    raise
                 page = tif_file.pages.first
                 nodata_tag = page.tags.get("GDAL_NODATA") if page is not None else None
                 if nodata_tag is not None:
@@ -322,13 +353,13 @@ def make_tile_decoder(
     """Build a :class:`TileDecoder` from shared pipeline pieces."""
 
     def _decoder(response: TileResponse, request: TileRequest) -> NDArrayAny:
-        del request
         return decode_tile_bytes(
             bytes(response.data),
             reader=reader,
             band_policy=band_policy,
             unwrapper=unwrapper,
             response=response,
+            request=request,
             cast_float32=cast_float32,
         )
 

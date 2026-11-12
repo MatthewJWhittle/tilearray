@@ -61,7 +61,7 @@ from .decode import (
     sniff_effective_content_type,
 )
 from .error_messages import tile_fetch_failure_message
-from .errors import NetworkError, ValidationError
+from .errors import NetworkError, ParseError, TileArrayError, ValidationError
 from .fetch import FetchPolicy, FetchProgress, ProgressCallback
 from .placement import fit_tile_to_request
 from .progress import resolve_on_progress
@@ -906,7 +906,13 @@ def _load_tile_array(
         return np.asarray(array, dtype=dtype)
     except Exception as exc:
         if on_tile_error is None or progress is None:
-            raise
+            if isinstance(exc, TileArrayError):
+                raise
+            raise ParseError(
+                f"Failed to decode tile from {request.url}: "
+                f"{type(exc).__name__}: {exc}",
+                cause=exc,
+            ) from exc
         message = f"{type(exc).__name__}: {exc}"
         action = on_tile_error(
             _tile_error_context(

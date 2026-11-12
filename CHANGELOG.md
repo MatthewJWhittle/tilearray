@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - WMS / WCS / WMTS-KVP `params=` no longer raises `TypeError` (protocol query keys and caller params used the same keyword). Caller API keys and vendor query params merge into the tile request alongside GetMap / GetCoverage / GetTile keys (#151)
+- Versioned OGC EPSG URNs with multi-dot versions (e.g. `urn:ogc:def:crs:EPSG:6.18.3:3857`) canonicalise to `EPSG:3857` instead of truncating to `EPSG:6` (#163)
+- Sync HTTP clients follow redirects (`follow_redirects=True`) so caps/tile GETs through a 301/302 succeed (#159)
+- Query strings on service `base_url` (e.g. MapServer `?map=/path/to.map`) peel into request `params` and survive GetMap / inspect / tile fetch (#155)
+- Thin RGB PNG tiles (e.g. height=1, shape `(1,256,3)`) keep band-last layout using request width/height instead of a bands-first heuristic (#152)
+- GeoTIFF PREDICTOR / missing-`imagecodecs` failures raise `ConfigurationError` naming imagecodecs instead of a bare `ValueError` (#153)
+- WCS 2 GetCoverage emits Scaling `scaleSize` (e.g. `x(256),y(256)`); lat-first axis labels map ranges by axis meaning; `subsettingCRS` is omitted when subsetting in the coverage native CRS (#154, #158)
+- Public create/compute surfaces wrap zero-area / inverted bbox and decode failures as `ValidationError` / `ParseError` (not bare pydantic / PIL) (#162)
 
 ## [0.3.1] - 2026-11-10
 

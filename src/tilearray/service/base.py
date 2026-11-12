@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any, Callable, cast
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from .._http_client import peel_url_query
 from ..error_messages import undetectable_service_type_message
 from ..errors import ConfigurationError, ValidationError
 from ..mosaic_plan import MosaicPlan
@@ -65,7 +66,20 @@ class BaseService(ABC):
     service_type: ServiceTypeEnum
 
     def __init__(self, base_url: str, **config: object) -> None:
-        self.base_url = base_url.rstrip("/?")
+        bare, query_params = peel_url_query(base_url)
+        # URL query first; existing config params win (e.g. map= overrides).
+        existing = config.get("params")
+        if isinstance(existing, Mapping):
+            merged_params: dict[str, object] = {
+                **query_params,
+                **dict(existing),
+            }
+        else:
+            merged_params = dict(query_params)
+        if merged_params:
+            config = {**config, "params": merged_params}
+        # Keep rstrip behaviour for legacy trailing slash / stray '?'.
+        self.base_url = bare.rstrip("/?") or bare
         self.config = config
 
     @classmethod

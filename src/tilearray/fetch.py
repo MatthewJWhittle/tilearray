@@ -20,7 +20,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from ._http_client import make_sync_client
+from ._http_client import make_sync_client, peel_url_query
 from .error_messages import (
     looks_like_html,
     looks_like_ogc_exception_report,
@@ -870,9 +870,12 @@ class TileFetcher:
                     try:
                         self.stats._record_request()
                         logger.debug("Fetching tile: %s", request.url)
+                        bare_url, get_params = peel_url_query(
+                            request.url, request.params
+                        )
                         response = self._client.get(
-                            request.url,
-                            params=request.params or None,
+                            bare_url,
+                            params=get_params or None,
                             headers=headers,
                         )
                     finally:
