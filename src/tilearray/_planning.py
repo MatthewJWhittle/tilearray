@@ -838,6 +838,25 @@ def resolve_decoder(
     raise ConfigurationError(missing_decoder_message(fmt))
 
 
+def first_fetchable_tile_request(
+    tile_requests: Sequence[TileRequest],
+) -> TileRequest:
+    """Pick the first tile that needs an HTTP fetch (skip coverage-empty pads).
+
+    Preserve-policy band probes must sample an in-extent tile. When every
+    planned tile is ``coverage_empty``, raise :class:`ValidationError`.
+    """
+
+    for request in tile_requests:
+        if not request.coverage_empty:
+            return request
+    raise ValidationError(
+        "Requested area does not intersect the coverage spatial extent; "
+        "no tiles to fetch. Check the coverage envelope from DescribeCoverage "
+        "and your bbox / bbox_crs."
+    )
+
+
 def probe_tile_band_count(
     sample_request: TileRequest,
     cache_dir: Path | None,
@@ -853,6 +872,12 @@ def probe_tile_band_count(
     fixed = default_band_count_for_format(effective_format, band_policy=band_policy)
     if fixed is not None:
         return fixed
+
+    if sample_request.coverage_empty:
+        raise ValidationError(
+            "Band-count probe cannot use a coverage-empty tile. Pass an "
+            "in-extent sample request (or band_policy='first_band')."
+        )
 
     # Circular: probe needs the create-path loader; array imports ArrayRequest here.
     from .array import _load_tile_array  # noqa: PLC0415 — documented cycle
@@ -882,6 +907,7 @@ __all__ = [
     "coerce_array_origin",
     "fetch_policy_from_summary",
     "fetch_policy_summary",
+    "first_fetchable_tile_request",
     "normalize_bbox",
     "organize_tiles",
     "probe_tile_band_count",

@@ -72,6 +72,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 | Palette PNG is grayscale indices | Mode `P` kept as indices by default | Pass `expand_palette=True` for RGB, or use a truecolor source |
 | Edge tile smaller / ValidationError on shape | WCS clipped the coverage | Georeferenced GeoTIFF responses are placed+padded with NaN; missing tags or a resolution/CRS mismatch still fail — see {doc}`how-it-works` |
 | Edge NaNs look like soft-fail | Coverage pad vs fetch soft-fail | Outside-coverage pads do not increment `tilearray_tile_errors`; soft-fail only records exhausted tile fetches |
+| WCS mosaic fails with `InvalidSubsetting` / HTTP 404 near the coverage edge | Planned tiles left the DescribeCoverage envelope | tilearray clips GetCoverage subsets to `spatial_extent` and pads wholly outside tiles with nodata (no HTTP). An AOI entirely outside the envelope raises `ValidationError` |
 | Need rasterio/rioxarray write | Optional downstream | Use the rioxarray recipe in {doc}`how-it-works` (`write_crs` / `write_transform` / `write_nodata` from attrs) |
 
 ## Environment Agency WCS

@@ -45,6 +45,9 @@ from ._planning import (
     fetch_policy_summary as _fetch_policy_summary,
 )
 from ._planning import (
+    first_fetchable_tile_request as _first_fetchable_tile_request,
+)
+from ._planning import (
     organize_tiles as _organize_tiles,
 )
 from ._planning import (
@@ -533,9 +536,10 @@ def create_array(
         call_max_concurrent=fetch_policy.call_max_concurrent,
     )
 
-    # Probe ignores soft-fail: shape discovery must stay hard.
+    # Probe ignores soft-fail: shape discovery must stay hard. Skip
+    # coverage-empty pads so an out-of-extent SW tile cannot abort create.
     n_bands = _probe_tile_band_count(
-        tile_requests[0],
+        _first_fetchable_tile_request(tile_requests),
         cache_path,
         decoder,
         dtype_np,
@@ -860,6 +864,22 @@ def _load_tile_array(
 ) -> NDArrayFloat:
     if progress is not None:
         progress.check_not_aborted()
+    # Coverage pads (wholly outside DescribeCoverage envelope) skip HTTP and
+    # fill nodata without counting as soft-fail.
+    if request.coverage_empty:
+        if progress is not None:
+            progress.tick(
+                request,
+                TileResponse(
+                    data=b"",
+                    content_type="application/octet-stream",
+                    status_code=204,
+                    headers={},
+                    url=request.url,
+                    success=True,
+                ),
+            )
+        return _soft_fill_array(request, dtype, float("nan"), n_bands)
     response = _fetch_with_cache(request, cache_dir, fetch_policy, progress)
     if progress is not None:
         progress.tick(request, response)

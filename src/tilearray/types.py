@@ -338,6 +338,24 @@ class BoundingBox(BaseModel):
             and self.max_y > other.min_y
         )
 
+    def intersection(self, other: BoundingBox) -> BoundingBox | None:
+        """Return the overlapping box in ``self.crs``, or ``None`` if disjoint."""
+
+        other_crs = other if other.crs == self.crs else other.to_crs(self.crs)
+        min_x = max(self.min_x, other_crs.min_x)
+        min_y = max(self.min_y, other_crs.min_y)
+        max_x = min(self.max_x, other_crs.max_x)
+        max_y = min(self.max_y, other_crs.max_y)
+        if min_x >= max_x or min_y >= max_y:
+            return None
+        return BoundingBox(
+            min_x=min_x,
+            min_y=min_y,
+            max_x=max_x,
+            max_y=max_y,
+            crs=self.crs,
+        )
+
     def to_crs(self, crs: CRS) -> BoundingBox:
         """Transform the bounding box to a new CRS."""
         target = CRS.parse(crs)
@@ -427,6 +445,13 @@ class TileRequest(BaseModel):
     bbox: BoundingBox | None = None
     width: int | None = None
     height: int | None = None
+    coverage_empty: bool = Field(
+        default=False,
+        description=(
+            "True when the planned tile lies wholly outside the coverage "
+            "spatial extent — skip HTTP and fill with coverage nodata"
+        ),
+    )
 
 
 class TileResponse(BaseModel):
