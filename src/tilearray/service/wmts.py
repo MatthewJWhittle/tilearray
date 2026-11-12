@@ -22,6 +22,7 @@ from .http import (
     http_get,
     resolve_timeout,
 )
+from .requests import tile_option_passthrough
 from .xyz import (
     _tile_bounds_3857,
     _tile_range_for_bbox,
@@ -434,6 +435,15 @@ class WMTSService(BaseService):
             )
 
         template = options.get("url_template") or self.url_template
+        consumed = (
+            "layer",
+            "style",
+            "tile_matrix_set",
+            "tile_matrix",
+            "url_template",
+            "tile_col",
+            "tile_row",
+        )
         if template:
             url = _format_rest_template(
                 template,
@@ -445,29 +455,15 @@ class WMTSService(BaseService):
                 tile_col=str(tile_col),
                 fmt=fmt,
             )
-            passthrough = {
-                key: value
-                for key, value in options.items()
-                if key
-                not in {
-                    "output_format",
-                    "crs",
-                    "layer",
-                    "style",
-                    "tile_matrix_set",
-                    "tile_matrix",
-                    "url_template",
-                }
-            }
             return self.compose_tile_request(
                 tile,
                 url=url,
                 output_format=fmt,
                 crs=crs,
-                **passthrough,
+                **tile_option_passthrough(options, *consumed),
             )
 
-        params: dict[str, Any] = {
+        protocol_params: dict[str, Any] = {
             "service": "WMTS",
             "request": "GetTile",
             "version": self.version,
@@ -480,27 +476,13 @@ class WMTSService(BaseService):
             "TileCol": str(tile_col),
         }
 
-        passthrough = {
-            key: value
-            for key, value in options.items()
-            if key
-            not in {
-                "output_format",
-                "crs",
-                "layer",
-                "style",
-                "tile_matrix_set",
-                "tile_matrix",
-                "url_template",
-            }
-        }
         return self.compose_tile_request(
             tile,
             url=self.base_url,
-            params=params,
+            protocol_params=protocol_params,
             output_format=fmt,
             crs=crs,
-            **passthrough,
+            **tile_option_passthrough(options, *consumed),
         )
 
     def _require_matrix(

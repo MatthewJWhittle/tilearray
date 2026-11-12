@@ -212,18 +212,22 @@ class BaseService(ABC):
         tile: TileGeometry,
         *,
         url: str,
-        params: dict[str, Any] | None = None,
+        protocol_params: dict[str, Any] | None = None,
         output_format: Format | None = None,
         crs: CRS | None = None,
         **options: object,
     ) -> TileRequest:
-        """Build a tile request with config headers/params applied."""
+        """Build a tile request with config headers/params applied.
+
+        ``protocol_params`` are the OGC/service query keys (GetMap, GetTile,
+        …). Caller ``params`` travel via ``**options`` and merge after.
+        """
 
         return _compose_tile_request(
             config=self.config,
             options=dict(options),
             url=url,
-            params=params,
+            protocol_params=protocol_params,
             bbox=tile.bbox,
             width=tile.width,
             height=tile.height,

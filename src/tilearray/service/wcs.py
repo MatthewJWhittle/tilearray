@@ -36,6 +36,7 @@ from .http import (
     http_get,
     resolve_timeout,
 )
+from .requests import tile_option_passthrough
 
 logger = logging.getLogger(__name__)
 
@@ -621,7 +622,7 @@ class WCSService(BaseService):
             zoom=tile.zoom,
         )
 
-        params: dict[str, Any] = {
+        protocol_params: dict[str, Any] = {
             "service": "WCS",
             "version": self.version,
             "request": "GetCoverage",
@@ -633,20 +634,20 @@ class WCSService(BaseService):
             "subsettingCRS": subset_crs.value,
         }
         if output_raw is not None:
-            params["outputCRS"] = result_crs.value
+            protocol_params["outputCRS"] = result_crs.value
 
-        passthrough = {
-            key: value
-            for key, value in options.items()
-            if key not in {"output_format", "crs", "output_crs", "supported_crs"}
-        }
         return self.compose_tile_request(
             subset_tile,
             url=self.base_url,
-            params=params,
+            protocol_params=protocol_params,
             output_format=fmt,
             crs=result_crs,
-            **passthrough,
+            **tile_option_passthrough(
+                options,
+                "output_crs",
+                "supported_crs",
+                "coverage_id",
+            ),
         )
 
     # ------------------------------------------------------------------
