@@ -71,6 +71,8 @@ dev = [
     # Pin past pytest-vcr's 4.3.0 resolution on 3.9 — that build's httpx stubs
     # fail cassette replay (`content` is None). vcrpy 7 supports 3.9.
     "vcrpy>=7.0.0",
+    # Direct: scripts/check_cassettes.py (packaging CI) — also transitive via vcrpy.
+    "pyyaml>=6.0.0",
     "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
     "ruff>=0.1.0",
@@ -256,6 +258,8 @@ dev = [
     "pytest-timeout>=2.4.0",
     "pytest-vcr>=1.0.2",
     "vcrpy>=7.0.0",
+    # Direct: scripts/check_cassettes.py (packaging CI) — also transitive via vcrpy.
+    "pyyaml>=6.0.0",
     "pytest-xdist>=3.8.0",
     "respx>=0.22.0",
     "ruff>=0.1.0",

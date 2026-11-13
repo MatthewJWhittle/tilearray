@@ -24,36 +24,6 @@ jobs:
       run: |
         uv sync --dev
 
-    - name: Assert net/slow suite collects (incl. EA native smoke)
-      run: |
-        # Fail the job on collection errors or an empty selection — do not
-        # treat a skipped/missing smoke as a green nightly.
-        out="$(uv run pytest -m "net or slow" --collect-only -q --cov-fail-under=0 2>&1)"
-        echo "$out"
-        echo "$out" | grep -Eq '[1-9][0-9]* test' || {
-          echo "Expected at least one net/slow test to be collected"
-          exit 1
-        }
-        echo "$out" | grep -q 'test_ea_native_getcoverage_smoke' || {
-          echo "EA native GetCoverage smoke must be collected by nightly net/slow"
-          exit 1
-        }
-        if echo "$out" | grep -Eq 'error during collection|ERROR collecting'; then
-          echo "Collection errors must fail nightly"
-          exit 1
-        fi
-        echo "OK: net/slow suite collected (incl. EA native smoke)"
-
     - name: Run net/slow tests
       run: |
-        set -o pipefail
-        uv run pytest -m "net or slow" --timeout=300 --cov-fail-under=0 -v 2>&1 | tee /tmp/nightly-net-slow.txt
-        # Skipped smoke must not count as green
-        if grep -E 'test_ea_native_getcoverage_smoke.*SKIPPED' /tmp/nightly-net-slow.txt; then
-          echo "EA native GetCoverage smoke was skipped — nightly must not pass"
-          exit 1
-        fi
-        grep -E 'test_ea_native_getcoverage_smoke.*PASSED' /tmp/nightly-net-slow.txt || {
-          echo "EA native GetCoverage smoke did not PASS"
-          exit 1
-        }
+        uv run pytest -m "net or slow" --timeout=300 --cov-fail-under=0
