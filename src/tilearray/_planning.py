@@ -6,8 +6,10 @@ constants, fetch-policy snapshots, tile-grid organisation, cache keys, and
 ``array`` symbols.
 
 Band probing needs the create-path tile loader. That is a documented cycle:
-:func:`probe_tile_band_count` imports :func:`tilearray.array._load_tile_array`
-lazily inside the function body so module import order stays acyclic.
+:func:`probe_tile_bands` / :func:`probe_tile_band_count` import
+:func:`tilearray.array._load_tile_array` lazily inside the function body so
+module import order stays acyclic. ``create_array`` may reuse the decoded
+probe when fetch identity and shape/dtype match the mosaic tile.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .decode import (
     DEFAULT_BAND_POLICIES,
     BandPolicy,
+    NDArrayAny,
     TileDecoder,
     band_count_from_array,
     build_format_decoder,
@@ -885,7 +889,57 @@ def first_fetchable_tile_request(
     )
 
 
-def probe_tile_band_count(
+def tile_fetch_identity(request: TileRequest) -> tuple[Any, ...]:
+    """Stable identity for whether two tile requests are the same fetch.
+
+    Matches the planning fields used by :func:`cache_key`: URL, params, format,
+    bbox, and requested pixel size. Shared auth headers are not part of tile
+    identity. Including bbox avoids treating distinct planned tiles that share a
+    stub URL as interchangeable.
+    """
+
+    params = tuple(sorted((str(k), str(v)) for k, v in request.params.items()))
+    bbox: tuple[Any, ...] | None = None
+    if request.bbox is not None:
+        b = request.bbox
+        crs_value = str(b.crs) if b.crs is not None else None
+        bbox = (b.min_x, b.min_y, b.max_x, b.max_y, crs_value)
+    fmt = request.output_format.value if request.output_format else None
+    return (request.url, params, fmt, bbox, request.width, request.height)
+
+
+@dataclass(frozen=True)
+class BandProbeResult:
+    """Band-count probe outcome; may carry a decoded sample for mosaic reuse."""
+
+    n_bands: int
+    array: NDArrayAny | None = None
+    request: TileRequest | None = None
+
+
+def probe_array_fits_tile(
+    array: NDArrayAny,
+    probe_request: TileRequest,
+    tile_request: TileRequest,
+    *,
+    dtype: np.dtype[Any],
+    n_bands: int,
+    chunk_height: int,
+    chunk_width: int,
+) -> bool:
+    """True when a probed array can be placed as ``tile_request`` without refetch."""
+
+    if tile_fetch_identity(probe_request) != tile_fetch_identity(tile_request):
+        return False
+    if array.dtype != dtype:
+        return False
+    height = tile_request.height or chunk_height
+    width = tile_request.width or chunk_width
+    expected = (height, width, n_bands) if n_bands > 1 else (height, width)
+    return array.shape == expected
+
+
+def probe_tile_bands(
     sample_request: TileRequest,
     cache_dir: Path | None,
     decoder: TileDecoder,
@@ -894,12 +948,17 @@ def probe_tile_band_count(
     effective_format: Format | None,
     *,
     band_policy: BandPolicy | None = None,
-) -> int:
-    """Determine band count before building the Dask graph."""
+) -> BandProbeResult:
+    """Determine band count before building the Dask graph.
+
+    When format policy fixes the band count, no HTTP probe runs. Otherwise the
+    sample tile is loaded once; callers may reuse ``array`` for the matching
+    mosaic tile when :func:`probe_array_fits_tile` is true.
+    """
 
     fixed = default_band_count_for_format(effective_format, band_policy=band_policy)
     if fixed is not None:
-        return fixed
+        return BandProbeResult(n_bands=fixed)
 
     if sample_request.coverage_empty:
         raise ValidationError(
@@ -917,12 +976,40 @@ def probe_tile_band_count(
         dtype,
         fetch_policy,
     )
-    return band_count_from_array(sample)
+    return BandProbeResult(
+        n_bands=band_count_from_array(sample),
+        array=sample,
+        request=sample_request,
+    )
+
+
+def probe_tile_band_count(
+    sample_request: TileRequest,
+    cache_dir: Path | None,
+    decoder: TileDecoder,
+    dtype: np.dtype[Any],
+    fetch_policy: FetchPolicy | None,
+    effective_format: Format | None,
+    *,
+    band_policy: BandPolicy | None = None,
+) -> int:
+    """Determine band count before building the Dask graph."""
+
+    return probe_tile_bands(
+        sample_request,
+        cache_dir,
+        decoder,
+        dtype,
+        fetch_policy,
+        effective_format,
+        band_policy=band_policy,
+    ).n_bands
 
 
 # Historical underscore aliases for array.py / tests.
 _resolve_decoder = resolve_decoder
 _probe_tile_band_count = probe_tile_band_count
+_probe_tile_bands = probe_tile_bands
 
 
 __all__ = [
@@ -931,6 +1018,7 @@ __all__ = [
     "RECOMMENDED_NUM_WORKERS_ATTR",
     "TILE_ERRORS_ATTR",
     "ArrayRequest",
+    "BandProbeResult",
     "cache_key",
     "coerce_array_origin",
     "fetch_policy_from_summary",
@@ -938,11 +1026,14 @@ __all__ = [
     "first_fetchable_tile_request",
     "normalize_bbox",
     "organize_tiles",
+    "probe_array_fits_tile",
     "probe_tile_band_count",
+    "probe_tile_bands",
     "recommend_grid_shape",
     "resolve_decoder",
     "resolve_fetch_policy",
     "resolve_grid_shape",
+    "tile_fetch_identity",
     "validate_chunk_size",
     "validate_grid_shape",
 ]
