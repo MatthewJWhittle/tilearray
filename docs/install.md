@@ -1,6 +1,6 @@
 # Install
 
-Get tilearray onto your machine so you can run the first live mosaic from PyPI (or a checkout). Documented against **0.3.1**.
+Get tilearray onto your machine so you can run the first live mosaic from PyPI (or a checkout). Documented against **0.3.2**.
 
 Python **3.9+**. Prefer [uv](https://github.com/astral-sh/uv):
 
