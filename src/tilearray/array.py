@@ -415,8 +415,8 @@ def create_array(
         Optional protocol override when ``service_url`` is a bare string.
         Must match the config when a config is passed.
     chunk_size:
-        Tile / chunk height × width in pixels. Often taken from the config
-        (e.g. 256×256 XYZ/WMTS; WCS coverage chunks).
+        Tile / chunk width × height in pixels. Defaults come from the config
+        when omitted (WMS/WCS ``1024×1024``; XYZ/WMTS stay near native ``256``).
     grid_shape:
         Mosaic layout as ``(rows, cols)`` of chunks. XYZ/WMTS may infer this
         from the planned tile coverage when left at the default single cell.
