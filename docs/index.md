@@ -8,10 +8,10 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays — 
 
 **Fit.** tilearray is a **data-access** library. Use [rioxarray](https://corteva.github.io/rioxarray/) / GDAL / rasterio for local files, warping, and GIS processing; use tilearray when the source is still remote tiles. It is not a map SDK, STAC/COG cube builder, or general GIS suite — see {doc}`design-principles`.
 
-```{admonition} Alpha — documented against 0.3.1
+```{admonition} Alpha — documented against 0.3.2
 :class: warning
 
-Examples use the **0.3.1** public names: `compute_mosaic`, `preview_array`, `bbox_crs=`, and mosaic attrs `mosaic_crs` / `bbox_crs`. The API may still change in later alphas.
+Examples use the **0.3.2** public names: `compute_mosaic`, `preview_array`, `bbox_crs=`, and mosaic attrs `mosaic_crs` / `bbox_crs`. The API may still change in later alphas.
 ```
 
 ## Start here

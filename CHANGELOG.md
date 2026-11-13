@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-13
+
 ### Fixed
 
-- WCS 2.0.1 GetCoverage omits `scaleSize` / `width` / `height` when the requested grid matches DescribeCoverage native resolution (RectifiedGrid `offsetVector`). Always-on `scaleSize` from #165 hung EA LiDAR at native size; non-native requests still send `scaleSize` for MapServer (#154). Scaled GetCoverage failures fail fast (`retries=0`) with a Scaling hint instead of burning every retry (#177)
+- WCS mosaics that straddle a coverage envelope no longer send GetCoverage subsets outside `DescribeCoverage` `spatial_extent` (HTTP 404 `InvalidSubsetting`). Wholly outside tiles skip HTTP and pad coverage nodata; straddling tiles clip the subset to the intersection. Band-count probes sample the first in-extent tile. Envelope `axisLabels` (including `y x`) are honoured when parsing the extent. An AOI entirely outside the envelope raises `ValidationError` naming the coverage extent (#168)
+- Resolution mosaics keep the requested pixel count when the AOI is not origin-aligned: `snap_bbox_outward` uses `round(span / resolution)` and floor-aligns the minimum corner instead of taking the intersecting pixel-union (which added a 1-px sliver, e.g. 513 for a 512-px request). Tile walks place any chunk remainder on the mosaic-trailing edge (south / east) so a short leftover is never the leading dask/Zarr chunk (#171)
+- Lazy mosaics no longer hang a live `FetchProgress` (with `threading.Lock`) on `DataArray.attrs`; attrs store a JSON-safe registry token so `deepcopy` / `pickle` / `to_zarr` work. Combined with trailing chunk remainders from the snap fix, Zarr accepts the dask chunk layout (#169)
 - HTTP 404 responses (including OGC `ExceptionReport` bodies such as `InvalidSubsetting`, `InvalidParameterValue`, and `NoSuchCoverage`) fail fast with a single attempt instead of being retried as transient pressure (#170)
 - `fetch_retries=0` is honoured: `TileFetcher` uses `FetchPolicy.retries` alone for the attempt budget, so the `TileRequest.retries` default no longer forces four attempts (#170)
-- Lazy mosaics no longer hang a live `FetchProgress` (with `threading.Lock`) on `DataArray.attrs`; attrs store a JSON-safe registry token so `deepcopy` / `pickle` / `to_zarr` work. Combined with trailing chunk remainders from the snap fix, Zarr accepts the dask chunk layout (#169)
-- Resolution mosaics keep the requested pixel count when the AOI is not origin-aligned: `snap_bbox_outward` uses `round(span / resolution)` and floor-aligns the minimum corner instead of taking the intersecting pixel-union (which added a 1-px sliver, e.g. 513 for a 512-px request). Tile walks place any chunk remainder on the mosaic-trailing edge (south / east) so a short leftover is never the leading dask/Zarr chunk (#171)
+- WCS 2.0.1 GetCoverage omits `scaleSize` / `width` / `height` when the requested grid matches DescribeCoverage native resolution (RectifiedGrid `offsetVector`). Always-on `scaleSize` from #165 hung EA LiDAR at native size; non-native requests still send `scaleSize` for MapServer (#154). Scaled GetCoverage failures fail fast (`retries=0`) with a Scaling hint instead of burning every retry (#177)
+- Packaging cassette integrity check installs via `uv sync --dev`; PyYAML is declared in the project `dev` dependency group (#180)
 - WMS / WCS / WMTS-KVP `params=` no longer raises `TypeError` (protocol query keys and caller params used the same keyword). Caller API keys and vendor query params merge into the tile request alongside GetMap / GetCoverage / GetTile keys (#151)
 - Versioned OGC EPSG URNs with multi-dot versions (e.g. `urn:ogc:def:crs:EPSG:6.18.3:3857`) canonicalise to `EPSG:3857` instead of truncating to `EPSG:6` (#163)
 - Sync HTTP clients follow redirects (`follow_redirects=True`) so caps/tile GETs through a 301/302 succeed (#159)
@@ -28,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - WCS `scaleSize` uses the same CRS-aware axis meaning as subsets for opaque labels under lat-first CRSs (#154/#158)
 - Caps/DescribeCoverage error text still shows redacted secrets (e.g. `api_key=***`) after base-URL query peeling into `params` (#155)
 - WMTS GetCapabilities Dimension / Style / Format defaults flow into KVP and REST GetTile URLs (#156, #157)
-- WCS mosaics that straddle a coverage envelope no longer send GetCoverage subsets outside `DescribeCoverage` `spatial_extent` (HTTP 404 `InvalidSubsetting`). Wholly outside tiles skip HTTP and pad coverage nodata; straddling tiles clip the subset to the intersection. Band-count probes sample the first in-extent tile. Envelope `axisLabels` (including `y x`) are honoured when parsing the extent. An AOI entirely outside the envelope raises `ValidationError` naming the coverage extent (#168)
 
 ## [0.3.1] - 2026-11-10
 
@@ -215,7 +218,8 @@ Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
 - Package renamed from scaffold `ogc-array` to `tilearray`; README, CI, and metadata aligned with shipped API
 - EA Lidar WCS GeoTIFF decode and non-divisible tile resize for native-resolution tiles
 
-[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.1.1...v0.2.0

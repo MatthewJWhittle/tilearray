@@ -12,7 +12,7 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays — 
 [![Docs](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/docs.yml)
 [![Build and Publish](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml/badge.svg)](https://github.com/MatthewJWhittle/tilearray/actions/workflows/build.yml)
 
-> **Alpha — documented against 0.3.1.** Examples use `compute_mosaic`, `preview_array`, `bbox_crs=`, and mosaic attrs `mosaic_crs` / `bbox_crs`. The API may still change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one `create_array` entry point.
+> **Alpha — documented against 0.3.2.** Examples use `compute_mosaic`, `preview_array`, `bbox_crs=`, and mosaic attrs `mosaic_crs` / `bbox_crs`. The API may still change. Today **WCS**, **WMS**, **WMTS**, and **XYZ** share one `create_array` entry point.
 
 **Docs:** [matthewjwhittle.github.io/tilearray](https://matthewjwhittle.github.io/tilearray/) — [install](https://matthewjwhittle.github.io/tilearray/install.html), [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html) (five-minute OSM first run), [usage guides](https://matthewjwhittle.github.io/tilearray/guides/index.html), [how it works](https://matthewjwhittle.github.io/tilearray/how-it-works.html), [troubleshooting](https://matthewjwhittle.github.io/tilearray/troubleshooting.html), and [API](https://matthewjwhittle.github.io/tilearray/api/index.html).
 
