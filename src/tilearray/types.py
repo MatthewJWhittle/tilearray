@@ -439,7 +439,13 @@ class TileRequest(BaseModel):
     params: dict[str, Any]
     headers: dict[str, str] | None = None
     timeout: int = 30
-    retries: int = 3
+    retries: int = Field(
+        default=3,
+        description=(
+            "Legacy per-request retry hint; TileFetcher uses FetchPolicy.retries "
+            "(config fetch_retries) as the attempt budget"
+        ),
+    )
     output_format: Format | None = None
     crs: CRS | None = None
     bbox: BoundingBox | None = None

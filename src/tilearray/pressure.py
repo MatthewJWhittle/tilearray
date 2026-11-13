@@ -55,16 +55,11 @@ BUILTIN_PRESSURE_SIGNATURES: tuple[PressureSignature, ...] = (
         name="upstream_error",
         status_codes=frozenset({500, 502, 503, 504}),
     ),
-    PressureSignature(
-        name="ogc_transient_404",
-        status_codes=frozenset({404}),
-        body_substrings=(
-            b"invalidparametervalue",
-            b"subsettingcrs",
-            b"exceptionreport",
-        ),
-    ),
 )
+# HTTP 404 (including OGC ExceptionReport bodies such as InvalidSubsetting /
+# InvalidParameterValue / NoSuchCoverage) is a permanent client error — no
+# built-in retryable 404 signature. Hosts that truly emit transient 404s can
+# register an explicit host-specific PressureSignature.
 
 
 @dataclass

@@ -370,7 +370,7 @@ def test_retries_still_run_before_soft_fill() -> None:
     )
     assert np.isnan(array).all()
     assert progress.is_aborted() is False
-    # attempts = max(request.retries, policy.retries) + 1 → 3
+    # attempts = policy.retries + 1 → 3
     assert route.call_count == 3
 
 

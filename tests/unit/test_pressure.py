@@ -15,12 +15,24 @@ from tilearray.pressure import (
 
 pytestmark = pytest.mark.unit
 
-_OGC_404_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
+_OGC_INVALID_PARAMETER_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
 <ExceptionReport xmlns="http://www.opengis.net/ogc">
   <Exception exceptionCode="InvalidParameterValue" locator="SUBSETTINGCRS">
     <ExceptionText>Invalid or unsupported SubsettingCrs</ExceptionText>
   </Exception>
 </ExceptionReport>"""
+
+_OGC_INVALID_SUBSETTING_BODY = b"""<?xml version="1.0" encoding="UTF-8" ?>
+<ows:ExceptionReport version="2.0.0" xmlns:ows="http://www.opengis.net/ows/2.0">
+  <ows:Exception exceptionCode="InvalidSubsetting" locator="(17360,18640)"/>
+</ows:ExceptionReport>
+"""
+
+_OGC_NO_SUCH_COVERAGE_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ows:ExceptionReport version="2.0.0" xmlns:ows="http://www.opengis.net/ows/2.0">
+  <ows:Exception exceptionCode="NoSuchCoverage" locator="coverage"/>
+</ows:ExceptionReport>
+"""
 
 
 @pytest.fixture(autouse=True)
@@ -50,19 +62,33 @@ def test_classify_gateway_status_codes(status_code: int, expected_name: str) -> 
     assert result.signature.name == expected_name
 
 
-def test_classify_ogc_transient_404() -> None:
+@pytest.mark.parametrize(
+    "body",
+    [
+        _OGC_INVALID_SUBSETTING_BODY,
+        _OGC_INVALID_PARAMETER_BODY,
+        _OGC_NO_SUCH_COVERAGE_BODY,
+        b"",
+    ],
+    ids=[
+        "invalid_subsetting",
+        "invalid_parameter_value",
+        "no_such_coverage",
+        "empty_body",
+    ],
+)
+def test_classify_ogc_and_plain_404_not_retryable(body: bytes) -> None:
     response = httpx.Response(
         404,
-        content=_OGC_404_BODY,
-        headers={"content-type": "application/xml"},
+        content=body,
+        headers={"content-type": "application/vnd.ogc.se_xml"},
+        request=httpx.Request("GET", "https://example.com/wcs"),
     )
     result = classify_response(response)
 
-    assert result.retryable is True
-    assert result.aimd_pressure is True
-    assert result.circuit_breaker is False
-    assert result.signature is not None
-    assert result.signature.name == "ogc_transient_404"
+    assert result.retryable is False
+    assert result.aimd_pressure is False
+    assert result.signature is None
 
 
 def test_classify_plain_404_is_not_retryable() -> None:
@@ -76,7 +102,9 @@ def test_classify_plain_404_is_not_retryable() -> None:
 def test_circuit_breaker_signatures() -> None:
     forbidden = classify_response(httpx.Response(403, text="Forbidden"))
     rate_limit = classify_response(httpx.Response(429, text="Too Many Requests"))
-    ogc_404 = classify_response(httpx.Response(404, content=_OGC_404_BODY))
+    ogc_404 = classify_response(
+        httpx.Response(404, content=_OGC_INVALID_PARAMETER_BODY)
+    )
     upstream = classify_response(httpx.Response(503, text="busy"))
 
     assert forbidden.circuit_breaker is True
@@ -126,4 +154,4 @@ def test_builtin_signatures_cover_known_dialects() -> None:
     assert "gateway_forbidden" in names
     assert "rate_limit" in names
     assert "upstream_error" in names
-    assert "ogc_transient_404" in names
+    assert "ogc_transient_404" not in names

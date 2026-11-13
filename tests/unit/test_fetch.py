@@ -20,6 +20,7 @@ from tilearray.fetch import (
     TileFetcher,
     fetch_tile_with_policy,
 )
+from tilearray.service.config import WCSConfig
 from tilearray.types import Format, TileRequest, TileResponse
 
 pytestmark = pytest.mark.unit
@@ -741,34 +742,60 @@ def test_fetch_progress_abort_blocks_new_fetches() -> None:
         progress.check_not_aborted()
 
 
-_OGC_404_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
+_OGC_INVALID_SUBSETTING_BODY = b"""<?xml version="1.0" encoding="UTF-8" ?>
+<ows:ExceptionReport version="2.0.0" xmlns:ows="http://www.opengis.net/ows/2.0">
+  <ows:Exception exceptionCode="InvalidSubsetting" locator="(17360,18640)"/>
+</ows:ExceptionReport>
+"""
+
+_OGC_INVALID_PARAMETER_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
 <ExceptionReport xmlns="http://www.opengis.net/ogc">
   <Exception exceptionCode="InvalidParameterValue" locator="SUBSETTINGCRS">
     <ExceptionText>Invalid or unsupported SubsettingCrs</ExceptionText>
   </Exception>
 </ExceptionReport>"""
 
+_OGC_NO_SUCH_COVERAGE_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
+<ows:ExceptionReport version="2.0.0" xmlns:ows="http://www.opengis.net/ows/2.0">
+  <ows:Exception exceptionCode="NoSuchCoverage" locator="coverage"/>
+</ows:ExceptionReport>
+"""
 
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        _OGC_INVALID_SUBSETTING_BODY,
+        _OGC_INVALID_PARAMETER_BODY,
+        _OGC_NO_SUCH_COVERAGE_BODY,
+        b"",
+    ],
+    ids=[
+        "invalid_subsetting",
+        "invalid_parameter_value",
+        "no_such_coverage",
+        "empty_body",
+    ],
+)
 @respx.mock
-def test_fetch_retries_ogc_404_invalid_parameter_value() -> None:
+def test_fetch_does_not_retry_ogc_or_plain_404(body: bytes) -> None:
     route = respx.get("https://example.com/tile")
-    route.side_effect = [
-        httpx.Response(
+    route.mock(
+        return_value=httpx.Response(
             404,
-            content=_OGC_404_BODY,
-            headers={"content-type": "application/xml"},
-        ),
-        httpx.Response(200, content=b"recovered"),
-    ]
-
-    response = fetch_tile_with_policy(
-        _tile_request(retries=1),
-        FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=1),
+            content=body,
+            headers={"content-type": "application/vnd.ogc.se_xml"},
+        )
     )
 
-    assert response.success is True
-    assert response.data == b"recovered"
-    assert route.call_count == 2
+    response = fetch_tile_with_policy(
+        _tile_request(retries=3),
+        FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=3),
+    )
+
+    assert response.success is False
+    assert response.status_code == 404
+    assert route.call_count == 1
 
 
 @respx.mock
@@ -787,28 +814,69 @@ def test_fetch_does_not_retry_plain_404() -> None:
 
 
 @respx.mock
-def test_aimd_decreases_limit_on_ogc_404() -> None:
+def test_fetch_retries_429_and_503() -> None:
     route = respx.get("https://example.com/tile")
     route.side_effect = [
-        httpx.Response(404, content=_OGC_404_BODY),
-        httpx.Response(200, content=b"ok"),
+        httpx.Response(429, text="slow", headers={"Retry-After": "0"}),
+        httpx.Response(503, text="busy"),
+        httpx.Response(200, content=b"recovered"),
     ]
+
+    response = fetch_tile_with_policy(
+        _tile_request(retries=2),
+        FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=2),
+    )
+
+    assert response.success is True
+    assert response.data == b"recovered"
+    assert route.call_count == 3
+
+
+@respx.mock
+def test_policy_retries_zero_ignores_tile_request_default() -> None:
+    """fetch_retries=0 must yield one attempt even when TileRequest.retries is 3."""
+
+    route = respx.get("https://example.com/tile")
+    route.mock(return_value=httpx.Response(503, text="busy"))
+
+    config = WCSConfig(
+        base_url="https://example.com/wcs",
+        coverage_id="cov",
+        fetch_retries=0,
+        rate_limit_per_second=None,
+        max_concurrent_requests=1,
+    )
+    policy = config.fetch_policy()
+    assert policy.retries == 0
+
+    response = fetch_tile_with_policy(_tile_request(retries=3), policy)
+
+    assert response.success is False
+    assert response.status_code == 503
+    assert route.call_count == 1
+
+
+@respx.mock
+def test_ogc_404_does_not_trigger_aimd_or_retry() -> None:
+    route = respx.get("https://example.com/tile")
+    route.mock(return_value=httpx.Response(404, content=_OGC_INVALID_SUBSETTING_BODY))
     policy = FetchPolicy(
         max_concurrent=8,
         initial_concurrent=4,
         min_concurrent=1,
         adaptive_concurrency=True,
         rate_limit_per_second=None,
-        retries=1,
+        retries=3,
     )
     fetcher = TileFetcher.for_policy(policy)
 
-    response = fetcher.fetch(_tile_request(retries=1))
+    response = fetcher.fetch(_tile_request(retries=3))
 
-    assert response.success is True
-    assert fetcher.stats.concurrency_decreases >= 1
-    assert fetcher.stats.retry_count >= 1
-    assert fetcher.stats.pressure_event_count == 0
+    assert response.success is False
+    assert response.status_code == 404
+    assert route.call_count == 1
+    assert fetcher.stats.retry_count == 0
+    assert fetcher.stats.concurrency_decreases == 0
 
 
 @respx.mock
