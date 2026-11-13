@@ -22,7 +22,7 @@ Committed PNGs live under `docs/_static/guides/`.
 make docs-artifacts
 ```
 
-That rebuilds How it works diagrams (offline) and live usage-guide mosaics (network, polite presets). Commit updated assets when they change.
+That rebuilds How it works diagrams (offline) and live usage-guide mosaics (network, polite presets). Commit updated assets when they change. The README / PyPI long description embeds the OSM London figure via an **absolute** GitHub Pages URL (`…/_static/guides/osm-london.png`) — relative paths do not render on Warehouse.
 
 ## Politeness soak (opt-in)
 
