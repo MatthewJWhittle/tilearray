@@ -108,7 +108,8 @@ jobs:
 
     - name: Cassette size and secret-header scan
       run: |
-        uv run --no-project python scripts/check_cassettes.py
+        # --with pyyaml: packaging runs before uv sync; integrity stamps need YAML
+        uv run --no-project --with pyyaml python scripts/check_cassettes.py
 
     - name: Fail on ogc-array leftovers (except CHANGELOG history)
       run: |

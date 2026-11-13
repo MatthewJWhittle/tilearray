@@ -23,7 +23,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError as exc:  # pragma: no cover - packaging env guard
+    raise SystemExit(
+        "scripts/check_cassettes.py needs PyYAML. "
+        "Run: uv run --no-project --with pyyaml python scripts/check_cassettes.py"
+    ) from exc
 
 # Keep individual cassettes small enough for sdists and reviews. The USGS
 # multipart fixture was previously ~6 MB; after shrinking it stays well under.
