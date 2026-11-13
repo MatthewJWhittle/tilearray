@@ -137,7 +137,7 @@ def test_array_request_infers_grid_from_resolution() -> None:
     assert request.resolution_grid_pending is False
 
 
-def test_array_request_snaps_resolution_bbox_outward() -> None:
+def test_array_request_snaps_resolution_bbox_to_rounded_pixel_count() -> None:
     bbox = BoundingBox(
         min_x=0.0, min_y=0.0, max_x=1024.1, max_y=512.09, crs=CRS.EPSG_27700
     )
@@ -160,14 +160,15 @@ def test_array_request_snaps_resolution_bbox_outward() -> None:
     tile_options = request.tile_options()
     request._apply_mosaic_crs_resolution(tile_options)
 
-    assert request.bbox.max_x == 1025.0
-    assert request.bbox.max_y == 513.0
-    assert request.grid_shape == (2, 2)
+    # round(1024.1) → 1024, round(512.09) → 512; min already on-grid.
+    assert request.bbox.max_x == 1024.0
+    assert request.bbox.max_y == 512.0
+    assert request.grid_shape == (1, 1)
     assert request.bbox_snap_delta == {
         "min_x": 0.0,
         "min_y": 0.0,
-        "max_x": pytest.approx(0.9),
-        "max_y": pytest.approx(0.91),
+        "max_x": pytest.approx(-0.1),
+        "max_y": pytest.approx(-0.09),
     }
     attrs = request.array_attrs(
         request.build_service(ServiceTypeEnum.WCS),

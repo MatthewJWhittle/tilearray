@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -39,7 +38,7 @@ from .fetch import FetchPolicy
 from .service import get_service
 from .service.base import BaseService
 from .service.config import ServiceConfig as ServiceConfigModel
-from .tiles import snap_bbox_outward
+from .tiles import resolution_axis_tile_sizes, snap_bbox_outward
 from .types import (
     CRS,
     BBoxTuple,
@@ -380,8 +379,9 @@ def recommend_grid_shape(
     """Infer ``(rows, cols)`` covering ``bbox`` at ``resolution`` × ``chunk_size``.
 
     ``chunk_size`` matches :func:`~tilearray.create_array`: ``(width, height)`` in
-    pixels. The bbox is snapped outward onto the resolution grid before counting
-    tiles. Geometry only — no host contact and no client-side pixel resampling.
+    pixels. The bbox is snapped onto the resolution grid (count-preserving) before
+    counting tiles. Geometry only — no host contact and no client-side pixel
+    resampling.
     """
 
     res_x, res_y = resolution
@@ -402,16 +402,10 @@ def recommend_grid_shape(
 
     chunk_height, chunk_width = validate_chunk_size(chunk_size)
     snapped = snap_bbox_outward(normalized, resolution, origin)
-    span_x = snapped.max_x - snapped.min_x
-    span_y = snapped.max_y - snapped.min_y
-    cols = (
-        max(1, int(math.ceil(span_x / (chunk_width * res_x)))) if chunk_width > 0 else 1
-    )
-    rows = (
-        max(1, int(math.ceil(span_y / (chunk_height * res_y))))
-        if chunk_height > 0
-        else 1
-    )
+    n_px = max(1, int(round((snapped.max_x - snapped.min_x) / res_x)))
+    n_py = max(1, int(round((snapped.max_y - snapped.min_y) / res_y)))
+    cols = len(resolution_axis_tile_sizes(n_px, chunk_width))
+    rows = len(resolution_axis_tile_sizes(n_py, chunk_height))
     return rows, cols
 
 
