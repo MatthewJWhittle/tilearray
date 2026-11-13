@@ -1,7 +1,9 @@
-"""Nightly single-request EA smoke: the GetCoverage we build must be answered (#177).
+"""Live EA native GetCoverage smoke (#177).
 
-Runs in its own nightly job, separate from multi-tile soak / #150 429 noise.
-A timeout here means EA did not answer the request tilearray builds.
+Marked ``net`` + ``slow`` so it runs in the existing nightly ``net-slow`` job
+(``pytest -m "net or slow"``), not a one-off workflow. A timeout must report
+that EA did not answer the request tilearray builds — not ordinary 429 soak
+noise.
 """
 
 from __future__ import annotations
@@ -9,7 +11,9 @@ from __future__ import annotations
 import time
 
 import httpx
+import numpy as np
 import pytest
+import xarray as xr
 
 from tilearray import create_array
 from tilearray.errors import NetworkError
@@ -24,10 +28,16 @@ from tilearray.types import CRS, Format
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow, pytest.mark.net]
 
+_ATTEMPT_LIMIT_S = 10.0
+_MAX_ATTEMPTS = 2  # one retry, per #177 acceptance
 
-def test_ea_native_bench_bbox_getcoverage_answers_within_10s() -> None:
-    """One native-resolution create_array on EA_LIDAR_BENCH_BBOX must return in <10 s."""
 
+def _run_native_bench() -> tuple[xr.DataArray, float]:
+    fetch = {
+        **ea_dsp_fetch_defaults(),
+        "fetch_timeout": _ATTEMPT_LIMIT_S,
+        "fetch_retries": 1,
+    }
     config = WCSConfig.from_url(
         EA_LIDAR_WCS_URL,
         EA_LIDAR_COVERAGE_ID,
@@ -35,34 +45,53 @@ def test_ea_native_bench_bbox_getcoverage_answers_within_10s() -> None:
         output_format=Format.GEOTIFF,
         chunk_size=(64, 64),
         resolution=(1.0, 1.0),
-        **ea_dsp_fetch_defaults(),
-        fetch_timeout=10.0,
-        fetch_retries=1,
+        **fetch,
     )
-
     started = time.perf_counter()
-    try:
-        result = create_array(
-            config,
-            EA_LIDAR_BENCH_BBOX,
-            bbox_crs=CRS.EPSG_27700,
-        )
-        computed = result.compute()
-    except (NetworkError, httpx.TimeoutException, httpx.TransportError) as exc:
-        elapsed = time.perf_counter() - started
-        message = str(exc).lower()
-        if "timeout" in message or "timed out" in message or elapsed >= 9.0:
-            raise AssertionError(
-                "EA did not answer the request tilearray builds "
-                f"(elapsed={elapsed:.1f}s). This is not ordinary 429 soak noise; "
-                "check that GetCoverage omits scaleSize at native resolution (#177). "
-                f"Underlying error: {exc}"
-            ) from exc
-        raise
-
-    elapsed = time.perf_counter() - started
-    assert elapsed < 10.0, (
-        f"EA native GetCoverage took {elapsed:.1f}s (limit 10s); "
-        "EA did not answer the request tilearray builds promptly (#177)"
+    result = create_array(
+        config,
+        EA_LIDAR_BENCH_BBOX,
+        bbox_crs=CRS.EPSG_27700,
     )
-    assert computed.shape == (64, 64)
+    computed = result.compute()
+    elapsed = time.perf_counter() - started
+    return computed, elapsed
+
+
+def test_ea_native_bench_bbox_getcoverage_answers_within_10s() -> None:
+    """One native-resolution create_array on EA_LIDAR_BENCH_BBOX must return in <10 s."""
+
+    last_error: BaseException | None = None
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        try:
+            computed, elapsed = _run_native_bench()
+        except (NetworkError, httpx.TimeoutException, httpx.TransportError) as exc:
+            last_error = exc
+            message = str(exc).lower()
+            if "timeout" in message or "timed out" in message:
+                if attempt < _MAX_ATTEMPTS:
+                    continue
+                raise AssertionError(
+                    "EA did not answer the request tilearray builds "
+                    f"(attempt {attempt}/{_MAX_ATTEMPTS}). This is not ordinary "
+                    "429 soak noise; check that GetCoverage omits scaleSize at "
+                    f"native resolution (#177). Underlying error: {exc}"
+                ) from exc
+            raise
+
+        if elapsed < _ATTEMPT_LIMIT_S:
+            assert computed.shape == (64, 64)
+            assert np.isfinite(computed).any()
+            return
+
+        last_error = AssertionError(
+            f"EA native GetCoverage took {elapsed:.1f}s "
+            f"(limit {_ATTEMPT_LIMIT_S:.0f}s on attempt {attempt}/{_MAX_ATTEMPTS})"
+        )
+        if attempt < _MAX_ATTEMPTS:
+            continue
+
+    raise AssertionError(
+        "EA did not answer the request tilearray builds promptly (#177). "
+        f"Last detail: {last_error}"
+    )
