@@ -36,6 +36,7 @@ from .http import (
     compose_http_headers,
     compose_http_params,
     http_get,
+    http_get_capabilities_text,
     resolve_timeout,
 )
 from .requests import tile_option_passthrough
@@ -580,15 +581,27 @@ class WCSService(BaseService):
             client=self._client,
         )
 
-    def get_capabilities(self, **params: Any) -> ServiceCapabilities:
+    def get_capabilities(
+        self, *, refresh: bool = False, **params: Any
+    ) -> ServiceCapabilities:
+        request_params = compose_http_params(
+            {
+                "service": "WCS",
+                "version": self.version,
+                "request": "GetCapabilities",
+            },
+            self.config,
+            params or None,
+        )
+        headers = compose_http_headers(self.config)
         try:
-            response = self._service_get(
-                {
-                    "service": "WCS",
-                    "version": self.version,
-                    "request": "GetCapabilities",
-                },
-                extra_params=params or None,
+            body = http_get_capabilities_text(
+                self.base_url,
+                params=request_params,
+                headers=headers,
+                timeout=resolve_timeout(self.config),
+                client=self._client,
+                refresh=refresh,
             )
         except httpx.HTTPError as exc:
             raise NetworkError(
@@ -601,21 +614,35 @@ class WCSService(BaseService):
                 ),
                 cause=exc,
             ) from exc
-        return self.parser.parse_get_capabilities(response.text)
+        return self.parser.parse_get_capabilities(body)
 
     def describe_coverage(
-        self, coverage_id: str | None = None, **params: Any
+        self,
+        coverage_id: str | None = None,
+        *,
+        refresh: bool = False,
+        **params: Any,
     ) -> CoverageDescription:
         coverage = coverage_id or self._require_coverage_id()
+        request_params = compose_http_params(
+            {
+                "service": "WCS",
+                "version": self.version,
+                "request": "DescribeCoverage",
+                "coverageId": coverage,
+            },
+            self.config,
+            params or None,
+        )
+        headers = compose_http_headers(self.config)
         try:
-            response = self._service_get(
-                {
-                    "service": "WCS",
-                    "version": self.version,
-                    "request": "DescribeCoverage",
-                    "coverageId": coverage,
-                },
-                extra_params=params or None,
+            body = http_get_capabilities_text(
+                self.base_url,
+                params=request_params,
+                headers=headers,
+                timeout=resolve_timeout(self.config),
+                client=self._client,
+                refresh=refresh,
             )
         except httpx.HTTPError as exc:
             raise NetworkError(
@@ -630,14 +657,14 @@ class WCSService(BaseService):
                 cause=exc,
             ) from exc
         try:
-            description = self.parser.parse_describe_coverage(response.text)
+            description = self.parser.parse_describe_coverage(body)
         except ParseError as exc:
             raise ParseError(
                 describe_coverage_parse_message(
                     coverage,
                     self.base_url,
-                    response.text,
-                    content_type=response.headers.get("content-type"),
+                    body,
+                    content_type=None,
                     parse_error=exc,
                 ),
                 cause=exc.cause or exc,

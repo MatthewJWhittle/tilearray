@@ -26,6 +26,16 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "integration: marks integration tests")
 
 
+@pytest.fixture(autouse=True)
+def clear_capabilities_memo_between_tests():
+    """Isolate process-local GetCapabilities / DescribeCoverage memo per test."""
+    from tilearray.service.capabilities_memo import clear_capabilities_memo
+
+    clear_capabilities_memo()
+    yield
+    clear_capabilities_memo()
+
+
 @pytest.fixture
 def tmp_cache_dir():
     """Isolated cache directory for tests."""

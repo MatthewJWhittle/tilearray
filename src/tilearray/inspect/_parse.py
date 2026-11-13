@@ -21,7 +21,7 @@ from ..service.base import detect_service_type
 from ..service.http import (
     compose_http_headers,
     compose_http_params,
-    http_get,
+    http_get_capabilities_text,
     resolve_timeout,
 )
 from ..service.wms import WMSCapabilities
@@ -113,6 +113,7 @@ def _probe_service_type_via_capabilities(
     *,
     config: Mapping[str, Any],
     client: httpx.Client | None,
+    refresh: bool = False,
 ) -> tuple[ServiceTypeEnum, str]:
     """Probe GetCapabilities when the URL path does not encode the protocol.
 
@@ -131,6 +132,7 @@ def _probe_service_type_via_capabilities(
                 service_type=candidate,
                 config=config,
                 client=client,
+                refresh=refresh,
             )
         except NetworkError as exc:
             failures.append(f"{candidate.value}: {exc}")
@@ -154,26 +156,30 @@ def _fetch_capabilities(
     service_type: ServiceTypeEnum,
     config: Mapping[str, Any],
     client: httpx.Client | None,
+    refresh: bool = False,
 ) -> str:
     version = {
         ServiceTypeEnum.WCS: "2.0.1",
         ServiceTypeEnum.WMS: "1.3.0",
         ServiceTypeEnum.WMTS: "1.0.0",
     }[service_type]
+    request_params = compose_http_params(
+        {
+            "service": service_type.value,
+            "version": version,
+            "request": "GetCapabilities",
+        },
+        config,
+    )
+    headers = compose_http_headers(config)
     try:
-        response = http_get(
+        return http_get_capabilities_text(
             url,
-            params=compose_http_params(
-                {
-                    "service": service_type.value,
-                    "version": version,
-                    "request": "GetCapabilities",
-                },
-                config,
-            ),
-            headers=compose_http_headers(config),
+            params=request_params,
+            headers=headers,
             timeout=resolve_timeout(config),
             client=client,
+            refresh=refresh,
         )
     except httpx.HTTPError as exc:
         raise NetworkError(
@@ -185,7 +191,6 @@ def _fetch_capabilities(
             ),
             cause=exc,
         ) from exc
-    return response.text
 
 
 def _inspect_xyz(

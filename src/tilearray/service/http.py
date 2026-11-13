@@ -12,6 +12,8 @@ single policy for those plan-time GETs:
 * **Headers / params:** library default User-Agent, then config overlays, then
   call-site extras — so private-server credentials on the config reach
   GetCapabilities / DescribeCoverage the same way they reach tiles
+* **Caps memo:** GetCapabilities / DescribeCoverage bodies share a process-local
+  TTL memo (see :mod:`tilearray.service.capabilities_memo`); tile GETs do not
 
 No new public HTTP knobs; services call these helpers internally.
 """
@@ -25,6 +27,7 @@ import httpx
 
 from .._http_client import DEFAULT_HTTP_TIMEOUT, make_sync_client, peel_url_query
 from ..fetch_presets import tilearray_user_agent
+from .capabilities_memo import cached_capabilities_text
 from .requests import merge_params, merge_str_mappings
 
 __all__ = [
@@ -33,6 +36,7 @@ __all__ = [
     "compose_http_params",
     "default_headers",
     "http_get",
+    "http_get_capabilities_text",
     "make_sync_client",
     "resolve_timeout",
 ]
@@ -112,3 +116,37 @@ def http_get(
     finally:
         if owns_client:
             http.close()
+
+
+def http_get_capabilities_text(
+    url: str,
+    *,
+    params: Mapping[str, Any] | None = None,
+    headers: Mapping[str, str] | None = None,
+    timeout: float | None = None,
+    client: httpx.Client | None = None,
+    refresh: bool = False,
+) -> str:
+    """GET a GetCapabilities / DescribeCoverage body via the process-local memo.
+
+    Successful responses are memoised (~1h TTL) keyed by URL + params + auth
+    identity. Pass ``refresh=True`` to bypass and replace a live entry. Failures
+    are never stored.
+    """
+
+    def _fetch() -> str:
+        return http_get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=timeout,
+            client=client,
+        ).text
+
+    return cached_capabilities_text(
+        url,
+        params=params,
+        headers=headers,
+        refresh=refresh,
+        fetch=_fetch,
+    )

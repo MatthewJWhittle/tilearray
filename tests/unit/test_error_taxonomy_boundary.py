@@ -70,7 +70,7 @@ def test_wcs_describe_coverage_http_failure_raises_network_error(
     def boom(*args: Any, **kwargs: Any) -> Any:
         raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr("tilearray.service.wcs.http_get", boom)
+    monkeypatch.setattr("tilearray.service.wcs.http_get_capabilities_text", boom)
 
     with pytest.raises(NetworkError, match="DescribeCoverage") as exc_info:
         service.describe_coverage()
@@ -89,7 +89,7 @@ def test_wcs_get_capabilities_http_failure_raises_network_error(
             response=httpx.Response(500),
         )
 
-    monkeypatch.setattr("tilearray.service.wcs.http_get", boom)
+    monkeypatch.setattr("tilearray.service.wcs.http_get_capabilities_text", boom)
 
     with pytest.raises(NetworkError, match="GetCapabilities"):
         service.get_capabilities()
@@ -108,7 +108,7 @@ def test_wmts_get_capabilities_http_failure_raises_network_error(
     def boom(*args: Any, **kwargs: Any) -> Any:
         raise httpx.TimeoutException("slow")
 
-    monkeypatch.setattr("tilearray.service.wmts.http_get", boom)
+    monkeypatch.setattr("tilearray.service.wmts.http_get_capabilities_text", boom)
 
     with pytest.raises(NetworkError, match="WMTS GetCapabilities"):
         service.get_capabilities()
