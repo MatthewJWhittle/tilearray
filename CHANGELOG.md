@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - WCS `scaleSize` uses the same CRS-aware axis meaning as subsets for opaque labels under lat-first CRSs (#154/#158)
 - Caps/DescribeCoverage error text still shows redacted secrets (e.g. `api_key=***`) after base-URL query peeling into `params` (#155)
 - WMTS GetCapabilities Dimension / Style / Format defaults flow into KVP and REST GetTile URLs (#156, #157)
+- WCS mosaics that straddle a coverage envelope no longer send GetCoverage subsets outside `DescribeCoverage` `spatial_extent` (HTTP 404 `InvalidSubsetting`). Wholly outside tiles skip HTTP and pad coverage nodata; straddling tiles clip the subset to the intersection. Band-count probes sample the first in-extent tile. Envelope `axisLabels` (including `y x`) are honoured when parsing the extent. An AOI entirely outside the envelope raises `ValidationError` naming the coverage extent (#168)
 
 ## [0.3.1] - 2026-11-10
 

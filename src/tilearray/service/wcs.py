@@ -17,6 +17,7 @@ from ..error_messages import (
     unsupported_format_message,
 )
 from ..errors import NetworkError, ParseError, ValidationError
+from ..mosaic_plan import MosaicPlan
 from ..types import (
     CRS,
     BoundingBox,
@@ -40,6 +41,35 @@ from .http import (
 from .requests import tile_option_passthrough
 
 logger = logging.getLogger(__name__)
+
+
+def label_is_northing(label: str, crs: CRS | None = None) -> bool | None:
+    """Classify a subset/envelope axis label as northing/lat when possible.
+
+    Returns ``True`` / ``False`` when the name is unambiguous, else ``None``
+    so callers can fall back to CRS axis order.
+    """
+
+    key = label.strip().lower()
+    if key in {"lat", "latitude", "n", "north", "northing", "y"}:
+        return True
+    if key in {"lon", "long", "longitude", "e", "east", "easting", "x"}:
+        return False
+    if crs is not None:
+        try:
+            axes = list(CRS.parse(crs).to_pyproj().axis_info)
+        except Exception:  # pragma: no cover - defensive
+            axes = []
+        for axis in axes:
+            name = (axis.name or "").lower()
+            abbrev = (axis.abbrev or "").lower()
+            if key in {name, abbrev} or key == abbrev.replace(" ", ""):
+                direction = (axis.direction or "").lower()
+                if direction in {"north", "south"}:
+                    return True
+                if direction in {"east", "west"}:
+                    return False
+    return None
 
 
 def normalize_crs_reference(value: str) -> str:
@@ -349,14 +379,56 @@ class WCSParser:
         if bbox_crs is None:
             bbox_crs = self._parse_native_crs(coverage_elem)
 
+        axis_labels_raw = envelope.get("axisLabels")
+        axis_parts = axis_labels_raw.split() if axis_labels_raw else []
+        min_x, min_y, max_x, max_y = self._envelope_corners_to_xy(
+            lower_coords,
+            upper_coords,
+            axis_parts=axis_parts,
+            crs=bbox_crs,
+        )
         bbox = BoundingBox(
-            min_x=lower_coords[0],
-            min_y=lower_coords[1],
-            max_x=upper_coords[0],
-            max_y=upper_coords[1],
+            min_x=min_x,
+            min_y=min_y,
+            max_x=max_x,
+            max_y=max_y,
             crs=bbox_crs,
         )
         return SpatialExtent(bbox=bbox, dimensions=None)
+
+    @staticmethod
+    def _envelope_corners_to_xy(
+        lower_coords: list[float],
+        upper_coords: list[float],
+        *,
+        axis_parts: list[str],
+        crs: CRS | None,
+    ) -> tuple[float, float, float, float]:
+        """Map envelope corners to always_xy mins/maxes using ``axisLabels``."""
+
+        if len(axis_parts) < 2:
+            return (
+                lower_coords[0],
+                lower_coords[1],
+                upper_coords[0],
+                upper_coords[1],
+            )
+
+        values = [0.0, 0.0, 0.0, 0.0]  # min_x, min_y, max_x, max_y
+        north_first = CRS.parse(crs).north_axis_first if crs is not None else False
+        for index, label in enumerate(axis_parts[:2]):
+            northing = label_is_northing(label, crs)
+            if northing is None:
+                northing = (index == 0) if north_first else (index == 1)
+            lo = lower_coords[index]
+            hi = upper_coords[index]
+            if northing:
+                values[1] = min(lo, hi)
+                values[3] = max(lo, hi)
+            else:
+                values[0] = min(lo, hi)
+                values[2] = max(lo, hi)
+        return values[0], values[1], values[2], values[3]
 
     def _parse_temporal_extent(
         self, coverage_elem: ET.Element
@@ -559,6 +631,21 @@ class WCSService(BaseService):
         subset_crs, subset_bbox, subset_parts, axis_labels = self._resolve_subset(
             bbox, crs or self.subsetting_crs, metadata
         )
+        clipped = self._intersect_coverage_extent(subset_bbox, subset_crs, metadata)
+        if clipped is None:
+            raise ValidationError(self._outside_coverage_message(coverage))
+        req_width, req_height = width, height
+        if (
+            clipped.min_x != subset_bbox.min_x
+            or clipped.min_y != subset_bbox.min_y
+            or clipped.max_x != subset_bbox.max_x
+            or clipped.max_y != subset_bbox.max_y
+        ):
+            res_x = (subset_bbox.max_x - subset_bbox.min_x) / width
+            res_y = (subset_bbox.max_y - subset_bbox.min_y) / height
+            req_width = max(1, int(round((clipped.max_x - clipped.min_x) / res_x)))
+            req_height = max(1, int(round((clipped.max_y - clipped.min_y) / res_y)))
+            subset_parts = self._format_subset(clipped, axis_labels)
         output_raw = params.pop("output_crs", None)
 
         request_params: dict[str, Any] = {
@@ -568,10 +655,10 @@ class WCSService(BaseService):
             "coverageId": coverage,
             "subset": subset_parts,
             "format": fmt.value,
-            "width": str(width),
-            "height": str(height),
+            "width": str(req_width),
+            "height": str(req_height),
             "scaleSize": self._format_scale_size(
-                axis_labels, width, height, crs=subset_crs
+                axis_labels, req_width, req_height, crs=subset_crs
             ),
         }
         if metadata.native_crs is None or subset_crs != metadata.native_crs:
@@ -604,6 +691,25 @@ class WCSService(BaseService):
     # ------------------------------------------------------------------
     # BaseService overrides
     # ------------------------------------------------------------------
+    def generate_tile_requests(
+        self,
+        bbox: BoundingBox,
+        chunk_size: tuple[int, int],
+        **options: object,
+    ) -> MosaicPlan:
+        """Plan tiles; fail loud when the whole AOI misses the coverage extent."""
+
+        coverage = options.get("coverage_id") or self.coverage_id
+        if coverage:
+            self.ensure_coverage_metadata(str(coverage))
+        plan = super().generate_tile_requests(bbox, chunk_size, **options)
+        tiles = list(plan.tiles)
+        if tiles and all(tile.coverage_empty for tile in tiles):
+            raise ValidationError(
+                self._outside_coverage_message(str(coverage) if coverage else None)
+            )
+        return plan
+
     def build_tile_request(self, tile: TileGeometry, **options: Any) -> TileRequest:
         coverage = options.get("coverage_id") or self.coverage_id
         if not coverage:
@@ -619,7 +725,10 @@ class WCSService(BaseService):
         )
         output_raw = options.get("output_crs")
         result_crs = CRS.parse(output_raw) if output_raw is not None else subset_crs
-        subset_tile = TileGeometry(
+        clipped = self._intersect_coverage_extent(subset_bbox, subset_crs, metadata)
+
+        # Canvas stays the planned tile; HTTP subset may be clipped or skipped.
+        canvas_tile = TileGeometry(
             bbox=subset_bbox,
             width=tile.width,
             height=tile.height,
@@ -628,6 +737,45 @@ class WCSService(BaseService):
             tile_y=tile.tile_y,
             zoom=tile.zoom,
         )
+        passthrough = tile_option_passthrough(
+            options,
+            "output_crs",
+            "supported_crs",
+            "coverage_id",
+        )
+
+        if clipped is None:
+            # Wholly outside the envelope — no GetCoverage subset that the
+            # server would reject; mosaic loader fills coverage nodata.
+            request = self.compose_tile_request(
+                canvas_tile,
+                url=self.base_url,
+                protocol_params={
+                    "service": "WCS",
+                    "version": self.version,
+                    "request": "GetCoverage",
+                    "coverageId": coverage,
+                    "format": fmt.value,
+                },
+                output_format=fmt,
+                crs=result_crs,
+                **passthrough,
+            )
+            return request.model_copy(update={"coverage_empty": True})
+
+        req_width = tile.width
+        req_height = tile.height
+        if (
+            clipped.min_x != subset_bbox.min_x
+            or clipped.min_y != subset_bbox.min_y
+            or clipped.max_x != subset_bbox.max_x
+            or clipped.max_y != subset_bbox.max_y
+        ):
+            res_x = (subset_bbox.max_x - subset_bbox.min_x) / tile.width
+            res_y = (subset_bbox.max_y - subset_bbox.min_y) / tile.height
+            req_width = max(1, int(round((clipped.max_x - clipped.min_x) / res_x)))
+            req_height = max(1, int(round((clipped.max_y - clipped.min_y) / res_y)))
+            subset_parts = self._format_subset(clipped, axis_labels)
 
         protocol_params: dict[str, Any] = {
             "service": "WCS",
@@ -636,10 +784,10 @@ class WCSService(BaseService):
             "coverageId": coverage,
             "subset": subset_parts,
             "format": fmt.value,
-            "width": str(tile.width),
-            "height": str(tile.height),
+            "width": str(req_width),
+            "height": str(req_height),
             "scaleSize": self._format_scale_size(
-                axis_labels, tile.width, tile.height, crs=subset_crs
+                axis_labels, req_width, req_height, crs=subset_crs
             ),
         }
         if metadata.native_crs is None or subset_crs != metadata.native_crs:
@@ -648,17 +796,12 @@ class WCSService(BaseService):
             protocol_params["outputCRS"] = result_crs.value
 
         return self.compose_tile_request(
-            subset_tile,
+            canvas_tile,
             url=self.base_url,
             protocol_params=protocol_params,
             output_format=fmt,
             crs=result_crs,
-            **tile_option_passthrough(
-                options,
-                "output_crs",
-                "supported_crs",
-                "coverage_id",
-            ),
+            **passthrough,
         )
 
     # ------------------------------------------------------------------
@@ -723,37 +866,52 @@ class WCSService(BaseService):
             axis_labels,
         )
 
+    def _intersect_coverage_extent(
+        self,
+        subset_bbox: BoundingBox,
+        subset_crs: CRS,
+        metadata: CoverageDescription,
+    ) -> BoundingBox | None:
+        """Return ``subset ∩ coverage`` in ``subset_crs``, or ``None`` if disjoint.
+
+        When DescribeCoverage did not advertise a spatial extent, return the
+        subset unchanged (no client-side clip).
+        """
+
+        extent = metadata.spatial_extent
+        if extent is None:
+            return subset_bbox
+        coverage_bbox = extent.bbox
+        if coverage_bbox.crs != subset_crs:
+            coverage_bbox = coverage_bbox.to_crs(subset_crs)
+        return subset_bbox.intersection(coverage_bbox)
+
+    def _outside_coverage_message(self, coverage_id: str | None) -> str:
+        meta = self.coverage_metadata(coverage_id) if coverage_id else None
+        extent = (
+            meta.spatial_extent.bbox
+            if meta is not None and meta.spatial_extent is not None
+            else None
+        )
+        if extent is None:
+            return (
+                "Requested bbox does not intersect the coverage spatial extent; "
+                "no tiles to fetch."
+            )
+        return (
+            "Requested bbox does not intersect coverage extent "
+            f"({extent.min_x}, {extent.min_y}, {extent.max_x}, {extent.max_y}) "
+            f"in {extent.crs.value}."
+        )
+
     def _default_subset_axes(self, crs: CRS) -> tuple[str, str]:
         return CRS.parse(crs).default_subset_axes()
 
     @staticmethod
     def _label_is_northing(label: str, crs: CRS | None = None) -> bool | None:
-        """Classify a subset/scale axis label as northing/lat when possible.
+        """Classify a subset/scale axis label as northing/lat when possible."""
 
-        Returns ``True`` / ``False`` when the name is unambiguous, else ``None``
-        so callers can fall back to CRS axis order.
-        """
-
-        key = label.strip().lower()
-        if key in {"lat", "latitude", "n", "north", "northing", "y"}:
-            return True
-        if key in {"lon", "long", "longitude", "e", "east", "easting", "x"}:
-            return False
-        if crs is not None:
-            try:
-                axes = list(CRS.parse(crs).to_pyproj().axis_info)
-            except Exception:  # pragma: no cover - defensive
-                axes = []
-            for axis in axes:
-                name = (axis.name or "").lower()
-                abbrev = (axis.abbrev or "").lower()
-                if key in {name, abbrev} or key == abbrev.replace(" ", ""):
-                    direction = (axis.direction or "").lower()
-                    if direction in {"north", "south"}:
-                        return True
-                    if direction in {"east", "west"}:
-                        return False
-        return None
+        return label_is_northing(label, crs)
 
     def _format_subset(
         self, bbox: BoundingBox, axis_labels: tuple[str, str]
@@ -762,7 +920,7 @@ class WCSService(BaseService):
         # caps labels like ("y", "x") get northing under y and easting under x.
         parts: list[str] = []
         for index, label in enumerate(axis_labels):
-            northing = self._label_is_northing(label, bbox.crs)
+            northing = label_is_northing(label, bbox.crs)
             if northing is None:
                 # Fall back: CRS axis order when labels are opaque.
                 north_first = CRS.parse(bbox.crs).north_axis_first
@@ -785,7 +943,7 @@ class WCSService(BaseService):
 
         parts: list[str] = []
         for index, label in enumerate(axis_labels):
-            northing = self._label_is_northing(label, crs)
+            northing = label_is_northing(label, crs)
             if northing is None:
                 # Match `_format_subset`: CRS axis order when labels are opaque.
                 north_first = (

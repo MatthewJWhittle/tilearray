@@ -461,13 +461,17 @@ def test_wcs_service_builds_subset_from_coverage_metadata() -> None:
     )
     service.set_coverage_metadata(ea_metadata)
 
+    # In-extent sample (EA envelope starts at 80000, 4000).
     geometry = TileGeometry(
-        bbox=BoundingBox(min_x=0, min_y=0, max_x=10, max_y=10, crs=CRS.EPSG_27700),
+        bbox=BoundingBox(
+            min_x=400000, min_y=300000, max_x=400010, max_y=300010, crs=CRS.EPSG_27700
+        ),
         width=16,
         height=16,
         crs=CRS.EPSG_27700,
     )
     request = service.build_tile_request(geometry)
+    assert request.coverage_empty is False
     subsets = request.params["subset"]
 
     assert subsets[0].startswith("E(")

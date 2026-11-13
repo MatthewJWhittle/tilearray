@@ -27,6 +27,7 @@ from ._planning import (
     cache_key,
     fetch_policy_from_summary,
     fetch_policy_summary,
+    first_fetchable_tile_request,
     organize_tiles,
     probe_tile_band_count,
     recommend_grid_shape,
@@ -350,7 +351,7 @@ def preview_array(
     if probe_bands:
         decoder = resolve_decoder(request, service, None)
         bands = probe_tile_band_count(
-            tile_requests[0],
+            first_fetchable_tile_request(tile_requests),
             request.cache_path,
             decoder,
             dtype_np,
