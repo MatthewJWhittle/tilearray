@@ -30,10 +30,10 @@ def test_create_refuses_huge_tile_plan() -> None:
 def test_wms_preview_estimates_huge_resolution_plan_without_materialising() -> None:
     """WMS/WCS resolution plans use BaseService O(1) estimate (#161 Bugbot)."""
     cfg = WMSConfig.from_url("https://example.com/wms", layers="a")
-    # ~100 km box at 1 m resolution → ~1e10 pixels / 256² ≈ huge tile count.
+    # ~400 km box at 1 m → ~1.6e11 pixels / default 1024² ≈ 1.5e5 tiles.
     pv = preview_array(
         cfg,
-        (400000, 100000, 500000, 200000),
+        (0, 0, 400000, 400000),
         bbox_crs="EPSG:27700",
         resolution=(1, 1),
         max_tile_requests=10_000,

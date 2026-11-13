@@ -247,6 +247,15 @@ class WCSConfig(ServiceConfig):
             "attrs['mosaic_crs'] matches this CRS. Not a client-side warp."
         ),
     )
+    # Still coupled to HTTP request size until #186; 1024 matches GDAL WMS default
+    # block size. XYZ/WMTS keep native ~256 via planning fallback / tile_size.
+    chunk_size: tuple[int, int] | None = Field(
+        default=(1024, 1024),
+        description=(
+            "Default chunk / request size (width, height) when create_array omits "
+            "chunk_size"
+        ),
+    )
     service_type: ServiceTypeEnum = Field(
         default=ServiceTypeEnum.WCS, init=False, description="Service type constant"
     )
@@ -357,6 +366,15 @@ class WMSConfig(ServiceConfig):
             "Optional GetMap CRS when the server should render pixels in a CRS "
             "other than the query. GetMap has one CRS for BBOX and image — "
             "not a client-side warp."
+        ),
+    )
+    # Still coupled to HTTP request size until #186; 1024 matches GDAL WMS default
+    # block size. XYZ/WMTS keep native ~256 via planning fallback / tile_size.
+    chunk_size: tuple[int, int] | None = Field(
+        default=(1024, 1024),
+        description=(
+            "Default chunk / request size (width, height) when create_array omits "
+            "chunk_size"
         ),
     )
     service_type: ServiceTypeEnum = Field(
