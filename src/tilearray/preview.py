@@ -34,7 +34,7 @@ from ._planning import (
 )
 from .decode import default_band_count_for_format
 from .errors import ValidationError
-from .fetch import FetchProgress, TileFetcher
+from .fetch import TileFetcher, lookup_fetch_progress
 from .matrix_resolution import (
     MatrixChoice,
     MatrixLevelSummary,
@@ -476,8 +476,8 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
     soft_failed: int | None = None
     aborted: bool | None = None
 
-    progress = attrs.get(PROGRESS_REF_ATTR)
-    if isinstance(progress, FetchProgress):
+    progress = lookup_fetch_progress(attrs.get(PROGRESS_REF_ATTR))
+    if progress is not None:
         total = progress.total
         done = progress.done
         soft_failed = progress.soft_failed_count()

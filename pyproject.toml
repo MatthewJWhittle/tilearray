@@ -77,6 +77,7 @@ dev = [
     # Stubs only needed where CI mypy runs (3.11+). On 3.9, types-tqdm pulls
     # types-requests → urllib3 2.x, which breaks pytest-vcr / vcrpy.
     "types-tqdm>=4.67.3.20260205; python_version >= '3.10'",
+    "zarr>=2.18.0,<3",
 ]
 docs = [
     "sphinx>=6.0.0",
@@ -259,4 +260,5 @@ dev = [
     "respx>=0.22.0",
     "ruff>=0.1.0",
     "types-tqdm>=4.67.3.20260205; python_version >= '3.10'",
+    "zarr>=2.18.0,<3",
 ]

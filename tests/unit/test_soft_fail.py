@@ -22,7 +22,12 @@ from tilearray.array import (
     _load_tile_array,
     create_array,
 )
-from tilearray.fetch import FetchPolicy, FetchProgress, TileFetcher
+from tilearray.fetch import (
+    FetchPolicy,
+    FetchProgress,
+    TileFetcher,
+    lookup_fetch_progress,
+)
 from tilearray.mosaic_plan import MosaicPlan
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.tile_errors import TileErrorAction, TileErrorContext
@@ -286,7 +291,11 @@ def test_mosaic_soft_fail_attrs_refresh_via_compute_mosaic(
     lazy_errors = lazy.attrs[_TILE_ERRORS_ATTR]
     assert lazy_errors["armed"] is True
     assert lazy_errors["soft_failed"] == 0
-    assert isinstance(lazy.attrs.get(_PROGRESS_REF_ATTR), FetchProgress)
+    # Live session is registry-backed; attrs hold only a JSON-safe token.
+    assert isinstance(lazy.attrs.get(_PROGRESS_REF_ATTR), str)
+    assert isinstance(
+        lookup_fetch_progress(lazy.attrs.get(_PROGRESS_REF_ATTR)), FetchProgress
+    )
 
     result = compute_mosaic(lazy)
 
