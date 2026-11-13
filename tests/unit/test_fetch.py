@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import httpx
@@ -19,6 +20,7 @@ from tilearray.fetch import (
     PerHostRateLimiter,
     TileFetcher,
     fetch_tile_with_policy,
+    tile_deadline_seconds,
 )
 from tilearray.service.config import WCSConfig
 from tilearray.types import Format, TileRequest, TileResponse
@@ -39,7 +41,11 @@ def test_fetch_policy_rejects_invalid_bounds() -> None:
     with pytest.raises(PydanticValidationError):
         FetchPolicy(max_concurrent=0)
     with pytest.raises(PydanticValidationError):
-        FetchPolicy(timeout=-1.0)
+        FetchPolicy(read_timeout=-1.0)
+    with pytest.raises(PydanticValidationError):
+        FetchPolicy(connect_timeout=-1.0)
+    with pytest.raises(PydanticValidationError):
+        FetchPolicy(tile_deadline=-1.0)
     with pytest.raises(PydanticValidationError):
         FetchPolicy(multiplicative_decrease=1.0)
     with pytest.raises(PydanticValidationError):
@@ -397,8 +403,8 @@ def test_aimd_remembers_limit_across_fetch_batches() -> None:
         "adaptive_concurrency": True,
         "rate_limit_per_second": None,
     }
-    policy_a = FetchPolicy(**base, timeout=60.0)
-    policy_b = FetchPolicy(**base, timeout=61.0)
+    policy_a = FetchPolicy(**base, read_timeout=60.0, tile_deadline=60.0)
+    policy_b = FetchPolicy(**base, read_timeout=61.0, tile_deadline=61.0)
     request = _tile_request(retries=0)
 
     fetcher_a = TileFetcher.for_policy(policy_a)
@@ -1081,3 +1087,175 @@ def test_aimd_shared_gate_max_concurrent_1_warns_with_waiters(
     assert any(
         "Shared fetch concurrency is 1" in record.message for record in caplog.records
     )
+
+
+def test_fetch_policy_connect_and_read_timeouts_are_distinct() -> None:
+    policy = FetchPolicy(
+        connect_timeout=4.0,
+        read_timeout=17.0,
+        tile_deadline=17.0,
+        rate_limit_per_second=None,
+    )
+    fetcher = TileFetcher(policy)
+    try:
+        assert fetcher._client.timeout.connect == 4.0
+        assert fetcher._client.timeout.read == 17.0
+        assert fetcher._client.timeout.write == 17.0
+        assert fetcher._client.timeout.pool == 4.0
+        assert policy.connect_timeout != policy.read_timeout
+    finally:
+        fetcher.close()
+
+
+def test_tile_deadline_scales_with_request_pixel_size() -> None:
+    policy = FetchPolicy(tile_deadline=10.0)
+    small = _tile_request(width=256, height=256)
+    large = _tile_request(width=1024, height=1024)
+    assert tile_deadline_seconds(policy, small) == pytest.approx(10.0)
+    # 1024² / 256² → sqrt scale 4 → 4× base (at the scale cap).
+    assert tile_deadline_seconds(policy, large) == pytest.approx(40.0)
+    assert tile_deadline_seconds(policy, _tile_request()) == pytest.approx(10.0)
+
+
+def _start_tile_http_server(handler_cls: type) -> tuple[ThreadingHTTPServer, str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    host, port = server.server_address
+    return server, f"http://{host}:{port}/tile"
+
+
+def test_tile_deadline_aborts_hung_tile_before_full_read_timeout() -> None:
+    """Wall-clock deadline must win over a long httpx idle-read timeout."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            time.sleep(30.0)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.end_headers()
+            self.wfile.write(b"too-late")
+
+        def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
+            return
+
+    server, url = _start_tile_http_server(Handler)
+    try:
+        policy = FetchPolicy(
+            max_concurrent=1,
+            rate_limit_per_second=None,
+            retries=0,
+            connect_timeout=5.0,
+            read_timeout=30.0,
+            tile_deadline=0.4,
+        )
+        started = time.perf_counter()
+        response = fetch_tile_with_policy(
+            TileRequest(url=url, params={}, retries=0),
+            policy,
+        )
+        elapsed = time.perf_counter() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert response.success is False
+    assert "Network error" in (response.error_message or "")
+    assert elapsed < 2.0
+    assert elapsed < policy.read_timeout / 2
+
+
+def test_stalled_tile_batch_finishes_within_about_2x_healthy_wall_time() -> None:
+    """One-in-four stalls must not stretch a batch toward the old full read timeout."""
+
+    healthy_latency_s = 0.05
+    n_tiles = 8
+    stall_every = 4
+    max_concurrent = 4
+    call_i = {"n": 0}
+    lock = threading.Lock()
+
+    class StallHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            with lock:
+                idx = call_i["n"]
+                call_i["n"] += 1
+            if idx % stall_every == 0:
+                time.sleep(30.0)
+            else:
+                time.sleep(healthy_latency_s)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
+            return
+
+    class HealthyHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            time.sleep(healthy_latency_s)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, format: str, *args: Any) -> None:  # noqa: A003
+            return
+
+    healthy_server, healthy_url = _start_tile_http_server(HealthyHandler)
+    try:
+        healthy_policy = FetchPolicy(
+            max_concurrent=max_concurrent,
+            rate_limit_per_second=None,
+            retries=0,
+            connect_timeout=2.0,
+            read_timeout=60.0,
+            tile_deadline=5.0,
+        )
+        request = TileRequest(url=healthy_url, params={}, retries=0)
+        healthy_started = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=max_concurrent) as pool:
+            futures = [
+                pool.submit(fetch_tile_with_policy, request, healthy_policy)
+                for _ in range(n_tiles)
+            ]
+            healthy_results = [future.result() for future in futures]
+        healthy_elapsed = time.perf_counter() - healthy_started
+    finally:
+        healthy_server.shutdown()
+        healthy_server.server_close()
+
+    assert all(result.success for result in healthy_results)
+
+    TileFetcher.reset_instances()
+    stall_server, stall_url = _start_tile_http_server(StallHandler)
+    try:
+        stall_policy = FetchPolicy(
+            max_concurrent=max_concurrent,
+            rate_limit_per_second=None,
+            retries=0,
+            connect_timeout=2.0,
+            read_timeout=60.0,
+            tile_deadline=0.35,
+        )
+        request = TileRequest(url=stall_url, params={}, retries=0)
+        stall_started = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=max_concurrent) as pool:
+            futures = [
+                pool.submit(fetch_tile_with_policy, request, stall_policy)
+                for _ in range(n_tiles)
+            ]
+            stall_results = [future.result() for future in futures]
+        stall_elapsed = time.perf_counter() - stall_started
+    finally:
+        stall_server.shutdown()
+        stall_server.server_close()
+
+    successes = sum(1 for result in stall_results if result.success)
+    failures = sum(1 for result in stall_results if not result.success)
+    assert successes == 6
+    assert failures == 2
+    # ~2× healthy wall under deadline behaviour (not ~60 s read-timeout tails).
+    assert stall_elapsed < max(2.0 * healthy_elapsed, healthy_elapsed + 1.5)
+    assert stall_elapsed < 5.0

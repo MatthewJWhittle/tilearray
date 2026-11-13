@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 import uuid
@@ -21,7 +22,13 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from ._http_client import make_sync_client, peel_url_query
+from ._http_client import (
+    DEFAULT_CONNECT_TIMEOUT,
+    DEFAULT_HTTP_TIMEOUT,
+    make_sync_client,
+    peel_url_query,
+    shape_httpx_timeout,
+)
 from .error_messages import (
     looks_like_html,
     looks_like_ogc_exception_report,
@@ -47,6 +54,12 @@ _DEFAULT_MIN_CONCURRENT = 1
 _DEFAULT_RATE_LIMIT_PER_SECOND = 2.0
 _DEFAULT_MULTIPLICATIVE_DECREASE = 0.5
 _DEFAULT_ADDITIVE_INCREASE = 2
+_DEFAULT_CONNECT_TIMEOUT = DEFAULT_CONNECT_TIMEOUT
+_DEFAULT_READ_TIMEOUT = DEFAULT_HTTP_TIMEOUT
+_DEFAULT_TILE_DEADLINE = DEFAULT_HTTP_TIMEOUT
+# Reference tile size for modest deadline scaling (256×256 XYZ / legacy WMS).
+_REF_TILE_PIXELS = 256 * 256
+_MAX_DEADLINE_SCALE = 4.0
 
 
 @runtime_checkable
@@ -470,7 +483,27 @@ class FetchPolicy(BaseModel):
             "retries + 1). Authoritative over TileRequest.retries."
         ),
     )
-    timeout: float = Field(default=30.0, gt=0)
+    connect_timeout: float = Field(
+        default=_DEFAULT_CONNECT_TIMEOUT,
+        gt=0,
+        description="TCP connect timeout in seconds (httpx connect=)",
+    )
+    read_timeout: float = Field(
+        default=_DEFAULT_READ_TIMEOUT,
+        gt=0,
+        description=(
+            "Idle time between response body chunks (httpx read=). Not a "
+            "whole-response wall clock — see tile_deadline."
+        ),
+    )
+    tile_deadline: float = Field(
+        default=_DEFAULT_TILE_DEADLINE,
+        gt=0,
+        description=(
+            "Hard wall-clock deadline per tile attempt in seconds (application "
+            "timer on top of httpx; scaled modestly with request width×height)"
+        ),
+    )
     rate_limit_per_second: float | None = _DEFAULT_RATE_LIMIT_PER_SECOND
     rate_limiter: HostRateLimiter | None = None
     adaptive_concurrency: bool = False
@@ -507,7 +540,9 @@ class FetchPolicy(BaseModel):
             self.max_concurrent,
             self.max_connections,
             self.retries,
-            self.timeout,
+            self.connect_timeout,
+            self.read_timeout,
+            self.tile_deadline,
             self.rate_limit_per_second,
             self.adaptive_concurrency,
             self.initial_concurrent,
@@ -519,6 +554,23 @@ class FetchPolicy(BaseModel):
             self.forbidden_threshold,
             self.forbidden_cooldown_seconds,
         )
+
+
+def tile_deadline_seconds(policy: FetchPolicy, request: TileRequest) -> float:
+    """Wall-clock deadline for one tile attempt, scaled by request pixel size.
+
+    Larger WMS/WCS tiles get up to :data:`_MAX_DEADLINE_SCALE` × the base
+    ``tile_deadline`` via ``sqrt(pixels / 256²)``. Missing or non-positive
+    width/height keep the base deadline.
+    """
+
+    base = float(policy.tile_deadline)
+    width = request.width
+    height = request.height
+    if width is None or height is None or width <= 0 or height <= 0:
+        return base
+    scale = math.sqrt((width * height) / float(_REF_TILE_PIXELS))
+    return base * min(_MAX_DEADLINE_SCALE, max(1.0, scale))
 
 
 # Lazy mosaics store a JSON-safe token in attrs; the live session lives here so
@@ -768,7 +820,10 @@ class TileFetcher:
         self.stats = FetchStats()
         pool_size = self._policy.max_connections or self._policy.max_concurrent
         self._client = make_sync_client(
-            timeout=self._policy.timeout,
+            timeout=shape_httpx_timeout(
+                connect=self._policy.connect_timeout,
+                read=self._policy.read_timeout,
+            ),
             limits=httpx.Limits(
                 max_connections=pool_size,
                 max_keepalive_connections=self._policy.max_concurrent,
@@ -906,6 +961,59 @@ class TileFetcher:
             self._adaptive_gate.record_circuit_breaker_pressure(host)
             self.stats._sync_adaptive_stats(self._adaptive_gate, host)
 
+    def _attempt_timeout(self, deadline_at: float) -> httpx.Timeout:
+        """Cap httpx connect/read by remaining wall-clock deadline for this attempt."""
+
+        remaining = max(1e-3, deadline_at - time.monotonic())
+        return shape_httpx_timeout(
+            connect=min(self._policy.connect_timeout, remaining),
+            read=min(self._policy.read_timeout, remaining),
+        )
+
+    def _read_body_with_deadline(
+        self,
+        response: httpx.Response,
+        deadline_at: float,
+    ) -> bytes:
+        """Consume a streamed body; abort if wall-clock deadline elapses (drip stalls)."""
+
+        chunks: list[bytes] = []
+        for chunk in response.iter_bytes():
+            if time.monotonic() >= deadline_at:
+                raise httpx.ReadTimeout(
+                    "Per-tile wall-clock deadline exceeded",
+                    request=response.request,
+                )
+            if chunk:
+                chunks.append(chunk)
+        return b"".join(chunks)
+
+    def _get_with_deadline(
+        self,
+        *,
+        url: str,
+        params: dict[str, Any] | None,
+        headers: dict[str, str],
+        deadline_at: float,
+    ) -> httpx.Response:
+        """GET one attempt under httpx connect/read timeouts + wall-clock deadline."""
+
+        timeout = self._attempt_timeout(deadline_at)
+        with self._client.stream(
+            "GET",
+            url,
+            params=params,
+            headers=headers,
+            timeout=timeout,
+        ) as streamed:
+            content = self._read_body_with_deadline(streamed, deadline_at)
+            return httpx.Response(
+                status_code=streamed.status_code,
+                headers=streamed.headers,
+                content=content,
+                request=streamed.request,
+            )
+
     def fetch(
         self,
         request: TileRequest,
@@ -931,6 +1039,7 @@ class TileFetcher:
         attempts = self._policy.retries + 1
         if request.retries == 0:
             attempts = 1
+        deadline_s = tile_deadline_seconds(self._policy, request)
 
         def _before_sleep(retry_state: RetryCallState) -> None:
             if progress is not None:
@@ -961,10 +1070,12 @@ class TileFetcher:
                         bare_url, get_params = peel_url_query(
                             request.url, request.params
                         )
-                        response = self._client.get(
-                            bare_url,
+                        deadline_at = time.monotonic() + deadline_s
+                        response = self._get_with_deadline(
+                            url=bare_url,
                             params=get_params or None,
                             headers=headers,
+                            deadline_at=deadline_at,
                         )
                     finally:
                         self.stats._leave_inflight()

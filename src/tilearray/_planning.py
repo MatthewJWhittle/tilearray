@@ -70,7 +70,9 @@ def fetch_policy_summary(policy: FetchPolicy) -> dict[str, Any]:
         "max_concurrent": policy.max_concurrent,
         "max_connections": policy.max_connections,
         "retries": policy.retries,
-        "timeout": policy.timeout,
+        "connect_timeout": policy.connect_timeout,
+        "read_timeout": policy.read_timeout,
+        "tile_deadline": policy.tile_deadline,
         "rate_limit_per_second": policy.rate_limit_per_second,
         "adaptive_concurrency": policy.adaptive_concurrency,
         "initial_concurrent": policy.initial_concurrent,
@@ -88,11 +90,28 @@ def fetch_policy_summary(policy: FetchPolicy) -> dict[str, Any]:
 def fetch_policy_from_summary(summary: dict[str, Any]) -> FetchPolicy:
     defaults = FetchPolicy()
     call_max = summary.get("call_max_concurrent", defaults.call_max_concurrent)
+    # Pre-0.3.3 attrs used a single ``timeout`` for connect/read/pool.
+    legacy_timeout = summary.get("timeout")
+    read_timeout = float(
+        summary.get(
+            "read_timeout",
+            legacy_timeout if legacy_timeout is not None else defaults.read_timeout,
+        )
+    )
+    tile_deadline = float(
+        summary.get(
+            "tile_deadline",
+            legacy_timeout if legacy_timeout is not None else defaults.tile_deadline,
+        )
+    )
+    connect_timeout = float(summary.get("connect_timeout", defaults.connect_timeout))
     return FetchPolicy(
         max_concurrent=int(summary.get("max_concurrent", defaults.max_concurrent)),
         max_connections=summary.get("max_connections", defaults.max_connections),
         retries=int(summary.get("retries", defaults.retries)),
-        timeout=float(summary.get("timeout", defaults.timeout)),
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        tile_deadline=tile_deadline,
         rate_limit_per_second=summary.get(
             "rate_limit_per_second", defaults.rate_limit_per_second
         ),
@@ -155,11 +174,26 @@ def resolve_fetch_policy(
     else:
         max_concurrent = int(override)
 
+    has_fetch_timeout = "fetch_timeout" in service_options
+    has_tile_deadline = "fetch_tile_deadline" in service_options
+    read_timeout = float(service_options.pop("fetch_timeout", base.read_timeout))
+    connect_timeout = float(
+        service_options.pop("fetch_connect_timeout", base.connect_timeout)
+    )
+    if has_tile_deadline:
+        tile_deadline = float(service_options.pop("fetch_tile_deadline"))
+    elif has_fetch_timeout:
+        tile_deadline = read_timeout
+    else:
+        tile_deadline = float(base.tile_deadline)
+
     return FetchPolicy(
         max_concurrent=max_concurrent,
         max_connections=service_options.pop("max_connections", base.max_connections),
         retries=service_options.pop("fetch_retries", base.retries),
-        timeout=service_options.pop("fetch_timeout", base.timeout),
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        tile_deadline=tile_deadline,
         rate_limit_per_second=service_options.pop(
             "rate_limit_per_second", base.rate_limit_per_second
         ),

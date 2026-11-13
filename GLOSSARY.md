@@ -97,3 +97,15 @@ _Avoid_: changing host ceilings at compute time; promising a cross-process globa
 **Fetch preset**:
 A reusable bundle of host-oriented fetch defaults composed onto a service configuration.
 _Avoid_: growing separate host-specific create methods for operational folklore
+
+**Connect timeout**:
+Bound on establishing the TCP connection for a tile HTTP request (`httpx` `connect=`).
+_Avoid_: using connect timeout as the whole-response budget
+
+**Read timeout**:
+Bound on idle time between response body chunks (`httpx` `read=`). A slow drip of bytes can keep a transfer alive past any “scaled read” alone.
+_Avoid_: treating read timeout as a hard wall-clock deadline for the whole tile
+
+**Tile deadline**:
+Hard wall-clock budget for one tile attempt, enforced by the library on top of httpx timeouts.
+_Avoid_: claiming httpx `read=` alone implements the deadline; request hedging as the v1 stall fix

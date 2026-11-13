@@ -6,9 +6,11 @@ different User-Agent and no config ``headers`` / ``params``. This module is the
 single policy for those plan-time GETs:
 
 * **Client:** sync ``httpx`` (same stack as tile fetch)
-* **Timeout:** ``ServiceConfig.fetch_timeout`` when present on the service
-  config bag, otherwise :data:`DEFAULT_HTTP_TIMEOUT` (matches
-  :class:`~tilearray.fetch.FetchPolicy` / ``ServiceConfig.fetch_timeout`` default)
+* **Timeout:** ``ServiceConfig.fetch_timeout`` (idle-read) when present on the
+  service config bag, otherwise :data:`DEFAULT_HTTP_TIMEOUT` (matches
+  :class:`~tilearray.fetch.FetchPolicy.read_timeout` /
+  ``ServiceConfig.fetch_timeout``). Shaped as ``httpx.Timeout(connect=, read=)``
+  with a shorter default connect ceiling.
 * **Headers / params:** library default User-Agent, then config overlays, then
   call-site extras — so private-server credentials on the config reach
   GetCapabilities / DescribeCoverage the same way they reach tiles
@@ -25,12 +27,19 @@ from typing import Any
 
 import httpx
 
-from .._http_client import DEFAULT_HTTP_TIMEOUT, make_sync_client, peel_url_query
+from .._http_client import (
+    DEFAULT_CONNECT_TIMEOUT,
+    DEFAULT_HTTP_TIMEOUT,
+    make_sync_client,
+    peel_url_query,
+    shape_httpx_timeout,
+)
 from ..fetch_presets import tilearray_user_agent
 from .capabilities_memo import cached_capabilities_text
 from .requests import merge_params, merge_str_mappings
 
 __all__ = [
+    "DEFAULT_CONNECT_TIMEOUT",
     "DEFAULT_HTTP_TIMEOUT",
     "compose_http_headers",
     "compose_http_params",
@@ -39,6 +48,7 @@ __all__ = [
     "http_get_capabilities_text",
     "make_sync_client",
     "resolve_timeout",
+    "shape_httpx_timeout",
 ]
 
 
@@ -100,16 +110,20 @@ def http_get(
     :class:`httpx.HTTPError` subclasses on transport failures.
     """
 
-    timeout_value = DEFAULT_HTTP_TIMEOUT if timeout is None else timeout
+    read = DEFAULT_HTTP_TIMEOUT if timeout is None else float(timeout)
+    timeout_cfg = shape_httpx_timeout(
+        connect=min(DEFAULT_CONNECT_TIMEOUT, read),
+        read=read,
+    )
     owns_client = client is None
-    http = client or make_sync_client(timeout=timeout_value)
+    http = client or make_sync_client(timeout=timeout_cfg)
     bare_url, merged_params = peel_url_query(url, params)
     try:
         response = http.get(
             bare_url,
             params=merged_params or None,
             headers=dict(headers) if headers is not None else None,
-            timeout=timeout_value,
+            timeout=timeout_cfg,
         )
         response.raise_for_status()
         return response

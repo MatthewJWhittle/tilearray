@@ -12,23 +12,66 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 import httpx
 
-# Align with FetchPolicy.timeout / ServiceConfig.fetch_timeout defaults.
+# Align with FetchPolicy.read_timeout / ServiceConfig.fetch_timeout defaults.
 DEFAULT_HTTP_TIMEOUT = 30.0
+DEFAULT_CONNECT_TIMEOUT = 10.0
+
+
+def shape_httpx_timeout(
+    *,
+    connect: float = DEFAULT_CONNECT_TIMEOUT,
+    read: float = DEFAULT_HTTP_TIMEOUT,
+) -> httpx.Timeout:
+    """Build fine-grained ``httpx.Timeout(connect=…, read=…)``.
+
+    ``write`` follows ``read``; ``pool`` follows ``connect``. A single float
+    passed to :func:`make_sync_client` still means “read budget” with the
+    default connect ceiling (capped by that float when smaller).
+    """
+
+    return httpx.Timeout(
+        connect=float(connect),
+        read=float(read),
+        write=float(read),
+        pool=float(connect),
+    )
 
 
 def make_sync_client(
     *,
     timeout: float | httpx.Timeout | None = None,
+    connect_timeout: float | None = None,
+    read_timeout: float | None = None,
     limits: httpx.Limits | None = None,
 ) -> httpx.Client:
     """Build a sync ``httpx.Client`` with shared timeout / optional pool Limits."""
 
-    if timeout is None:
-        timeout_cfg: httpx.Timeout = httpx.Timeout(DEFAULT_HTTP_TIMEOUT)
-    elif isinstance(timeout, httpx.Timeout):
+    if isinstance(timeout, httpx.Timeout):
         timeout_cfg = timeout
+    elif connect_timeout is not None or read_timeout is not None:
+        read = (
+            float(read_timeout)
+            if read_timeout is not None
+            else (
+                float(timeout)
+                if isinstance(timeout, (int, float))
+                else DEFAULT_HTTP_TIMEOUT
+            )
+        )
+        connect = (
+            float(connect_timeout)
+            if connect_timeout is not None
+            else min(DEFAULT_CONNECT_TIMEOUT, read)
+        )
+        timeout_cfg = shape_httpx_timeout(connect=connect, read=read)
+    elif timeout is None:
+        timeout_cfg = shape_httpx_timeout()
     else:
-        timeout_cfg = httpx.Timeout(float(timeout))
+        read = float(timeout)
+        timeout_cfg = shape_httpx_timeout(
+            connect=min(DEFAULT_CONNECT_TIMEOUT, read),
+            read=read,
+        )
     kwargs: dict[str, Any] = {
         "timeout": timeout_cfg,
         "follow_redirects": True,
