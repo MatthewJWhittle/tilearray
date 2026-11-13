@@ -190,6 +190,7 @@ class WCSParser:
             temporal_extent = self._parse_temporal_extent(coverage_elem)
             native_crs, axis_labels = self._parse_envelope_metadata(coverage_elem)
             native_format = self._parse_native_format(coverage_elem)
+            native_resolution = self._parse_native_resolution(coverage_elem)
 
             if native_format and native_format not in supported_formats:
                 supported_formats.append(native_format)
@@ -208,6 +209,7 @@ class WCSParser:
                 native_crs=native_crs,
                 axis_labels=axis_labels,
                 native_format=native_format,
+                native_resolution=native_resolution,
             )
         except ET.ParseError as exc:  # pragma: no cover - defensive
             raise ParseError(f"Invalid XML content: {exc}", cause=exc) from exc
@@ -284,6 +286,7 @@ class WCSParser:
                         keywords=self._get_keywords(coverage_elem),
                         native_crs=None,
                         native_format=None,
+                        native_resolution=None,
                     )
                 )
         return coverages
@@ -349,6 +352,39 @@ class WCSParser:
         except ValueError:
             logger.debug("Skipping unsupported native format '%s'", text)
             return None
+
+    def _parse_native_resolution(
+        self, coverage_elem: ET.Element
+    ) -> tuple[float, float] | None:
+        """Ground sample distance from RectifiedGrid ``offsetVector`` magnitudes."""
+
+        vectors = coverage_elem.findall(
+            ".//gml:domainSet//gml:offsetVector", self.namespaces
+        )
+        if len(vectors) < 2:
+            vectors = coverage_elem.findall(".//gml:offsetVector", self.namespaces)
+        if len(vectors) < 2:
+            return None
+
+        parsed: list[list[float]] = []
+        for elem in vectors[:2]:
+            text = (elem.text or "").strip()
+            if not text:
+                return None
+            try:
+                parsed.append([float(part) for part in text.split()])
+            except ValueError:
+                return None
+        if len(parsed[0]) < 2 or len(parsed[1]) < 2:
+            return None
+
+        # offsetVector components are typically (dx, 0) and (0, dy); take
+        # Euclidean magnitude so rotated grids still yield positive GSD.
+        res_a = (parsed[0][0] ** 2 + parsed[0][1] ** 2) ** 0.5
+        res_b = (parsed[1][0] ** 2 + parsed[1][1] ** 2) ** 0.5
+        if res_a <= 0 or res_b <= 0:
+            return None
+        return (res_a, res_b)
 
     def _parse_spatial_extent(self, coverage_elem: ET.Element) -> SpatialExtent | None:
         envelope = self._find_envelope(coverage_elem)
@@ -635,6 +671,7 @@ class WCSService(BaseService):
         if clipped is None:
             raise ValidationError(self._outside_coverage_message(coverage))
         req_width, req_height = width, height
+        size_bbox = subset_bbox
         if (
             clipped.min_x != subset_bbox.min_x
             or clipped.min_y != subset_bbox.min_y
@@ -646,6 +683,7 @@ class WCSService(BaseService):
             req_width = max(1, int(round((clipped.max_x - clipped.min_x) / res_x)))
             req_height = max(1, int(round((clipped.max_y - clipped.min_y) / res_y)))
             subset_parts = self._format_subset(clipped, axis_labels)
+            size_bbox = clipped
         output_raw = params.pop("output_crs", None)
 
         request_params: dict[str, Any] = {
@@ -655,12 +693,17 @@ class WCSService(BaseService):
             "coverageId": coverage,
             "subset": subset_parts,
             "format": fmt.value,
-            "width": str(req_width),
-            "height": str(req_height),
-            "scaleSize": self._format_scale_size(
-                axis_labels, req_width, req_height, crs=subset_crs
-            ),
         }
+        request_params.update(
+            self._getcoverage_size_params(
+                axis_labels=axis_labels,
+                width=req_width,
+                height=req_height,
+                bbox=size_bbox,
+                metadata=metadata,
+                subset_crs=subset_crs,
+            )
+        )
         if metadata.native_crs is None or subset_crs != metadata.native_crs:
             request_params["subsettingCRS"] = subset_crs.value
         if output_raw is not None:
@@ -681,10 +724,16 @@ class WCSService(BaseService):
                 if isinstance(exc, httpx.HTTPStatusError)
                 else None
             )
+            error_message = str(exc)
+            if "scaleSize" in request_params:
+                error_message = (
+                    f"{error_message}; scaled GetCoverage (scaleSize) failed — "
+                    "server may not support WCS Scaling"
+                )
             return WCSResponse(
                 success=False,
                 data=None,
-                error_message=str(exc),
+                error_message=error_message,
                 status_code=status_code,
             )
 
@@ -765,6 +814,7 @@ class WCSService(BaseService):
 
         req_width = tile.width
         req_height = tile.height
+        size_bbox = subset_bbox
         if (
             clipped.min_x != subset_bbox.min_x
             or clipped.min_y != subset_bbox.min_y
@@ -776,6 +826,7 @@ class WCSService(BaseService):
             req_width = max(1, int(round((clipped.max_x - clipped.min_x) / res_x)))
             req_height = max(1, int(round((clipped.max_y - clipped.min_y) / res_y)))
             subset_parts = self._format_subset(clipped, axis_labels)
+            size_bbox = clipped
 
         protocol_params: dict[str, Any] = {
             "service": "WCS",
@@ -784,18 +835,23 @@ class WCSService(BaseService):
             "coverageId": coverage,
             "subset": subset_parts,
             "format": fmt.value,
-            "width": str(req_width),
-            "height": str(req_height),
-            "scaleSize": self._format_scale_size(
-                axis_labels, req_width, req_height, crs=subset_crs
-            ),
         }
+        protocol_params.update(
+            self._getcoverage_size_params(
+                axis_labels=axis_labels,
+                width=req_width,
+                height=req_height,
+                bbox=size_bbox,
+                metadata=metadata,
+                subset_crs=subset_crs,
+            )
+        )
         if metadata.native_crs is None or subset_crs != metadata.native_crs:
             protocol_params["subsettingCRS"] = subset_crs.value
         if output_raw is not None:
             protocol_params["outputCRS"] = result_crs.value
 
-        return self.compose_tile_request(
+        request = self.compose_tile_request(
             canvas_tile,
             url=self.base_url,
             protocol_params=protocol_params,
@@ -803,6 +859,11 @@ class WCSService(BaseService):
             crs=result_crs,
             **passthrough,
         )
+        # Fail fast on scaled GetCoverage: servers that hang or 500 on
+        # scaleSize must not burn every retry (#177).
+        if "scaleSize" in protocol_params:
+            return request.model_copy(update={"retries": 0})
+        return request
 
     # ------------------------------------------------------------------
     # Helpers
@@ -820,6 +881,7 @@ class WCSService(BaseService):
             identifier=coverage_id,
             native_crs=None,
             native_format=None,
+            native_resolution=None,
         )
 
     def _coerce_format(self, fmt: Any) -> Format:
@@ -953,3 +1015,71 @@ class WCSService(BaseService):
             size = height if northing else width
             parts.append(f"{label}({size})")
         return ",".join(parts)
+
+    @staticmethod
+    def _requested_resolution(
+        bbox: BoundingBox, width: int, height: int
+    ) -> tuple[float, float]:
+        return (
+            (bbox.max_x - bbox.min_x) / width,
+            (bbox.max_y - bbox.min_y) / height,
+        )
+
+    @staticmethod
+    def _resolutions_match(
+        requested: tuple[float, float],
+        native: tuple[float, float],
+        *,
+        relative_tol: float = 1e-3,
+        absolute_tol: float = 1e-6,
+    ) -> bool:
+        for req, nat in zip(requested, native):
+            if abs(req - nat) > max(absolute_tol, relative_tol * abs(nat)):
+                return False
+        return True
+
+    def _is_native_output_size(
+        self,
+        bbox: BoundingBox,
+        width: int,
+        height: int,
+        metadata: CoverageDescription,
+    ) -> bool:
+        """True when the requested pixel grid matches DescribeCoverage native GSD."""
+
+        native = metadata.native_resolution
+        if native is None:
+            return False
+        return self._resolutions_match(
+            self._requested_resolution(bbox, width, height), native
+        )
+
+    def _getcoverage_size_params(
+        self,
+        *,
+        axis_labels: tuple[str, str],
+        width: int,
+        height: int,
+        bbox: BoundingBox,
+        metadata: CoverageDescription,
+        subset_crs: CRS,
+    ) -> dict[str, str]:
+        """Size keys for WCS 2 GetCoverage.
+
+        At native resolution omit ``scaleSize`` / ``width`` / ``height`` — some
+        hosts (EA LiDAR) hang or 500 when Scaling is requested even at native
+        size (#177). When the output grid differs from native, send ``scaleSize``
+        (MapServer / #154) and keep vendor ``width``/``height`` for ArcGIS.
+        When native GSD is unknown, keep sending size params so MapServer still
+        gets ``scaleSize``.
+        """
+
+        if self._is_native_output_size(bbox, width, height, metadata):
+            return {}
+        return {
+            "width": str(width),
+            "height": str(height),
+            "scaleSize": self._format_scale_size(
+                axis_labels, width, height, crs=subset_crs
+            ),
+        }

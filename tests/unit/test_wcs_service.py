@@ -440,6 +440,7 @@ def test_wcs_parser_reads_axis_labels_from_describe_coverage_fixtures() -> None:
     )
     assert ea.native_crs == CRS.EPSG_27700
     assert ea.axis_labels["EPSG:27700"] == ("E", "N")
+    assert ea.native_resolution == (1.0, 1.0)
 
     usgs = parser.parse_describe_coverage(
         (FIXTURES / "usgs_3dep_describe_coverage.xml").read_text()
@@ -447,6 +448,8 @@ def test_wcs_parser_reads_axis_labels_from_describe_coverage_fixtures() -> None:
     assert usgs.native_crs == CRS.EPSG_3857
     assert usgs.axis_labels["EPSG:3857"] == ("x", "y")
     assert usgs.native_format == Format.GEOTIFF
+    assert usgs.native_resolution is not None
+    assert usgs.native_resolution[0] == pytest.approx(1.0, rel=1e-6)
 
 
 def test_wcs_service_builds_subset_from_coverage_metadata() -> None:

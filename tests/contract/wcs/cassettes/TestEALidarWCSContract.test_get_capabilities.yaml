@@ -68,3 +68,8 @@ interactions:
       code: 200
       message: OK
 version: 1
+tilearray_cassette:
+  recorded_at: '2026-11-13T05:08:18Z'
+  interactions:
+  - request_uri_sha256: ce541111c9df40a48736eb68f8932968b75a59c85c27f7b2ae6c2fd9f282db50
+    response_body_sha256: 19ea68d3a7aaa3815e25c2fd9b0df48d2df2fe4c08f5cc9a894368ad5cb51cad

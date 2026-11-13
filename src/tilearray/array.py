@@ -840,23 +840,27 @@ def _apply_tile_error_action(
     n_bands: int,
     exc: BaseException | None = None,
 ) -> NDArrayFloat:
+    scaled = "scaleSize" in (request.params or {})
+    failure_message = tile_fetch_failure_message(
+        request.url, message, scaled_getcoverage=scaled
+    )
     if action is TileErrorAction.SOFT_FAIL:
         if progress is not None:
             progress.record_soft_fail(request)
         return _soft_fill_array(request, dtype, soft_fill_value, n_bands)
     if action is TileErrorAction.ABORT_MOSAIC:
         if progress is not None:
-            progress.abort(message)
+            progress.abort(failure_message)
         if exc is not None:
             raise exc
-        raise NetworkError(tile_fetch_failure_message(request.url, message))
+        raise NetworkError(failure_message)
     if action is TileErrorAction.RERAISE:
         # Fetch failures keep today's abort; decode/library errors re-raise as-is.
         if exc is not None:
             raise exc
         if progress is not None:
-            progress.abort(message)
-        raise NetworkError(tile_fetch_failure_message(request.url, message))
+            progress.abort(failure_message)
+        raise NetworkError(failure_message)
     # Exhaustiveness guard for newly added TileErrorAction variants.
     _exhaustive: TileErrorAction = action
     raise AssertionError(f"Unhandled TileErrorAction: {_exhaustive!r}")
@@ -896,17 +900,18 @@ def _load_tile_array(
         progress.tick(request, response)
     if not response.success:
         message = response.error_message or f"HTTP {response.status_code}"
+        scaled = "scaleSize" in (request.params or {})
         if on_tile_error is None or progress is None:
-            if progress is not None:
-                progress.abort(message)
-            raise NetworkError(
-                tile_fetch_failure_message(
-                    request.url,
-                    message,
-                    content_type=response.content_type or None,
-                    body=response.data or None,
-                )
+            failure_message = tile_fetch_failure_message(
+                request.url,
+                message,
+                content_type=response.content_type or None,
+                body=response.data or None,
+                scaled_getcoverage=scaled,
             )
+            if progress is not None:
+                progress.abort(failure_message)
+            raise NetworkError(failure_message)
         action = on_tile_error(
             _tile_error_context(
                 request,

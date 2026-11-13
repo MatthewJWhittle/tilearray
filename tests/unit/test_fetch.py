@@ -857,6 +857,28 @@ def test_policy_retries_zero_ignores_tile_request_default() -> None:
 
 
 @respx.mock
+def test_tile_request_retries_zero_fail_fast_ceiling() -> None:
+    """Explicit TileRequest.retries=0 caps attempts to one under a high policy (#177)."""
+
+    route = respx.get("https://example.com/tile")
+    route.mock(return_value=httpx.Response(503, text="busy"))
+
+    policy = FetchPolicy(
+        max_concurrent=2,
+        rate_limit_per_second=None,
+        retries=4,
+    )
+    response = fetch_tile_with_policy(
+        _tile_request(retries=0, params={"scaleSize": "x(64),y(64)"}),
+        policy,
+    )
+
+    assert response.success is False
+    assert response.status_code == 503
+    assert route.call_count == 1
+
+
+@respx.mock
 def test_ogc_404_does_not_trigger_aimd_or_retry() -> None:
     route = respx.get("https://example.com/tile")
     route.mock(return_value=httpx.Response(404, content=_OGC_INVALID_SUBSETTING_BODY))
