@@ -52,18 +52,24 @@ da = create_array(
     config,
     bbox=(-0.005, 51.495, 0.005, 51.505),  # query lon/lat
     bbox_crs=CRS.EPSG_4326,
-    expand_palette=True,  # full-colour RGB; omit for single-band palette indices
+    expand_palette=True,  # OSM tiles are palette PNGs; expand for plot-ready RGB
 )
 arr = compute_mosaic(da)
-print(arr.shape, da.attrs["mosaic_crs"], da.attrs["transform"])
 # Mosaic is EPSG:3857 (Web Mercator tile union), not lon/lat — bbox_crs= is query only
-# PNG/JPEG mosaics default to uint8 (plot-ready for xarray rgb=)
 arr.plot.imshow(rgb="band", add_colorbar=False)
 ```
 
-**Success:** shape about `(1024, 512, 3)`, mosaic CRS `EPSG:3857`, London street mosaic on the plot. OSM tiles are often palette PNGs: `expand_palette=True` expands to RGB. Include © OpenStreetMap contributors when displaying map imagery.
+<p align="center">
+  <img
+    src="https://matthewjwhittle.github.io/tilearray/_static/guides/osm-london.png"
+    alt="OpenStreetMap mosaic over a small central London bbox (Web Mercator axes)"
+    width="420"
+  />
+</p>
 
-Full plotted walkthrough + CRS cheat sheet: [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html). Other hosts (WCS / WMS / WMTS / GIBS): [usage guides](https://matthewjwhittle.github.io/tilearray/guides/index.html). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html).
+<p align="center"><em>Central London OSM mosaic — mosaic CRS <code>EPSG:3857</code>. Map data © OpenStreetMap contributors.</em></p>
+
+OSM tiles are often palette PNGs, so the snippet passes `expand_palette=True` for colour; omit it to keep single-band palette indices. Full walkthrough + CRS cheat sheet: [quick start](https://matthewjwhittle.github.io/tilearray/quickstart.html). Other hosts (WCS / WMS / WMTS / GIBS): [usage guides](https://matthewjwhittle.github.io/tilearray/guides/index.html). Unknown endpoints: [inspect](https://matthewjwhittle.github.io/tilearray/inspect-endpoint.html).
 
 ## Development
 

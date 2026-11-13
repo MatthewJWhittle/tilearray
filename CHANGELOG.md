@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README / PyPI long description: replace the verbose OSM “Success: shape…” prose with the committed London mosaic figure (absolute GitHub Pages URL so Warehouse renders it). Keep `expand_palette=True` in the OSM snippet for plot-ready RGB; default remains indices
+
 ## [0.3.2] - 2026-11-13
 
 ### Fixed
