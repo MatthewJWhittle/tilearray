@@ -7,6 +7,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Isolated from multi-tile soak / #150 429 noise: one native GetCoverage that
+  # tilearray actually builds. A timeout here means EA did not answer (#177).
+  ea-native-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Set up Python
+      run: uv python install 3.11
+
+    - name: Install dependencies
+      run: |
+        uv sync --dev
+
+    - name: EA native GetCoverage smoke (single request)
+      run: |
+        uv run pytest tests/integration/test_ea_native_getcoverage_smoke.py \
+          -m "net and slow" --timeout=60 --cov-fail-under=0 -vv
+
   net-slow:
     runs-on: ubuntu-latest
     steps:
@@ -26,4 +50,6 @@ jobs:
 
     - name: Run net/slow tests
       run: |
-        uv run pytest -m "net or slow" --timeout=300 --cov-fail-under=0
+        uv run pytest -m "net or slow" \
+          --ignore=tests/integration/test_ea_native_getcoverage_smoke.py \
+          --timeout=300 --cov-fail-under=0

@@ -110,3 +110,10 @@ interactions:
       code: 200
       message: OK
 version: 1
+tilearray_cassette:
+  recorded_at: '2026-11-13T05:08:18Z'
+  interactions:
+  - request_uri_sha256: f501f73e7ae44f175994d5c4d2afaade90c87c45003b10e0bba5c417991d02d0
+    response_body_sha256: 3c64f18efcd652940bd2ba840ddaf7eaa3bd7a0da673dec23097b5537c6bf329
+  - request_uri_sha256: 81860f83e63212afbe9f484462c3684dbe30a748b3b2e5eb9b4274dd7f66aa8a
+    response_body_sha256: 51d134fed65a7b93cfb7a0fe207c43537a935e3f98adb8b0a990d32084deb961

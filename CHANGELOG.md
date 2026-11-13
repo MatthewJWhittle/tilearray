@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- WCS 2.0.1 GetCoverage omits `scaleSize` / `width` / `height` when the requested grid matches DescribeCoverage native resolution (RectifiedGrid `offsetVector`). Always-on `scaleSize` from #165 hung EA LiDAR at native size; non-native requests still send `scaleSize` for MapServer (#154). Scaled GetCoverage failures fail fast (`retries=0`) with a Scaling hint instead of burning every retry (#177)
 - HTTP 404 responses (including OGC `ExceptionReport` bodies such as `InvalidSubsetting`, `InvalidParameterValue`, and `NoSuchCoverage`) fail fast with a single attempt instead of being retried as transient pressure (#170)
 - `fetch_retries=0` is honoured: `TileFetcher` uses `FetchPolicy.retries` alone for the attempt budget, so the `TileRequest.retries` default no longer forces four attempts (#170)
 - Lazy mosaics no longer hang a live `FetchProgress` (with `threading.Lock`) on `DataArray.attrs`; attrs store a JSON-safe registry token so `deepcopy` / `pickle` / `to_zarr` work. Combined with trailing chunk remainders from the snap fix, Zarr accepts the dask chunk layout (#169)

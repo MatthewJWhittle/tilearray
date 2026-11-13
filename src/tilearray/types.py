@@ -411,6 +411,13 @@ class CoverageDescription(BaseModel):
     native_format: Format | None = Field(
         None, description="Preferred output format from DescribeCoverage nativeFormat"
     )
+    native_resolution: tuple[float, float] | None = Field(
+        None,
+        description=(
+            "Native ground sample distance (CRS units per pixel in X and Y) "
+            "from DescribeCoverage RectifiedGrid offsetVector magnitudes"
+        ),
+    )
 
 
 class ServiceCapabilities(BaseModel):
@@ -442,8 +449,9 @@ class TileRequest(BaseModel):
     retries: int = Field(
         default=3,
         description=(
-            "Legacy per-request retry hint; TileFetcher uses FetchPolicy.retries "
-            "(config fetch_retries) as the attempt budget"
+            "Per-request retry hint. TileFetcher uses FetchPolicy.retries "
+            "(config fetch_retries) as the attempt budget; set to 0 for an "
+            "explicit fail-fast ceiling (one attempt), e.g. scaled WCS GetCoverage"
         ),
     )
     output_format: Format | None = None

@@ -411,12 +411,20 @@ def tile_fetch_failure_message(
     *,
     content_type: str | None = None,
     body: bytes | str | None = None,
+    scaled_getcoverage: bool = False,
 ) -> str:
     """NetworkError text for a failed tile GET."""
 
     safe_url = redact_url(url)
     lines = [f"Tile fetch failed for {safe_url}: {message}"]
-    if looks_like_html(body, content_type=content_type) or looks_like_html(message):
+    if scaled_getcoverage:
+        lines.append(
+            "  Hint: this GetCoverage requested WCS Scaling (scaleSize). The server "
+            "did not answer a scaled request (timeout or 5xx) — it may advertise "
+            "Scaling but not implement it. Request native resolution (omit scaleSize) "
+            "or resample on the client."
+        )
+    elif looks_like_html(body, content_type=content_type) or looks_like_html(message):
         lines.append(
             "  Hint: response looks like HTML (auth/portal page), not tile bytes; "
             "check credentials via params=/headers= and base_url."

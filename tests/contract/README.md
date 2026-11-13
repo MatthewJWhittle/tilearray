@@ -75,7 +75,15 @@ uv run pytest tests/contract/wcs/test_wcs_contract.py \
 
 3. Review the diff in `tests/contract/wcs/cassettes/` — confirm no secrets
    appear (Authorization, cookies, API keys are filtered in `conftest.py`).
-4. Commit the updated YAML alongside any assertion changes.
+4. Refresh integrity stamps (required — CI fails when URI/body hashes drift):
+
+```bash
+uv run --no-project python scripts/check_cassettes.py --stamp
+```
+
+5. Commit the updated YAML + stamps alongside any assertion changes.
+   **Do not hand-edit request URIs** while keeping an old response body
+   (`scripts/check_cassettes.py` integrity stamps catch that; see #177).
 
 To force a live run without playback (e.g. debugging), use `--disable-vcr`.
 

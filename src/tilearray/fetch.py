@@ -923,10 +923,14 @@ class TileFetcher:
             headers.setdefault("Accept", request.output_format.value)
 
         host = urlparse(request.url).netloc or request.url
-        # FetchPolicy.retries (from fetch_retries= on configs) is the single
-        # source of truth. Do not max() with TileRequest.retries — that default
-        # (3) silently overrode fetch_retries=0 into four attempts.
+        # FetchPolicy.retries (from fetch_retries= on configs) is the attempt
+        # budget. Do not max() with TileRequest.retries — that default (3)
+        # silently overrode fetch_retries=0 into four attempts (#170).
+        # Explicit TileRequest.retries == 0 is a fail-fast ceiling (e.g. WCS
+        # scaled GetCoverage that must not burn retries on hang/5xx — #177).
         attempts = self._policy.retries + 1
+        if request.retries == 0:
+            attempts = 1
 
         def _before_sleep(retry_state: RetryCallState) -> None:
             if progress is not None:
