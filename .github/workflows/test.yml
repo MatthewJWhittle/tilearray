@@ -106,9 +106,11 @@ jobs:
     - name: Set up Python
       run: uv python install 3.11
 
-    - name: Cassette size and secret-header scan
+    - name: Cassette size, secret-header, and integrity-stamp scan
       run: |
-        uv run --no-project python scripts/check_cassettes.py
+        # --no-project keeps packaging lean; --with pyyaml is required because
+        # check_cassettes.py parses YAML for tilearray_cassette stamp checks.
+        uv run --with pyyaml --no-project python scripts/check_cassettes.py
 
     - name: Fail on ogc-array leftovers (except CHANGELOG history)
       run: |

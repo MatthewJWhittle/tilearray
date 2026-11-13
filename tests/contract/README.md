@@ -78,7 +78,7 @@ uv run pytest tests/contract/wcs/test_wcs_contract.py \
 4. Refresh integrity stamps (required — CI fails when URI/body hashes drift):
 
 ```bash
-uv run --no-project python scripts/check_cassettes.py --stamp
+uv run --with pyyaml --no-project python scripts/check_cassettes.py --stamp
 ```
 
 5. Commit the updated YAML + stamps alongside any assertion changes.
