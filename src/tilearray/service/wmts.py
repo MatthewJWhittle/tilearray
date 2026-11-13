@@ -23,7 +23,7 @@ from .base import BaseService, TileGeometry, register_service
 from .http import (
     compose_http_headers,
     compose_http_params,
-    http_get,
+    http_get_capabilities_text,
     resolve_timeout,
 )
 from .requests import tile_option_passthrough
@@ -333,22 +333,27 @@ class WMTSService(BaseService):
             raise ValidationError("WMTS services require a tile_matrix")
         return cls(url, **config)
 
-    def get_capabilities(self, **params: Any) -> WMTSCapabilities:
+    def get_capabilities(
+        self, *, refresh: bool = False, **params: Any
+    ) -> WMTSCapabilities:
+        request_params = compose_http_params(
+            {
+                "service": "WMTS",
+                "version": self.version,
+                "request": "GetCapabilities",
+            },
+            self.config,
+            params or None,
+        )
+        headers = compose_http_headers(self.config)
         try:
-            response = http_get(
+            body = http_get_capabilities_text(
                 self.base_url,
-                params=compose_http_params(
-                    {
-                        "service": "WMTS",
-                        "version": self.version,
-                        "request": "GetCapabilities",
-                    },
-                    self.config,
-                    params or None,
-                ),
-                headers=compose_http_headers(self.config),
+                params=request_params,
+                headers=headers,
                 timeout=resolve_timeout(self.config),
                 client=self._client,
+                refresh=refresh,
             )
         except httpx.HTTPError as exc:
             raise NetworkError(
@@ -362,7 +367,7 @@ class WMTSService(BaseService):
                 ),
                 cause=exc,
             ) from exc
-        self._capabilities = self.parser.parse_get_capabilities(response.text)
+        self._capabilities = self.parser.parse_get_capabilities(body)
         return self._capabilities
 
     def apply_capabilities(self, capabilities: WMTSCapabilities | None = None) -> None:

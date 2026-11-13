@@ -83,7 +83,7 @@ def test_describe_coverage_connect_error_is_actionable(
     def boom(*args: Any, **kwargs: Any) -> Any:
         raise httpx.ConnectError("[Errno -2] Name or service not known")
 
-    monkeypatch.setattr("tilearray.service.wcs.http_get", boom)
+    monkeypatch.setattr("tilearray.service.wcs.http_get_capabilities_text", boom)
 
     with pytest.raises(NetworkError) as exc_info:
         service.describe_coverage()
@@ -104,7 +104,7 @@ def test_describe_coverage_http_404_includes_status(
         response = httpx.Response(404, request=request, text="not found")
         raise httpx.HTTPStatusError("404", request=request, response=response)
 
-    monkeypatch.setattr("tilearray.service.wcs.http_get", boom)
+    monkeypatch.setattr("tilearray.service.wcs.http_get_capabilities_text", boom)
 
     with pytest.raises(NetworkError) as exc_info:
         service.describe_coverage()
@@ -119,15 +119,10 @@ def test_describe_coverage_html_body_not_blamed_on_coverage_id(
 ) -> None:
     service = WCSService("http://example.com/login", coverage_id="cov-1")
 
-    def fake_get(*args: Any, **kwargs: Any) -> httpx.Response:
-        return httpx.Response(
-            200,
-            text="<!DOCTYPE html><html><body>Login</body></html>",
-            headers={"content-type": "text/html"},
-            request=httpx.Request("GET", "http://example.com/login"),
-        )
+    def fake_caps(*args: Any, **kwargs: Any) -> str:
+        return "<!DOCTYPE html><html><body>Login</body></html>"
 
-    monkeypatch.setattr("tilearray.service.wcs.http_get", fake_get)
+    monkeypatch.setattr("tilearray.service.wcs.http_get_capabilities_text", fake_caps)
 
     with pytest.raises(ParseError) as exc_info:
         service.describe_coverage()
@@ -251,7 +246,7 @@ def test_describe_coverage_redacts_secret_in_base_url(
     def boom(*args: Any, **kwargs: Any) -> Any:
         raise httpx.ConnectError("refused")
 
-    monkeypatch.setattr("tilearray.service.wcs.http_get", boom)
+    monkeypatch.setattr("tilearray.service.wcs.http_get_capabilities_text", boom)
 
     with pytest.raises(NetworkError) as exc_info:
         service.describe_coverage()

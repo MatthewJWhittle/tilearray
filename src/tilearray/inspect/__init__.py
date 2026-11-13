@@ -62,6 +62,7 @@ def inspect_endpoint(
     params: Mapping[str, Any] | None = None,
     timeout: float | None = None,
     client: httpx.Client | None = None,
+    refresh: bool = False,
 ) -> EndpointInspection:
     """Fetch and summarise an OGC endpoint (or validate an XYZ template).
 
@@ -81,6 +82,8 @@ def inspect_endpoint(
         Optional HTTP timeout in seconds (defaults to the shared caps timeout).
     client:
         Optional shared ``httpx.Client`` (tests / callers that own a session).
+    refresh:
+        Bypass the process-local GetCapabilities memo and replace the entry.
     """
 
     header_map = dict(headers or {})
@@ -104,6 +107,7 @@ def inspect_endpoint(
                 url,
                 config=config_bag,
                 client=client,
+                refresh=refresh,
             )
 
     if resolved_type is ServiceTypeEnum.XYZ:
@@ -114,6 +118,7 @@ def inspect_endpoint(
         service_type=resolved_type,
         config=config_bag,
         client=client,
+        refresh=refresh,
     )
     return inspect_capabilities(
         body,

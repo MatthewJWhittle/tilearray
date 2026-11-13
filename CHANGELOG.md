@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
+
 ### Changed
 
 - WMS/WCS default ``chunk_size`` is now ``1024×1024`` when the caller omits it (still coupled to HTTP request size). XYZ/WMTS stay near native ``~256``. Aligns with GDAL WMS default block size; full request≠chunk decoupling is a follow-on (#181, #178)
