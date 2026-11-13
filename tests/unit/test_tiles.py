@@ -13,7 +13,13 @@ import respx
 
 from tilearray.errors import ValidationError
 from tilearray.fetch import FetchPolicy, TileFetcher
-from tilearray.tiles import create_tile_grid, fetch_tile, save_tile, snap_bbox_outward
+from tilearray.tiles import (
+    create_tile_grid,
+    fetch_tile,
+    resolution_axis_tile_sizes,
+    save_tile,
+    snap_bbox_outward,
+)
 from tilearray.types import CRS, BoundingBox, Format, TileRequest, TileResponse
 
 pytestmark = pytest.mark.unit
@@ -32,14 +38,15 @@ def _bbox(min_x: float, min_y: float, max_x: float, max_y: float) -> BoundingBox
     )
 
 
-def test_snap_bbox_outward_expands_fractional_edges() -> None:
+def test_snap_bbox_outward_preserves_rounded_pixel_count() -> None:
+    """Fractional edges align min down; span uses round(span/res), not pixel-union."""
     bbox = _bbox(0.1, 0.1, 1024.1, 512.25)
     snapped = snap_bbox_outward(bbox, resolution=(1.0, 1.0), origin=(0.0, 0.0))
 
     assert snapped.min_x == 0.0
     assert snapped.min_y == 0.0
-    assert snapped.max_x == 1025.0
-    assert snapped.max_y == 513.0
+    assert snapped.max_x == 1024.0
+    assert snapped.max_y == 512.0
 
 
 def test_snap_bbox_outward_leaves_aligned_bbox_unchanged() -> None:
@@ -58,19 +65,34 @@ def test_snap_bbox_outward_rejects_non_positive_resolution() -> None:
         snap_bbox_outward(bbox, resolution=(0.0, 1.0), origin=(0.0, 0.0))
 
 
-def test_snap_bbox_outward_matches_create_tile_grid_pixel_union() -> None:
-    bbox = _bbox(12.2, 8.7, 88.1, 92.4)
-    origin = (0.0, 0.0)
-    resolution = (1.0, 1.0)
-    snapped = snap_bbox_outward(bbox, resolution=resolution, origin=origin)
-    grid = create_tile_grid(
-        bbox, tile_size=(1, 1), origin=origin, resolution=resolution
+def test_snap_bbox_outward_keeps_integer_span_when_unaligned() -> None:
+    """Half-pixel offset must not inflate an exact N-pixel ground span to N+1."""
+    bbox = BoundingBox(
+        min_x=-10297015.0,
+        min_y=4364542.0,
+        max_x=-10291895.0,
+        max_y=4369662.0,
+        crs=CRS.EPSG_3857,
     )
+    resolution = (10.0, 10.0)
+    assert (bbox.max_x - bbox.min_x) / resolution[0] == 512.0
+    assert (bbox.max_y - bbox.min_y) / resolution[1] == 512.0
 
-    assert grid[0, 0, 0] == snapped.min_x
-    assert grid[0, 0, 1] == snapped.min_y
-    assert grid[-1, -1, 2] == snapped.max_x
-    assert grid[-1, -1, 3] == snapped.max_y
+    snapped = snap_bbox_outward(bbox, resolution=resolution, origin=(0.0, 0.0))
+
+    assert (snapped.max_x - snapped.min_x) / resolution[0] == 512.0
+    assert (snapped.max_y - snapped.min_y) / resolution[1] == 512.0
+    assert snapped.min_x == -10297020.0
+    assert snapped.min_y == 4364540.0
+    assert snapped.max_x == -10291900.0
+    assert snapped.max_y == 4369660.0
+
+
+def test_resolution_axis_tile_sizes_keeps_remainder_final() -> None:
+    assert resolution_axis_tile_sizes(512, 256) == [256, 256]
+    assert resolution_axis_tile_sizes(513, 256) == [256, 256, 1]
+    assert resolution_axis_tile_sizes(100, 256) == [100]
+    assert resolution_axis_tile_sizes(1024, 1024) == [1024]
 
 
 def test_create_tile_grid_aligned_bbox() -> None:

@@ -126,7 +126,7 @@ def test_wcs_plan_tiles_with_resolution():
 
 
 def test_wcs_plan_tiles_fractional_leftover_is_not_subpixel():
-    """~0.1 m remainder at 1 m res must not emit a sub-pixel WCS request."""
+    """Fractional span rounds to whole pixels; every request stays ≥ 1 native pixel."""
     service = WCSService(
         "http://example.com/wcs",
         coverage_id="coverage-1",
@@ -138,8 +138,9 @@ def test_wcs_plan_tiles_fractional_leftover_is_not_subpixel():
     tiles = list(service.plan_tiles(bbox, (1024, 1024), resolution=res))
 
     assert tiles
-    assert max(tile.bbox.max_x for tile in tiles) >= bbox.max_x
-    assert max(tile.bbox.max_y for tile in tiles) >= bbox.max_y
+    # round(1024.1) → 1024; count-preserving snap does not invent a 1025th pixel.
+    assert max(tile.bbox.max_x for tile in tiles) == pytest.approx(1024.0)
+    assert max(tile.bbox.max_y for tile in tiles) == pytest.approx(1024.0)
     for tile in tiles:
         assert tile.bbox.max_x - tile.bbox.min_x >= res[0] - 1e-9
         assert tile.bbox.max_y - tile.bbox.min_y >= res[1] - 1e-9
@@ -147,8 +148,8 @@ def test_wcs_plan_tiles_fractional_leftover_is_not_subpixel():
         assert tile.height >= 1
 
 
-def test_wcs_plan_tiles_epsilon_boundary_still_covers_request():
-    """Remainders at/under the old res/10 epsilon must not silently shrink coverage."""
+def test_wcs_plan_tiles_epsilon_boundary_stays_whole_pixels():
+    """Sub-resolution leftovers round away; requests never go sub-pixel."""
     service = WCSService(
         "http://example.com/wcs",
         coverage_id="coverage-1",
@@ -164,8 +165,8 @@ def test_wcs_plan_tiles_epsilon_boundary_still_covers_request():
             crs=CRS.EPSG_27700,
         )
         tiles = list(service.plan_tiles(bbox, (1024, 512), resolution=(1.0, 1.0)))
-        assert max(tile.bbox.max_x for tile in tiles) >= bbox.max_x
-        assert max(tile.bbox.max_y for tile in tiles) >= bbox.max_y
+        assert max(tile.bbox.max_x for tile in tiles) == pytest.approx(1024.0)
+        assert max(tile.bbox.max_y for tile in tiles) == pytest.approx(512.0)
         for tile in tiles:
             assert tile.bbox.max_x - tile.bbox.min_x >= 1.0 - 1e-9
             assert tile.bbox.max_y - tile.bbox.min_y >= 1.0 - 1e-9
@@ -229,10 +230,11 @@ def test_wcs_plan_tiles_respects_custom_origin():
         service.plan_tiles(bbox, (10, 10), resolution=(1.0, 1.0), origin=(100.0, 200.0))
     )
     assert tiles
+    # 10-unit span → 10 px; min floors onto origin+(5,5)*res.
     assert min(tile.bbox.min_x for tile in tiles) == 105.0
     assert min(tile.bbox.min_y for tile in tiles) == 205.0
-    assert max(tile.bbox.max_x for tile in tiles) == 116.0
-    assert max(tile.bbox.max_y for tile in tiles) == 216.0
+    assert max(tile.bbox.max_x for tile in tiles) == 115.0
+    assert max(tile.bbox.max_y for tile in tiles) == 215.0
 
 
 @given(
@@ -267,8 +269,16 @@ def test_wcs_plan_tiles_never_emits_subpixel_requests_property(
     )
     tiles = list(service.plan_tiles(bbox, (chunk, chunk), resolution=(res, res)))
     assert tiles
-    assert max(tile.bbox.max_x for tile in tiles) >= bbox.max_x - 1e-9
-    assert max(tile.bbox.max_y for tile in tiles) >= bbox.max_y - 1e-9
+    n_px = max(1, int(round(width / res)))
+    n_py = max(1, int(round(height / res)))
+    mosaic_w = max(tile.bbox.max_x for tile in tiles) - min(
+        tile.bbox.min_x for tile in tiles
+    )
+    mosaic_h = max(tile.bbox.max_y for tile in tiles) - min(
+        tile.bbox.min_y for tile in tiles
+    )
+    assert mosaic_w == pytest.approx(n_px * res)
+    assert mosaic_h == pytest.approx(n_py * res)
     for tile in tiles:
         assert tile.bbox.max_x - tile.bbox.min_x >= res - 1e-9
         assert tile.bbox.max_y - tile.bbox.min_y >= res - 1e-9

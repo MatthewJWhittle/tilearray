@@ -61,7 +61,8 @@ def test_recommend_grid_shape_snaps_partial_pixels() -> None:
         min_x=0.0, min_y=0.0, max_x=1024.1, max_y=512.09, crs=CRS.EPSG_27700
     )
     grid = recommend_grid_shape(bbox, chunk_size=(1024, 512), resolution=(1.0, 1.0))
-    assert grid == (2, 2)
+    # round(1024.1)→1024, round(512.09)→512 → one chunk on each axis.
+    assert grid == (1, 1)
 
 
 def test_recommend_grid_shape_rejects_bad_inputs() -> None:

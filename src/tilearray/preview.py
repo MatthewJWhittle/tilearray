@@ -388,7 +388,7 @@ def preview_array(
 
     if request.bbox_snap_delta is not None:
         notes.append(
-            "planned bbox was snapped outward onto the resolution grid "
+            "planned bbox was snapped onto the resolution grid "
             "(requested extent preserved in requested_bbox)"
         )
     if service_type_str in {ServiceTypeEnum.XYZ.value, ServiceTypeEnum.WMTS.value}:
