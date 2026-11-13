@@ -13,6 +13,7 @@ Fetching uses **synchronous HTTP** with a process-local concurrency gate:
 - **AIMD** when enabled: ramp under `max_concurrent`, back off on pressure (403/408/429/5xx and known OGC transient responses).
 - Optional **circuit breaker** (EA DSP preset): a burst of pressure freezes concurrency at the floor for a cooldown.
 - Retries with `Retry-After` support; hard failure raises `NetworkError` by default.
+- Timeouts: shorter **connect** vs idle **read** via `httpx.Timeout`, plus a separate wall-clock **tile deadline** per attempt (`fetch_timeout` / `fetch_connect_timeout` / `fetch_tile_deadline`). Idle-read alone is not a whole-response deadline.
 
 Host **presets** (`osm_fetch_defaults`, `ea_dsp_fetch_defaults`) set polite defaults — compose onto `from_url`. Stay at or below preset ceilings on multi-tile cold mosaics. AIMD only helps if Dask can schedule enough tile loads — use `compute_mosaic`.
 
@@ -44,7 +45,7 @@ Soft-fail knobs (`on_tile_error`, `soft_fail`, `soft_fill_value`, `soft_fail_max
 
 | Family | Keys (illustrative) | What consumes them |
 |--------|---------------------|--------------------|
-| **Fetch** | `max_concurrent_requests`, `max_connections`, `fetch_retries`, `fetch_timeout`, `rate_limit_per_second`, `rate_limiter`, AIMD / circuit-breaker fields (`adaptive_concurrency`, `initial_concurrent_requests`, …) | Popped into `FetchPolicy` before planning |
+| **Fetch** | `max_concurrent_requests`, `max_connections`, `fetch_retries`, `fetch_timeout`, `fetch_connect_timeout`, `fetch_tile_deadline`, `rate_limit_per_second`, `rate_limiter`, AIMD / circuit-breaker fields (`adaptive_concurrency`, `initial_concurrent_requests`, …) | Popped into `FetchPolicy` before planning |
 | **Planner** | `resolution`, `origin` | Snap / grid planning; leftovers join tile options |
 | **Identity / protocol** | `headers`, `params`, coverage / layer / style / TMS / zoom… | Leftover options → service / tile request |
 

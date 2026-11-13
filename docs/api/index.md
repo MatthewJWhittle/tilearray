@@ -162,7 +162,7 @@ Pass plan-time ``on_tile_error=`` (or ``soft_fail=True``) into {py:func}`~tilear
    FetchPolicy
 ```
 
-`FetchPolicy` sets concurrency ceilings, retries, timeouts, rate limits, and optional AIMD / circuit-breaker behaviour for polite tile HTTP. Service configs expose the same knobs and build a policy via `.fetch_policy()`.
+`FetchPolicy` sets concurrency ceilings, retries, timeouts, rate limits, and optional AIMD / circuit-breaker behaviour for polite tile HTTP. Connect vs idle-read use `httpx.Timeout(connect=, read=)`; `tile_deadline` is a separate wall-clock budget per tile attempt (idle-read alone is not a whole-response deadline). Service configs expose the same knobs (`fetch_timeout`, `fetch_connect_timeout`, `fetch_tile_deadline`) and build a policy via `.fetch_policy()`.
 
 `FetchPolicy.max_concurrent` is the **shared process-local gate** ceiling (threads in one process share it; separate OS processes / distributed workers do not). Per-call politeness is `call_max_concurrent` (or a lower `max_concurrent_requests` override on `create_array`). `compute_mosaic(..., num_workers=)` sizes Dask **thread** workers only — see {doc}`../polite-fetch`.
 

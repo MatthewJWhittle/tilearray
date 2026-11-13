@@ -119,7 +119,23 @@ class ServiceConfig(BaseModel):
     fetch_timeout: float = Field(
         default=30.0,
         gt=0,
-        description="Per-tile HTTP read/connect timeout in seconds",
+        description=(
+            "Per-tile HTTP idle-read timeout in seconds (also the default "
+            "wall-clock tile deadline unless fetch_tile_deadline is set)"
+        ),
+    )
+    fetch_connect_timeout: float = Field(
+        default=10.0,
+        gt=0,
+        description="TCP connect timeout in seconds (httpx connect=)",
+    )
+    fetch_tile_deadline: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Hard wall-clock deadline per tile attempt in seconds; defaults to "
+            "fetch_timeout when omitted"
+        ),
     )
     rate_limit_per_second: float | None = Field(
         default=2.0,
@@ -171,11 +187,18 @@ class ServiceConfig(BaseModel):
     def fetch_policy(self) -> FetchPolicy:
         """Build a :class:`~tilearray.fetch.FetchPolicy` from this configuration."""
 
+        deadline = (
+            self.fetch_tile_deadline
+            if self.fetch_tile_deadline is not None
+            else self.fetch_timeout
+        )
         return FetchPolicy(
             max_concurrent=self.max_concurrent_requests,
             max_connections=self.max_connections,
             retries=self.fetch_retries,
-            timeout=self.fetch_timeout,
+            connect_timeout=self.fetch_connect_timeout,
+            read_timeout=self.fetch_timeout,
+            tile_deadline=deadline,
             rate_limit_per_second=self.rate_limit_per_second,
             rate_limiter=self.rate_limiter,
             adaptive_concurrency=self.adaptive_concurrency,
@@ -202,6 +225,9 @@ class ServiceConfig(BaseModel):
             kwargs["params"] = dict(self.params)
         # Plan-time caps / DescribeCoverage share the tile fetch timeout policy.
         kwargs["fetch_timeout"] = self.fetch_timeout
+        kwargs["fetch_connect_timeout"] = self.fetch_connect_timeout
+        if self.fetch_tile_deadline is not None:
+            kwargs["fetch_tile_deadline"] = self.fetch_tile_deadline
         return kwargs
 
     def tile_kwargs(self) -> dict[str, Any]:

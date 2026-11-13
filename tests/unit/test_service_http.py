@@ -69,9 +69,23 @@ def test_make_sync_client_applies_timeout_and_limits() -> None:
     limits = httpx.Limits(max_connections=4, max_keepalive_connections=2)
     client = make_sync_client(timeout=12.5, limits=limits)
     try:
-        assert client.timeout.connect == 12.5
+        # Single float is the read budget; connect uses the default ceiling (capped).
+        assert client.timeout.read == 12.5
+        assert client.timeout.connect == 10.0
         # httpx stores Limits on the transport; constructing with limits= is enough.
         assert limits.max_connections == 4
         assert isinstance(client, httpx.Client)
+    finally:
+        client.close()
+
+
+@pytest.mark.unit
+def test_make_sync_client_splits_connect_and_read() -> None:
+    client = make_sync_client(connect_timeout=3.0, read_timeout=22.0)
+    try:
+        assert client.timeout.connect == 3.0
+        assert client.timeout.read == 22.0
+        assert client.timeout.write == 22.0
+        assert client.timeout.pool == 3.0
     finally:
         client.close()

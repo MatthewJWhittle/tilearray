@@ -41,11 +41,18 @@ LIVE_TILE_RTT_S = 1.5
 
 
 def _policy_from_service_defaults(defaults: dict[str, object]) -> FetchPolicy:
+    read_timeout = float(defaults["fetch_timeout"])  # type: ignore[arg-type]
     return FetchPolicy(
         max_concurrent=int(defaults["max_concurrent_requests"]),  # type: ignore[arg-type]
         max_connections=defaults.get("max_connections"),  # type: ignore[arg-type]
         retries=int(defaults["fetch_retries"]),  # type: ignore[arg-type]
-        timeout=float(defaults["fetch_timeout"]),  # type: ignore[arg-type]
+        connect_timeout=float(
+            defaults.get("fetch_connect_timeout", 10.0)  # type: ignore[arg-type]
+        ),
+        read_timeout=read_timeout,
+        tile_deadline=float(
+            defaults.get("fetch_tile_deadline", read_timeout)  # type: ignore[arg-type]
+        ),
         rate_limit_per_second=defaults.get("rate_limit_per_second"),  # type: ignore[arg-type]
         adaptive_concurrency=bool(defaults.get("adaptive_concurrency", False)),
         initial_concurrent=int(
@@ -255,7 +262,8 @@ def run_healthy_scenario() -> list[str]:
         static_ea_policy = FetchPolicy(
             max_concurrent=2,
             retries=4,
-            timeout=60.0,
+            read_timeout=60.0,
+            tile_deadline=60.0,
             rate_limit_per_second=1.0,
             adaptive_concurrency=False,
         )
@@ -264,7 +272,8 @@ def run_healthy_scenario() -> list[str]:
         fixed2_policy = FetchPolicy(
             max_concurrent=2,
             retries=4,
-            timeout=60.0,
+            read_timeout=60.0,
+            tile_deadline=60.0,
             rate_limit_per_second=None,
             adaptive_concurrency=False,
         )

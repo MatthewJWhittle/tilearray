@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- `FetchPolicy.timeout` replaced by distinct **`connect_timeout`**, **`read_timeout`**, and **`tile_deadline`** (wall-clock per tile attempt). httpx clients use `Timeout(connect=, read=)`; the deadline is enforced separately so drip stalls cannot outlive idle-read alone. Service configs add `fetch_connect_timeout` and optional `fetch_tile_deadline` (`fetch_timeout` remains the idle-read / default deadline). Attrs summaries use the new keys; legacy `timeout` is still accepted when reconstituting a policy (#182, #178)
+
 ### Added
 
+- Per-tile wall-clock deadline with modest scaling by request `width`×`height` (relative to a 256×256 reference, capped at 4×). No request hedging (#182)
 - Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
 
 ### Changed
