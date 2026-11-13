@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `create_array` reuses the decoded band-count probe for the matching mosaic tile when fetch identity (URL + params) and shape/dtype match, so preserve-policy formats no longer download that tile twice (#183, #178)
 - WMS/WCS default ``chunk_size`` is now ``1024×1024`` when the caller omits it (still coupled to HTTP request size). XYZ/WMTS stay near native ``~256``. Aligns with GDAL WMS default block size; full request≠chunk decoupling is a follow-on (#181, #178)
 - README / PyPI long description: replace the verbose OSM “Success: shape…” prose with the committed London mosaic figure (absolute GitHub Pages URL so Warehouse renders it). Keep `expand_palette=True` in the OSM snippet for plot-ready RGB; default remains indices
 

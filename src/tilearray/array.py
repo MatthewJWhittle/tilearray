@@ -51,7 +51,10 @@ from ._planning import (
     organize_tiles as _organize_tiles,
 )
 from ._planning import (
-    probe_tile_band_count as _probe_tile_band_count,
+    probe_array_fits_tile as _probe_array_fits_tile,
+)
+from ._planning import (
+    probe_tile_bands as _probe_tile_bands,
 )
 from ._planning import (
     resolve_decoder as _resolve_decoder,
@@ -546,7 +549,9 @@ def create_array(
 
     # Probe ignores soft-fail: shape discovery must stay hard. Skip
     # coverage-empty pads so an out-of-extent SW tile cannot abort create.
-    n_bands = _probe_tile_band_count(
+    # When the probe downloaded a sample, reuse it for the matching mosaic
+    # tile (same fetch identity + shape/dtype) so tile 0 is not fetched twice.
+    band_probe = _probe_tile_bands(
         _first_fetchable_tile_request(tile_requests),
         cache_path,
         decoder,
@@ -555,6 +560,7 @@ def create_array(
         effective_format,
         band_policy=resolved_band_policy,
     )
+    n_bands = band_probe.n_bands
 
     blocks: list[list[DaskArray]] = []
     for row_tiles in tile_grid:
@@ -562,18 +568,38 @@ def create_array(
         for tile_request in row_tiles:
             height = tile_request.height or chunk_height
             width = tile_request.width or chunk_width
-            delayed_tile = _delayed_call(
-                _load_tile_array,
-                tile_request,
-                cache_path,
-                decoder,
-                dtype_np,
-                fetch_policy,
-                progress,
-                tile_error_handler,
-                soft_fill_value,
-                n_bands,
-            )
+            if (
+                band_probe.array is not None
+                and band_probe.request is not None
+                and _probe_array_fits_tile(
+                    band_probe.array,
+                    band_probe.request,
+                    tile_request,
+                    dtype=dtype_np,
+                    n_bands=n_bands,
+                    chunk_height=chunk_height,
+                    chunk_width=chunk_width,
+                )
+            ):
+                delayed_tile = _delayed_call(
+                    _reuse_probed_tile_array,
+                    band_probe.array,
+                    tile_request,
+                    progress,
+                )
+            else:
+                delayed_tile = _delayed_call(
+                    _load_tile_array,
+                    tile_request,
+                    cache_path,
+                    decoder,
+                    dtype_np,
+                    fetch_policy,
+                    progress,
+                    tile_error_handler,
+                    soft_fill_value,
+                    n_bands,
+                )
             block_shape = (height, width, n_bands) if n_bands > 1 else (height, width)
             row_blocks.append(
                 da_from_delayed(
@@ -864,6 +890,29 @@ def _apply_tile_error_action(
     # Exhaustiveness guard for newly added TileErrorAction variants.
     _exhaustive: TileErrorAction = action
     raise AssertionError(f"Unhandled TileErrorAction: {_exhaustive!r}")
+
+
+def _reuse_probed_tile_array(
+    array: NDArrayFloat,
+    request: TileRequest,
+    progress: FetchProgress | None = None,
+) -> NDArrayFloat:
+    """Place a pre-decoded band-probe sample as a mosaic tile (no second fetch)."""
+
+    if progress is not None:
+        progress.check_not_aborted()
+        progress.tick(
+            request,
+            TileResponse(
+                data=b"",
+                content_type="application/octet-stream",
+                status_code=200,
+                headers={},
+                url=request.url,
+                success=True,
+            ),
+        )
+    return np.array(array, copy=True)
 
 
 def _load_tile_array(
