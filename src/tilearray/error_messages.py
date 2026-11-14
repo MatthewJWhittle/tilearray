@@ -21,6 +21,7 @@ from .types import Format
 
 # Bound cleaned body snippets in failed-tile error_message text.
 FAILED_TILE_BODY_SNIP_CHARS = 200
+_HTTP_STATUS_IN_MESSAGE = re.compile(r"(?i)\bHTTP\s+(\d{3})\b")
 
 # Query keys that must never appear in exception text.
 _SECRET_QUERY_KEYS = frozenset(
@@ -513,18 +514,51 @@ def coverage_build_service_config_message(
     )
 
 
+def _status_from_tile_message(message: str) -> int | None:
+    """Parse ``HTTP NNN`` from a tile error message when status was not passed."""
+
+    match = _HTTP_STATUS_IN_MESSAGE.search(message)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def _header_has_retry_after(headers: Mapping[str, str] | None) -> bool:
+    if not headers:
+        return False
+    return any(key.lower() == "retry-after" for key in headers)
+
+
+def _is_rate_limit_status(
+    status: int | None, headers: Mapping[str, str] | None
+) -> bool:
+    """True for 429, or 503 with ``Retry-After`` (common throttle signal)."""
+
+    if status == 429:
+        return True
+    return status == 503 and _header_has_retry_after(headers)
+
+
 def tile_fetch_failure_message(
     url: str,
     message: str,
     *,
     content_type: str | None = None,
     body: bytes | str | None = None,
+    status_code: int | None = None,
+    headers: Mapping[str, str] | None = None,
     scaled_getcoverage: bool = False,
 ) -> str:
     """NetworkError text for a failed tile GET."""
 
     safe_url = redact_url(url)
     lines = [f"Tile fetch failed for {safe_url}: {message}"]
+    status = (
+        status_code if status_code is not None else _status_from_tile_message(message)
+    )
+    htmlish = looks_like_html(body, content_type=content_type) or looks_like_html(
+        message
+    )
     if scaled_getcoverage:
         lines.append(
             "  Hint: this GetCoverage requested WCS Scaling (scaleSize). The server "
@@ -532,12 +566,23 @@ def tile_fetch_failure_message(
             "Scaling but not implement it. Request native resolution (omit scaleSize) "
             "or resample on the client."
         )
-    elif looks_like_html(body, content_type=content_type) or looks_like_html(message):
+    elif _is_rate_limit_status(status, headers):
+        # HTML 429 bodies (e.g. EA LiDAR) must not look like auth/portal pages.
+        lines.append(
+            "  Hint: the server is rate-limiting (too many requests); retry later, "
+            "lower max_concurrent_requests, or use cache_dir and rerun."
+        )
+    elif status is not None and status >= 500:
+        lines.append(
+            "  Hint: server-side error or overloaded host; retry later or lower "
+            "max_concurrent_requests."
+        )
+    elif htmlish and (status is None or status in {200, 401, 403}):
         lines.append(
             "  Hint: response looks like HTML (auth/portal page), not tile bytes; "
             "check credentials via params=/headers= and base_url."
         )
-    elif "401" in message or "403" in message:
+    elif status in {401, 403} or "401" in message or "403" in message:
         lines.append(
             "  Hint: auth/forbidden — pass credentials via params=/headers=; "
             "soft-fail does not paper over 401."

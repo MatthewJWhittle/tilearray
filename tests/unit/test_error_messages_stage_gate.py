@@ -23,13 +23,14 @@ from typing import Any
 import httpx
 import pytest
 
-from tilearray.error_messages import redact_url
+from tilearray.error_messages import redact_url, tile_fetch_failure_message
 from tilearray.errors import (
     ConfigurationError,
     NetworkError,
     ParseError,
     ValidationError,
 )
+from tilearray.fetch import _response_from_httpx
 from tilearray.service.base import detect_service_type
 from tilearray.service.config import WCSConfig
 from tilearray.service.wcs import WCSParser, WCSService
@@ -233,6 +234,61 @@ def test_redact_url_masks_secret_query_keys() -> None:
     assert "super-secret" not in redacted
     assert "key=***" in redacted
     assert "coverageId=abc" in redacted
+
+
+def test_tile_html_429_hint_blames_rate_limiting_not_credentials() -> None:
+    """EA-style HTML 429 must read as rate limiting, not an auth/portal page."""
+
+    url = "https://example.com/wcs"
+    html = (
+        b"<html><body><p>You are making too many requests. "
+        b"Please try again later.</p></body></html>"
+    )
+    response = httpx.Response(
+        429,
+        content=html,
+        headers={"content-type": "text/html"},
+        request=httpx.Request("GET", url),
+    )
+    tile_response = _response_from_httpx(response, url)
+    message = tile_fetch_failure_message(
+        url,
+        tile_response.error_message or "",
+        content_type=tile_response.content_type or None,
+        body=html,
+        status_code=tile_response.status_code,
+        headers=tile_response.headers,
+    )
+    lowered = message.lower()
+    assert "429" in message
+    assert "rate-limiting" in lowered or "too many requests" in lowered
+    assert "credential" not in lowered
+    assert "auth/portal" not in lowered
+
+
+def test_tile_html_200_portal_hint_still_mentions_credentials() -> None:
+    """HTML 200 portal pages keep the auth/credentials hint."""
+
+    url = "https://example.com/portal/tile"
+    html = b"<!DOCTYPE html><html><body>Login</body></html>"
+    response = httpx.Response(
+        200,
+        content=html,
+        headers={"content-type": "text/html"},
+        request=httpx.Request("GET", url),
+    )
+    tile_response = _response_from_httpx(response, url)
+    message = tile_fetch_failure_message(
+        url,
+        tile_response.error_message or "",
+        content_type=tile_response.content_type or None,
+        body=html,
+        status_code=tile_response.status_code,
+        headers=tile_response.headers,
+    )
+    lowered = message.lower()
+    assert "credential" in lowered or "auth/portal" in lowered
+    assert "rate-limiting" not in lowered
 
 
 def test_describe_coverage_redacts_secret_in_base_url(
