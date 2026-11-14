@@ -14,6 +14,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
    create_array
    load_array
    compute_mosaic
+   write_zarr
    preview_array
    recommend_grid_shape
    choose_matrix_for_resolution
