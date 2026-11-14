@@ -132,6 +132,24 @@ These fail **before** a useful mosaic exists. Exception text names what was wron
 
 Pass `cache_dir=` to `create_array` / `load_array` (and the same path to `preview_array` when preflighting) to reuse tile bytes across runs. Each tile is `{sha256}.tile` + `{sha256}.meta` keyed by URL/params/format/bbox/size. Warm reads sniff the body when response headers lie (e.g. multipart WCS). Warm hits skip the network for that tile but cold siblings still share the host concurrency gate. Clear the directory if you change decode expectations, auth params, or suspect corrupt cache entries. `preview_array(...).summary()` reports warm/cold counts for the planned request set before you spend a cold compute.
 
+## Large mosaics to Zarr
+
+Plain `to_zarr` writes mosaic attrs when the store is created — before tiles finish. An aborted or killed run can leave a full-shape store that looks finished while unread chunks are fill/NaN. Prefer {py:func}`~tilearray.write_zarr` so the group attr `tilearray_complete` is set only after `compute_mosaic` succeeds (`false` / missing means incomplete):
+
+```python
+from tilearray import create_array, write_zarr
+
+da = create_array(cfg, bbox, bbox_crs=..., cache_dir="./tiles")
+write_zarr(da, "out.zarr", name="elevation")  # requires optional zarr
+
+import xarray as xr
+ds = xr.open_zarr("out.zarr")
+if not ds.attrs.get("tilearray_complete"):
+    raise RuntimeError("incomplete Zarr write — re-run with the same cache_dir")
+```
+
+Resume: call `create_array` again with the **same** `cache_dir` and `write_zarr` to the same path (`mode="w"` replaces the store; warm cache tiles skip the network).
+
 ## Private / keyed hosts
 
 Every `*Config` already accepts `params=` (extra query) and `headers=` (extra HTTP headers) — same path as public hosts. Put credentials there at plan time; there is no separate auth client.

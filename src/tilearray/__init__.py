@@ -69,6 +69,7 @@ from .types import (
     TileResponse,
     WCSResponse,
 )
+from .zarr_write import write_zarr
 
 __all__ = [
     "__version__",
@@ -77,6 +78,7 @@ __all__ = [
     "compute_mosaic",
     "create_array",
     "load_array",
+    "write_zarr",
     "preview_array",
     "recommend_grid_shape",
     "choose_matrix_for_resolution",
