@@ -478,6 +478,13 @@ class TileResponse(BaseModel):
     url: str
     success: bool
     error_message: str | None = None
+    ogc_exception_code: str | None = Field(
+        default=None,
+        description=(
+            "OGC ExceptionReport / ServiceException ``exceptionCode`` (or ``code``) "
+            "when the failure body was a parsed OGC exception; else None"
+        ),
+    )
 
 
 class WCSResponse(BaseModel):

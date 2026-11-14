@@ -225,6 +225,7 @@ def decode_tile_bytes(
         url=stub_response.url,
         success=stub_response.success,
         error_message=stub_response.error_message,
+        ogc_exception_code=stub_response.ogc_exception_code,
     )
     payload = (unwrapper or identity_unwrapper)(raw_bytes, effective_response)
     data = reader(payload)

@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - WMS/WCS default ``chunk_size`` is now ``1024×1024`` when the caller omits it (still coupled to HTTP request size). XYZ/WMTS stay near native ``~256``. Aligns with GDAL WMS default block size; full request≠chunk decoupling is a follow-on (#181, #178)
 - README / PyPI long description: replace the verbose OSM “Success: shape…” prose with the committed London mosaic figure (absolute GitHub Pages URL so Warehouse renders it). Keep `expand_palette=True` in the OSM snippet for plot-ready RGB; default remains indices
 
+### Fixed
+
+- Failed-tile ``NetworkError`` text parses OGC ``ExceptionReport`` / ``ServiceExceptionReport`` bodies so ``exceptionCode``, ``locator``, and ``ExceptionText`` appear even when the XML preamble is longer than 200 characters; HTML error pages (e.g. 429) show visible text after tag stripping. ``TileResponse.ogc_exception_code`` carries the parsed code for soft-fail / pressure matching (#200)
+
 ## [0.3.2] - 2026-11-13
 
 ### Fixed
