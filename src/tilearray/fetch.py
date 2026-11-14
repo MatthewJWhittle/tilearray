@@ -30,8 +30,12 @@ from ._http_client import (
     shape_httpx_timeout,
 )
 from .error_messages import (
+    FAILED_TILE_BODY_SNIP_CHARS,
+    format_ogc_tile_error_message,
+    html_visible_text,
     looks_like_html,
     looks_like_ogc_exception_report,
+    parse_ogc_exception,
     redact_url,
 )
 from .errors import NetworkError, ValidationError
@@ -751,7 +755,7 @@ def _response_from_httpx(response: httpx.Response, request_url: str) -> TileResp
     # so callers get HTML/OGC hints instead of Pillow "cannot identify image".
     if response.status_code == 200:
         if looks_like_html(body, content_type=content_type):
-            body_snip = response.text[:200]
+            body_snip = html_visible_text(response.text)
             return TileResponse(
                 data=b"",
                 content_type=content_type,
@@ -764,7 +768,21 @@ def _response_from_httpx(response: httpx.Response, request_url: str) -> TileResp
                 ),
             )
         if looks_like_ogc_exception_report(body):
-            body_snip = response.text[:200]
+            parsed = parse_ogc_exception(body)
+            if parsed is not None:
+                return TileResponse(
+                    data=b"",
+                    content_type=content_type,
+                    status_code=response.status_code,
+                    headers=dict(response.headers),
+                    url=redact_url(str(response.url)),
+                    success=False,
+                    error_message=format_ogc_tile_error_message(
+                        response.status_code, parsed, not_tile_bytes=True
+                    ),
+                    ogc_exception_code=parsed.code,
+                )
+            body_snip = response.text[:FAILED_TILE_BODY_SNIP_CHARS]
             return TileResponse(
                 data=b"",
                 content_type=content_type,
@@ -785,14 +803,25 @@ def _response_from_httpx(response: httpx.Response, request_url: str) -> TileResp
             success=True,
         )
 
-    body_snip = response.text[:200]
-    error_msg = f"HTTP {response.status_code}: {body_snip}"
+    ogc_code: str | None = None
     if looks_like_html(response.text, content_type=content_type):
+        body_snip = html_visible_text(response.text)
         error_msg = (
             f"HTTP {response.status_code} (HTML body, not tile bytes): {body_snip}"
         )
     elif looks_like_ogc_exception_report(response.text):
-        error_msg = f"HTTP {response.status_code} (OGC ExceptionReport): {body_snip}"
+        parsed = parse_ogc_exception(response.text)
+        if parsed is not None:
+            error_msg = format_ogc_tile_error_message(response.status_code, parsed)
+            ogc_code = parsed.code
+        else:
+            body_snip = response.text[:FAILED_TILE_BODY_SNIP_CHARS]
+            error_msg = (
+                f"HTTP {response.status_code} (OGC ExceptionReport): {body_snip}"
+            )
+    else:
+        body_snip = response.text[:FAILED_TILE_BODY_SNIP_CHARS]
+        error_msg = f"HTTP {response.status_code}: {body_snip}"
     return TileResponse(
         data=b"",
         content_type=content_type,
@@ -801,6 +830,7 @@ def _response_from_httpx(response: httpx.Response, request_url: str) -> TileResp
         url=redact_url(str(response.url)),
         success=False,
         error_message=error_msg,
+        ogc_exception_code=ogc_code,
     )
 
 

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `write_zarr(da, path, …)` writes a lazy mosaic with `compute=False` + `compute_mosaic`, then sets group attr `tilearray_complete` (plus tile count / finish time, or the error on failure). Aborted or killed runs leave the flag false or absent so `xr.open_zarr` can tell a partial store from a finished one; re-run with the same `cache_dir` to resume (#198)
 - Per-tile wall-clock deadline with modest scaling by request `width`×`height` (relative to a 256×256 reference, capped at 4×). No request hedging (#182)
 - Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
 
@@ -22,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `create_array` reuses the decoded band-count probe for the matching mosaic tile when fetch identity (URL + params) and shape/dtype match, so preserve-policy formats no longer download that tile twice (#183, #178)
 - WMS/WCS default ``chunk_size`` is now ``1024×1024`` when the caller omits it (still coupled to HTTP request size). XYZ/WMTS stay near native ``~256``. Aligns with GDAL WMS default block size; full request≠chunk decoupling is a follow-on (#181, #178)
 - README / PyPI long description: replace the verbose OSM “Success: shape…” prose with the committed London mosaic figure (absolute GitHub Pages URL so Warehouse renders it). Keep `expand_palette=True` in the OSM snippet for plot-ready RGB; default remains indices
+
+### Fixed
+
+- Failed-tile ``NetworkError`` text parses OGC ``ExceptionReport`` / ``ServiceExceptionReport`` bodies so ``exceptionCode``, ``locator``, and ``ExceptionText`` appear even when the XML preamble is longer than 200 characters; HTML error pages (e.g. 429) show visible text after tag stripping. ``TileResponse.ogc_exception_code`` carries the parsed code for soft-fail / pressure matching (#200)
+- Tile fetch failures with an HTML **429** body (and HTML **503** with `Retry-After`) hint at rate limiting / too many requests instead of blaming credentials or an auth portal page (#150)
 
 ## [0.3.2] - 2026-11-13
 
