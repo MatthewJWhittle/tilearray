@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Failed-tile ``NetworkError`` text parses OGC ``ExceptionReport`` / ``ServiceExceptionReport`` bodies so ``exceptionCode``, ``locator``, and ``ExceptionText`` appear even when the XML preamble is longer than 200 characters; HTML error pages (e.g. 429) show visible text after tag stripping. ``TileResponse.ogc_exception_code`` carries the parsed code for soft-fail / pressure matching (#200)
+- Tile fetch failures with an HTML **429** body (and HTML **503** with `Retry-After`) hint at rate limiting / too many requests instead of blaming credentials or an auth portal page (#150)
 
 ## [0.3.2] - 2026-11-13
 

@@ -126,7 +126,7 @@ These fail **before** a useful mosaic exists. Exception text names what was wron
 | `Coverage '…' is not available` / no coverage description | Wrong or misspelled CoverageId | Use {py:func}`~tilearray.inspect_endpoint` (or `service.get_capabilities()`) and pick a listed CoverageId; for EA DSP, id looks like `UUID__…` and ≠ the URL path slug |
 | `Unknown coverage` / `Unknown layer` from `build_config` | Identifier not in GetCapabilities | Print the inspection summary and pass an exact listed id — no fuzzy rename |
 | `Unable to detect service type` | Ambiguous URL | Pass `service_type=` to `inspect_endpoint`, or a typed config / `{z}/{x}/{y}` for XYZ |
-| Tile `NetworkError` after plan succeeded | Host reject / politeness / transient | Keep preset ceilings; prefer `compute_mosaic`; HTML tile bodies usually mean auth/portal URL. OGC bodies include the server `exceptionCode` / text (e.g. `NoSuchCoverage`); HTML 429 pages show the visible sentence, not raw markup |
+| Tile `NetworkError` after plan succeeded | Host reject / politeness / transient | Keep preset ceilings; prefer `compute_mosaic`. OGC bodies include the server `exceptionCode` / text (e.g. `NoSuchCoverage`). HTML **429** (or 503 with `Retry-After`) means rate limiting — lower concurrency or retry later; HTML **200/401/403** usually means an auth/portal URL |
 
 ## Disk cache
 
