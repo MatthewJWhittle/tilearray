@@ -22,6 +22,7 @@ _REQUIRED_PUBLIC = frozenset(
         "compute_mosaic",
         "create_array",
         "load_array",
+        "write_zarr",
         "inspect_endpoint",
         "inspect_capabilities",
         "EndpointInspection",

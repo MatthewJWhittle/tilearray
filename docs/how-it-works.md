@@ -98,8 +98,9 @@ Each planned tile is a Dask chunk on a shared mosaic graph (request table + ``ma
 | `load_array(...)` | Eager sugar for `create_array(..., compute=True)`. Prefer lazy + `compute_mosaic` on primary paths. |
 | `da.compute()` | Works, but default Dask worker count can under-use a high fetch ceiling. |
 | `cache_dir=...` | Optional on-disk tile cache; warm hits skip the network. |
+| {py:func}`tilearray.write_zarr` | Persist a lazy mosaic; sets group attr `tilearray_complete` only after a successful write (optional `zarr` package). |
 
-Multi-tile mosaics show a tqdm-style progress bar by default (`show_progress=False` or `TILEARRAY_PROGRESS=0` to quiet). Memory tracks **what you compute** — not automatically the whole AOI.
+Multi-tile mosaics show a tqdm-style progress bar by default (`show_progress=False` or `TILEARRAY_PROGRESS=0` to quiet). Memory tracks **what you compute** — not automatically the whole AOI. For large AOIs written to Zarr, use `write_zarr` (not bare `to_zarr`) so a killed run is marked incomplete; resume with the same `cache_dir` — see {doc}`troubleshooting`.
 
 ---
 
