@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from ._version import __version__
+from .pressure import PressureClassifier, PressureSignature
 
 __all__ = [
     "OSM_TILE_TEMPLATE",
@@ -23,6 +24,28 @@ __all__ = [
     "osm_fetch_defaults",
     "ea_dsp_fetch_defaults",
 ]
+
+# EA LiDAR WCS occasionally returns a one-off HTTP 404 for an in-extent
+# subset that succeeds on the next attempt. Cap retries so permanent 404s
+# (out-of-extent / unknown coverage) still fail after a few tries, without
+# changing the global fail-fast 404 default for other hosts.
+_EA_TRANSIENT_404_MAX_RETRIES = 2
+
+
+def _ea_dsp_pressure_classifier() -> PressureClassifier:
+    """Built-in signatures plus a bounded EA-only retryable 404 rule."""
+
+    classifier = PressureClassifier()
+    classifier.register(
+        PressureSignature(
+            name="ea_transient_404",
+            status_codes=frozenset({404}),
+            retryable=True,
+            max_retries=_EA_TRANSIENT_404_MAX_RETRIES,
+        )
+    )
+    return classifier
+
 
 OSM_TILE_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
@@ -77,6 +100,10 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
     Uses in-process AIMD concurrency (starts modest, ramps on success, backs off
     hard on 403/408/429 / timeouts) with a bounded ceiling. No fixed per-second throttle;
     ``Retry-After`` and transient 403/408/429/503 are handled by the polite fetch gate.
+
+    Also registers a host-specific pressure rule so a one-off HTTP 404 can retry
+    a couple of times (EA sometimes 404s an in-extent subset that succeeds on
+    the next attempt). Other hosts keep the global fail-fast 404 default.
     """
 
     return {
@@ -92,4 +119,5 @@ def ea_dsp_fetch_defaults() -> dict[str, Any]:
         "rate_limit_per_second": None,
         "fetch_retries": 4,
         "fetch_timeout": 60.0,
+        "pressure_classifier": _ea_dsp_pressure_classifier(),
     }

@@ -12,7 +12,13 @@ _BODY_SAMPLE_BYTES = 4096
 
 @dataclass(frozen=True)
 class PressureSignature:
-    """Pluggable match rule: HTTP status plus optional body substrings."""
+    """Pluggable match rule: HTTP status plus optional body substrings.
+
+    ``max_retries`` caps how many times this signature may retry within one
+    tile fetch (``None`` uses the full ``FetchPolicy.retries`` budget). Host
+    presets that see rare transient 404s can register a bounded signature
+    without burning the whole retry budget on a permanent miss.
+    """
 
     name: str
     status_codes: frozenset[int]
@@ -20,6 +26,7 @@ class PressureSignature:
     retryable: bool = True
     aimd_pressure: bool = True
     circuit_breaker: bool = False
+    max_retries: int | None = None
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,7 @@ class ResponseClassification:
     retryable: bool = False
     aimd_pressure: bool = False
     circuit_breaker: bool = False
+    max_retries: int | None = None
 
 
 def _gateway_status_codes() -> frozenset[int]:
@@ -91,6 +99,7 @@ class PressureClassifier:
                 retryable=signature.retryable,
                 aimd_pressure=signature.aimd_pressure,
                 circuit_breaker=signature.circuit_breaker,
+                max_retries=signature.max_retries,
             )
 
         return ResponseClassification()

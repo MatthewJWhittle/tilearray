@@ -131,6 +131,24 @@ def test_custom_signature_is_pluggable() -> None:
     assert result.signature.name == "custom_soft_418"
 
 
+def test_host_signature_can_bound_404_retries() -> None:
+    classifier = PressureClassifier()
+    classifier.register(
+        PressureSignature(
+            name="host_transient_404",
+            status_codes=frozenset({404}),
+            max_retries=2,
+        )
+    )
+
+    result = classifier.classify(httpx.Response(404, text="missing"))
+
+    assert result.retryable is True
+    assert result.max_retries == 2
+    assert result.signature is not None
+    assert result.signature.name == "host_transient_404"
+
+
 def test_body_substrings_require_any_match() -> None:
     classifier = PressureClassifier(
         signatures=(

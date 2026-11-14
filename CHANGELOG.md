@@ -16,9 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-tile wall-clock deadline with modest scaling by request `width`×`height` (relative to a 256×256 reference, capped at 4×). No request hedging (#182)
 - Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
 
+### Fixed
+
+- `ea_dsp_fetch_defaults()` registers a host-specific pressure rule so a one-off HTTP 404 on Environment Agency WCS can retry up to twice (three attempts total) instead of aborting the mosaic on the first miss. Permanent EA 404s still fail after that bounded budget. The global fail-fast 404 default for other hosts is unchanged (#199)
+
 ### Changed
 
 - Mosaic Dask graphs use a request-table + ``map_blocks`` build (stackstac-style) so HighLevelGraph **layer count stays O(1)** as tile count grows, instead of per-tile ``delayed`` / ``from_delayed`` fan-out. Fetch politeness, soft-fail, probe reuse, and mosaic pixels/metadata are unchanged (#185, #178)
+- `PressureSignature` accepts optional ``max_retries`` so a host preset can make a status retryable without burning the full ``fetch_retries`` budget (#199)
 - `create_array` reuses the decoded band-count probe for the matching mosaic tile when fetch identity (URL + params) and shape/dtype match, so preserve-policy formats no longer download that tile twice (#183, #178)
 - WMS/WCS default ``chunk_size`` is now ``1024×1024`` when the caller omits it (still coupled to HTTP request size). XYZ/WMTS stay near native ``~256``. Aligns with GDAL WMS default block size; full request≠chunk decoupling is a follow-on (#181, #178)
 - README / PyPI long description: replace the verbose OSM “Success: shape…” prose with the committed London mosaic figure (absolute GitHub Pages URL so Warehouse renders it). Keep `expand_palette=True` in the OSM snippet for plot-ready RGB; default remains indices

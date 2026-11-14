@@ -226,6 +226,9 @@ def resolve_fetch_policy(
         forbidden_cooldown_seconds=service_options.pop(
             "forbidden_cooldown_seconds", base.forbidden_cooldown_seconds
         ),
+        pressure_classifier=service_options.pop(
+            "pressure_classifier", base.pressure_classifier
+        ),
         call_max_concurrent=call_max_concurrent,
         max_tile_requests=int(
             service_options.pop("max_tile_requests", base.max_tile_requests)
