@@ -569,6 +569,7 @@ def test_wmts_projected_tms_autoload_capabilities_network_error() -> None:
         tile_matrix_set="EPSG:25833",
         tile_matrix="utm33_2",
         crs=CRS.parse("EPSG:25833"),
+        fetch_retries=0,
     )
     bbox = BoundingBox(
         min_x=300_000.0,

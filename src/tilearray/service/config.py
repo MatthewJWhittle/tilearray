@@ -114,7 +114,10 @@ class ServiceConfig(BaseModel):
     fetch_retries: int = Field(
         default=3,
         ge=0,
-        description="Retry attempts for retryable HTTP/network tile fetch failures",
+        description=(
+            "Retry budget for retryable HTTP/network failures on tile fetches and "
+            "plan-time GETs (GetCapabilities / DescribeCoverage); attempts = retries + 1"
+        ),
     )
     fetch_timeout: float = Field(
         default=30.0,
@@ -223,9 +226,10 @@ class ServiceConfig(BaseModel):
             kwargs["headers"] = dict(self.headers)
         if self.params:
             kwargs["params"] = dict(self.params)
-        # Plan-time caps / DescribeCoverage share the tile fetch timeout policy.
+        # Plan-time caps / DescribeCoverage share the tile fetch timeout/retry policy.
         kwargs["fetch_timeout"] = self.fetch_timeout
         kwargs["fetch_connect_timeout"] = self.fetch_connect_timeout
+        kwargs["fetch_retries"] = self.fetch_retries
         if self.fetch_tile_deadline is not None:
             kwargs["fetch_tile_deadline"] = self.fetch_tile_deadline
         return kwargs
