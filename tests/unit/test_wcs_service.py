@@ -342,6 +342,7 @@ def test_wcs_service_get_coverage_handles_request_errors() -> None:
         coverage_id="coverage-1",
         output_format=Format.GEOTIFF,
         crs=CRS.EPSG_4326,
+        fetch_retries=0,
     )
     service.set_coverage_metadata(
         CoverageDescription(

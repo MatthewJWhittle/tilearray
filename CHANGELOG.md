@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - WMS/WCS default ``chunk_size`` is now ``1024×1024`` when the caller omits it (still coupled to HTTP request size). XYZ/WMTS stay near native ``~256``. Aligns with GDAL WMS default block size; full request≠chunk decoupling is a follow-on (#181, #178)
 - README / PyPI long description: replace the verbose OSM “Success: shape…” prose with the committed London mosaic figure (absolute GitHub Pages URL so Warehouse renders it). Keep `expand_palette=True` in the OSM snippet for plot-ready RGB; default remains indices
 
+### Fixed
+
+- Plan-time GetCapabilities / DescribeCoverage GETs retry transient failures (transport errors, 408 / 429 / 5xx) with `Retry-After` or exponential backoff, using the same pressure classification and `fetch_retries` budget as tile fetches. Client errors (400 / 401 / 403 / 404) still fail on the first response; exhausted errors name the attempt count (#196)
+
 ## [0.3.2] - 2026-11-13
 
 ### Fixed

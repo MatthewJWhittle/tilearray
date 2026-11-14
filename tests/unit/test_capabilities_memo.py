@@ -247,7 +247,10 @@ def test_html_capabilities_body_is_not_memoised() -> None:
 
 @pytest.mark.unit
 @respx.mock
-def test_failed_capabilities_response_is_not_memoised() -> None:
+def test_failed_capabilities_response_is_not_memoised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("tilearray.service.http.time.sleep", lambda _s: None)
     route = respx.get("https://example.com/wcs").mock(
         return_value=httpx.Response(503, text="busy")
     )
@@ -255,14 +258,19 @@ def test_failed_capabilities_response_is_not_memoised() -> None:
         http_get_capabilities_text(
             "https://example.com/wcs",
             params={"service": "WCS", "request": "GetCapabilities"},
+            retries=2,
         )
+    # Exhausted failures are never memoised; the next call still hits the network.
+    exhausted_calls = route.call_count
+    assert exhausted_calls == 3
     route.mock(return_value=httpx.Response(200, text=WCS_CAPS))
     body = http_get_capabilities_text(
         "https://example.com/wcs",
         params={"service": "WCS", "request": "GetCapabilities"},
+        retries=0,
     )
     assert body == WCS_CAPS
-    assert route.call_count == 2
+    assert route.call_count == exhausted_calls + 1
 
 
 @pytest.mark.unit

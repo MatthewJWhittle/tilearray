@@ -102,7 +102,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 
 ## Failures are loud (by default)
 
-After retries, a failed tile raises {py:exc}`tilearray.NetworkError`. Mosaics do **not** succeed with silent NaN holes; sibling in-flight tile fetches abort when the session fails hard. Capabilities / DescribeCoverage HTTP failures on the WCS/WMTS **httpx** path also raise {py:exc}`tilearray.NetworkError`.
+After retries, a failed tile raises {py:exc}`tilearray.NetworkError`. Mosaics do **not** succeed with silent NaN holes; sibling in-flight tile fetches abort when the session fails hard. Capabilities / DescribeCoverage plan-time GETs use the same transient-retry budget (`fetch_retries`) for transport errors and 408 / 429 / 5xx; client errors (400 / 401 / 403 / 404) still fail on the first response. Exhausted caps / DescribeCoverage failures raise {py:exc}`tilearray.NetworkError` naming the attempt count.
 
 Bad inputs and setup mistakes raise other {py:exc}`tilearray.TileArrayError` subclasses (`ValidationError`, `ParseError`, `ConfigurationError`) rather than bare `ValueError` / `RuntimeError`. Catch the hierarchy (or a subclass), not bare builtins, when handling library failures.
 
