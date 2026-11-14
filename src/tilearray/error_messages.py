@@ -6,7 +6,11 @@ and what to check next. No new public exception types.
 
 from __future__ import annotations
 
+import html
+import re
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
@@ -14,6 +18,9 @@ import httpx
 
 from .errors import ParseError, TileArrayError
 from .types import Format
+
+# Bound cleaned body snippets in failed-tile error_message text.
+FAILED_TILE_BODY_SNIP_CHARS = 200
 
 # Query keys that must never appear in exception text.
 _SECRET_QUERY_KEYS = frozenset(
@@ -125,6 +132,105 @@ def looks_like_ogc_exception_report(body: str | bytes | None) -> bool:
     )
 
 
+def _xml_local_name(tag: str) -> str:
+    if "}" in tag:
+        return tag.rsplit("}", 1)[-1]
+    return tag
+
+
+@dataclass(frozen=True)
+class OgcExceptionInfo:
+    """Parsed fields from an OGC ExceptionReport / ServiceExceptionReport."""
+
+    code: str | None = None
+    locator: str | None = None
+    text: str | None = None
+
+
+def parse_ogc_exception(body: str | bytes) -> OgcExceptionInfo | None:
+    """Parse ``exceptionCode`` / ``locator`` / ExceptionText from an OGC body.
+
+    Supports OWS 1.1/2.0 ``ExceptionReport`` and WCS 1.x ``ServiceExceptionReport``.
+    Returns ``None`` when the XML is malformed or no exception element is found.
+    """
+
+    if isinstance(body, bytes):
+        text = body.decode("utf-8", errors="replace")
+    else:
+        text = body
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return None
+
+    exception_el: ET.Element | None = None
+    for el in root.iter():
+        local = _xml_local_name(el.tag).lower()
+        if local in {"exception", "serviceexception"}:
+            exception_el = el
+            break
+    if exception_el is None:
+        return None
+
+    code = (
+        exception_el.attrib.get("exceptionCode")
+        or exception_el.attrib.get("code")
+        or None
+    )
+    locator = exception_el.attrib.get("locator") or None
+    detail: str | None = None
+    for child in exception_el:
+        if _xml_local_name(child.tag).lower() == "exceptiontext":
+            detail = (child.text or "").strip() or None
+            break
+    if detail is None:
+        # WCS 1.x ServiceException puts the message in the element body.
+        detail = (exception_el.text or "").strip() or None
+    if not code and not locator and not detail:
+        return None
+    return OgcExceptionInfo(code=code, locator=locator, text=detail)
+
+
+def html_visible_text(
+    body: str | bytes,
+    *,
+    max_chars: int = FAILED_TILE_BODY_SNIP_CHARS,
+) -> str:
+    """Strip tags / scripts and collapse whitespace for HTML error snippets."""
+
+    if isinstance(body, bytes):
+        text = body.decode("utf-8", errors="replace")
+    else:
+        text = body
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:max_chars]
+
+
+def format_ogc_tile_error_message(
+    status_code: int,
+    info: OgcExceptionInfo,
+    *,
+    not_tile_bytes: bool = False,
+) -> str:
+    """Build failed-tile ``error_message`` from a parsed OGC exception."""
+
+    if info.code:
+        head = f"OGC {info.code}"
+    else:
+        head = "OGC ExceptionReport"
+    if info.locator:
+        head = f"{head}, locator={info.locator}"
+    if not_tile_bytes:
+        head = f"{head}, not tile bytes"
+    detail = (info.text or "").strip()
+    if detail:
+        return f"HTTP {status_code} ({head}): {detail[:FAILED_TILE_BODY_SNIP_CHARS]}"
+    return f"HTTP {status_code} ({head})"
+
+
 def ogc_exception_report_message(
     body: str | bytes,
     *,
@@ -133,26 +239,28 @@ def ogc_exception_report_message(
 ) -> str:
     """Human-readable ParseError / ServiceError text for an OGC exception body."""
 
-    if isinstance(body, bytes):
-        text = body.decode("utf-8", errors="replace")
-    else:
-        text = body
-    detail: str | None = None
-    # Prefer ExceptionText / ServiceException body content when present.
-    for marker in ("ExceptionText", "ServiceException"):
-        start = text.find(f"<{marker}")
-        if start < 0:
-            start = text.find(f"<{marker.lower()}")
-        if start < 0:
-            continue
-        gt = text.find(">", start)
-        end = text.find(f"</{marker}", gt)
-        if end < 0:
-            end = text.find(f"</{marker.lower()}", gt)
-        if gt >= 0 and end > gt:
-            detail = text[gt + 1 : end].strip()
-            if detail:
-                break
+    parsed = parse_ogc_exception(body)
+    detail = parsed.text if parsed is not None else None
+    if detail is None:
+        if isinstance(body, bytes):
+            text = body.decode("utf-8", errors="replace")
+        else:
+            text = body
+        # Prefer ExceptionText / ServiceException body content when present.
+        for marker in ("ExceptionText", "ServiceException"):
+            start = text.find(f"<{marker}")
+            if start < 0:
+                start = text.find(f"<{marker.lower()}")
+            if start < 0:
+                continue
+            gt = text.find(">", start)
+            end = text.find(f"</{marker}", gt)
+            if end < 0:
+                end = text.find(f"</{marker.lower()}", gt)
+            if gt >= 0 and end > gt:
+                detail = text[gt + 1 : end].strip()
+                if detail:
+                    break
     safe = redact_url(url)
     lines = [
         f"{protocol} GetCapabilities returned an OGC ExceptionReport for {safe}, "
