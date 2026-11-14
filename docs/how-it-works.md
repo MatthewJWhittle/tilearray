@@ -72,11 +72,11 @@ Shared decode unwraps and reads JPEG/PNG/GeoTIFF (including multipart WCS). JPEG
 ## 4 · Place and mosaic
 
 ```{image} _static/guides/how-it-works-04-mosaic.png
-:alt: Delayed tile blocks assembling into a north-up xarray DataArray
+:alt: Tile blocks assembling into a north-up xarray DataArray
 :width: 740px
 ```
 
-Each tile is a Dask delayed block. Blocks are stitched **north-up** into one `xarray.DataArray` with coordinates and attrs. Shape is known when the graph is built; tile bytes load when something computes.
+Each planned tile is a Dask chunk on a shared mosaic graph (request table + ``map_blocks``, not one Delayed layer per tile). Chunks are stitched **north-up** into one `xarray.DataArray` with coordinates and attrs. Shape is known when the graph is built; tile bytes load when something computes.
 
 **Georef contract:** `attrs["transform"]` is a north-up Affine from the **planned** mosaic bbox + shape. `y`/`x` are **pixel centres** (row 0 = north). `bbox_crs=` is the query CRS (`attrs["bbox_crs"]`). For WCS / WMS, `attrs["mosaic_crs"]` matches that query. For **XYZ / slippy WMTS**, the mosaic is labelled `EPSG:3857` over the tile-union extent. For **WMTS with TileMatrixSet metadata**, the mosaic follows the matrix SupportedCRS. No client-side warp — see {doc}`user-terms` and {doc}`design-principles`.
 

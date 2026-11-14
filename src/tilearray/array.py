@@ -11,16 +11,13 @@ from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     cast,
 )
 
 import numpy as np
 import xarray as xr
-from dask.array import block as da_block
-from dask.array import concatenate as da_concatenate
-from dask.array import from_delayed as da_from_delayed
-from dask.delayed import Delayed, delayed
+from dask.array import from_array as da_from_array
+from dask.base import tokenize
 
 from ._entry import from_public_args as _from_public_args
 from ._planning import (
@@ -100,12 +97,6 @@ if TYPE_CHECKING:
     from dask.array.core import Array as DaskArray
 else:  # pragma: no cover - typing aid
     DaskArray = Any
-
-
-def _delayed_call(func: Callable[..., Any], *args: Any) -> Delayed:
-    """Typed helper around ``dask.delayed`` to satisfy static analysis."""
-
-    return cast(Delayed, delayed(func)(*args))
 
 
 def _attrs_from_compute_target(obj: Any) -> dict[str, Any] | None:
@@ -457,8 +448,8 @@ def create_array(
         CI; ``True`` forces a bar.
     on_tile_error:
         Plan-time tile error handler (e.g.
-        :func:`~tilearray.soft_fail_exhausted_tiles`). Bound into each
-        delayed load before the graph is built.
+        :func:`~tilearray.soft_fail_exhausted_tiles`). Bound into the
+        mosaic load graph before it is built.
     soft_fail:
         Convenience switch for the library soft-fill preset. Default remains
         hard-fail + sibling abort after retries. Prefer an explicit
@@ -562,55 +553,26 @@ def create_array(
     )
     n_bands = band_probe.n_bands
 
-    blocks: list[list[DaskArray]] = []
-    for row_tiles in tile_grid:
-        row_blocks: list[DaskArray] = []
-        for tile_request in row_tiles:
-            height = tile_request.height or chunk_height
-            width = tile_request.width or chunk_width
-            if (
-                band_probe.array is not None
-                and band_probe.request is not None
-                and _probe_array_fits_tile(
-                    band_probe.array,
-                    band_probe.request,
-                    tile_request,
-                    dtype=dtype_np,
-                    n_bands=n_bands,
-                    chunk_height=chunk_height,
-                    chunk_width=chunk_width,
-                )
-            ):
-                delayed_tile = _delayed_call(
-                    _reuse_probed_tile_array,
-                    band_probe.array,
-                    tile_request,
-                    progress,
-                )
-            else:
-                delayed_tile = _delayed_call(
-                    _load_tile_array,
-                    tile_request,
-                    cache_path,
-                    decoder,
-                    dtype_np,
-                    fetch_policy,
-                    progress,
-                    tile_error_handler,
-                    soft_fill_value,
-                    n_bands,
-                )
-            block_shape = (height, width, n_bands) if n_bands > 1 else (height, width)
-            row_blocks.append(
-                da_from_delayed(
-                    delayed_tile,
-                    shape=block_shape,
-                    dtype=dtype_np,
-                )
-            )
-        blocks.append(row_blocks)
-
-    data = _assemble_tile_mosaic(blocks, n_bands)
+    # Request-table + map_blocks: HighLevelGraph layer count stays O(1) as tile
+    # count grows (stackstac-style; not per-tile delayed/from_delayed).
+    probed_array = (
+        cast(NDArrayFloat, band_probe.array) if band_probe.array is not None else None
+    )
+    data = _build_tile_mosaic_dask_array(
+        tile_grid,
+        n_bands=n_bands,
+        dtype=dtype_np,
+        chunk_height=chunk_height,
+        chunk_width=chunk_width,
+        cache_path=cache_path,
+        decoder=decoder,
+        fetch_policy=fetch_policy,
+        progress=progress,
+        on_tile_error=tile_error_handler,
+        soft_fill_value=soft_fill_value,
+        probed_array=probed_array,
+        probed_request=band_probe.request,
+    )
 
     attrs = request.array_attrs(service, tile_options, effective_format)
     attrs[_FETCH_POLICY_ATTR] = _fetch_policy_summary(fetch_policy)
@@ -624,7 +586,7 @@ def create_array(
         progress=None,
     )
     # Token only on attrs (JSON-/pickle-safe); live session stays in the registry
-    # and in delayed tile closures. compute_mosaic resolves the token to refresh
+    # and in map_blocks closures. compute_mosaic resolves the token to refresh
     # tilearray_tile_errors.
     attrs[_PROGRESS_REF_ATTR] = register_fetch_progress(progress)
 
@@ -788,24 +750,145 @@ def _geospatial_attrs(
     return attrs
 
 
-def _assemble_tile_mosaic(
-    blocks: list[list[DaskArray]],
+def _mosaic_chunk_sizes(
+    tile_grid: list[list[TileRequest]],
+    *,
+    chunk_height: int,
+    chunk_width: int,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Return ``(row_heights, col_widths)`` for the planned tile grid."""
+
+    if not tile_grid or not tile_grid[0]:
+        raise ValidationError("tile grid is empty")
+    row_heights = tuple((row[0].height or chunk_height) for row in tile_grid)
+    col_widths = tuple(
+        (tile_grid[0][j].width or chunk_width) for j in range(len(tile_grid[0]))
+    )
+    return row_heights, col_widths
+
+
+def _load_request_table_block(
+    block: np.ndarray,
+    cache_dir: Path | None,
+    decoder: TileDecoder,
+    dtype: np.dtype[Any],
+    fetch_policy: FetchPolicy | None,
+    progress: FetchProgress | None,
+    on_tile_error: TileErrorHandler | None,
+    soft_fill_value: float,
     n_bands: int,
+    probed_array: NDArrayFloat | None,
+    probed_request: TileRequest | None,
+    chunk_height: int,
+    chunk_width: int,
+    block_info: dict[str, Any] | None = None,
+) -> NDArrayFloat:
+    """Load one mosaic tile from a 1×1 request-table block (map_blocks)."""
+
+    del block_info  # Dask may pass chunk location; identity comes from the request.
+    request = cast(TileRequest, np.asarray(block, dtype=object).reshape(-1)[0])
+    if (
+        probed_array is not None
+        and probed_request is not None
+        and _probe_array_fits_tile(
+            probed_array,
+            probed_request,
+            request,
+            dtype=dtype,
+            n_bands=n_bands,
+            chunk_height=chunk_height,
+            chunk_width=chunk_width,
+        )
+    ):
+        return _reuse_probed_tile_array(probed_array, request, progress)
+    return _load_tile_array(
+        request,
+        cache_dir,
+        decoder,
+        dtype,
+        fetch_policy,
+        progress,
+        on_tile_error,
+        soft_fill_value,
+        n_bands,
+    )
+
+
+def _build_tile_mosaic_dask_array(
+    tile_grid: list[list[TileRequest]],
+    *,
+    n_bands: int,
+    dtype: np.dtype[Any],
+    chunk_height: int,
+    chunk_width: int,
+    cache_path: Path | None,
+    decoder: TileDecoder,
+    fetch_policy: FetchPolicy | None,
+    progress: FetchProgress | None,
+    on_tile_error: TileErrorHandler | None,
+    soft_fill_value: float,
+    probed_array: NDArrayFloat | None,
+    probed_request: TileRequest | None,
 ) -> DaskArray:
-    """
-    Stitch decoded tile blocks into a single mosaic array.
+    """Build a mosaic via request table + ``map_blocks`` (O(1) HLG layers)."""
 
-    ``da.block`` maps the tile grid onto the leading axes of each block. For
-    multi-band tiles ``(y, x, band)`` that incorrectly concatenates along
-    ``band`` instead of ``x``. Concatenate explicitly on spatial axes instead.
-    """
+    rows = len(tile_grid)
+    cols = len(tile_grid[0]) if rows else 0
+    if rows == 0 or cols == 0:
+        raise ValidationError("tile grid is empty")
 
+    table = np.empty((rows, cols), dtype=object)
+    for i, row_tiles in enumerate(tile_grid):
+        if len(row_tiles) != cols:
+            raise ValidationError("tile grid rows must share a common column count")
+        for j, tile_request in enumerate(row_tiles):
+            table[i, j] = tile_request
+
+    row_heights, col_widths = _mosaic_chunk_sizes(
+        tile_grid, chunk_height=chunk_height, chunk_width=chunk_width
+    )
+    request_table = da_from_array(
+        table,
+        chunks=(1, 1),
+        inline_array=True,
+        name="tilearray-requests-" + tokenize(table),
+    )
+    load_args = (
+        cache_path,
+        decoder,
+        dtype,
+        fetch_policy,
+        progress,
+        on_tile_error,
+        soft_fill_value,
+        n_bands,
+        probed_array,
+        probed_request,
+        chunk_height,
+        chunk_width,
+    )
     if n_bands > 1:
-        row_arrays = [
-            cast(DaskArray, da_concatenate(row_blocks, axis=1)) for row_blocks in blocks
-        ]
-        return cast(DaskArray, da_concatenate(row_arrays, axis=0))
-    return cast(DaskArray, da_block(blocks))
+        return cast(
+            DaskArray,
+            request_table.map_blocks(
+                _load_request_table_block,
+                *load_args,
+                dtype=dtype,
+                chunks=(row_heights, col_widths, (n_bands,)),
+                new_axis=2,
+                meta=np.empty((0, 0, 0), dtype=dtype),
+            ),
+        )
+    return cast(
+        DaskArray,
+        request_table.map_blocks(
+            _load_request_table_block,
+            *load_args,
+            dtype=dtype,
+            chunks=(row_heights, col_widths),
+            meta=np.empty((0, 0), dtype=dtype),
+        ),
+    )
 
 
 def _soft_fill_array(
