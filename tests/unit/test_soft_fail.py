@@ -161,10 +161,10 @@ def _patch_grid(
 
 @respx.mock
 def test_default_hard_fail_still_aborts() -> None:
-    progress = FetchProgress(total=2)
+    progress = FetchProgress(total=1, deferred_max_concurrent=1)
     policy = FetchPolicy(max_concurrent=2, rate_limit_per_second=None, retries=0)
-    respx.get("https://example.com/fail").mock(
-        return_value=httpx.Response(500, text="fail")
+    route = respx.get("https://example.com/fail").mock(
+        return_value=httpx.Response(500, text="fail", headers={"Retry-After": "0"})
     )
     request = TileRequest(
         url="https://example.com/fail",
@@ -174,10 +174,14 @@ def test_default_hard_fail_still_aborts() -> None:
         height=2,
         retries=0,
     )
-    with pytest.raises(NetworkError):
+    with pytest.raises(NetworkError, match="deferred retry pass failed"):
         _load_tile_array(request, None, _decoder, np.dtype("float32"), policy, progress)
     assert progress.is_aborted() is True
     assert progress.soft_failed == 0
+    assert progress.deferred_parked == 1
+    assert progress.deferred_failed == 1
+    # Primary attempt + one deferred pass attempt (retries=0 → 1 each).
+    assert route.call_count == 2
 
 
 @respx.mock
@@ -340,14 +344,10 @@ def test_mosaic_without_soft_fail_aborts(
 
 @respx.mock
 def test_retries_still_run_before_soft_fill() -> None:
-    progress = FetchProgress(total=1)
+    progress = FetchProgress(total=1, deferred_max_concurrent=1)
     policy = FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=2)
     route = respx.get("https://example.com/flaky").mock(
-        side_effect=[
-            httpx.Response(500, text="err"),
-            httpx.Response(500, text="err"),
-            httpx.Response(500, text="err"),
-        ]
+        return_value=httpx.Response(500, text="err", headers={"Retry-After": "0"})
     )
     request = TileRequest(
         url="https://example.com/flaky",
@@ -370,8 +370,10 @@ def test_retries_still_run_before_soft_fill() -> None:
     )
     assert np.isnan(array).all()
     assert progress.is_aborted() is False
-    # attempts = policy.retries + 1 → 3
-    assert route.call_count == 3
+    # Primary retries+1 plus one deferred pass of retries+1 before soft-fill.
+    assert route.call_count == 6
+    assert progress.deferred_parked == 1
+    assert progress.deferred_failed == 1
 
 
 @respx.mock
@@ -441,9 +443,9 @@ def test_auth_401_still_aborts_with_soft_preset() -> None:
 
 @respx.mock
 def test_exhausted_429_still_aborts_with_soft_preset() -> None:
-    progress = FetchProgress(total=1)
+    progress = FetchProgress(total=1, deferred_max_concurrent=1)
     policy = FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=0)
-    respx.get("https://example.com/rate").mock(
+    route = respx.get("https://example.com/rate").mock(
         return_value=httpx.Response(429, text="slow", headers={"Retry-After": "0"})
     )
     request = TileRequest(
@@ -467,6 +469,9 @@ def test_exhausted_429_still_aborts_with_soft_preset() -> None:
             1,
         )
     assert progress.is_aborted() is True
+    assert progress.deferred_parked == 1
+    assert progress.deferred_failed == 1
+    assert route.call_count == 2
 
 
 def test_soft_fail_threshold_aborts_mosaic(

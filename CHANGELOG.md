@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Exhausted **pressure** tile failures (429 / 5xx / timeout / transport) no longer abort the whole mosaic on the first unlucky tile. Those tiles park (≤10% of the plan), siblings finish, then one deferred retry pass runs at the AIMD floor (honouring ``Retry-After``). Permanent client errors (401 / 403 / 404) and decode/parse still fail fast. Soft-fail semantics are unchanged. Counts appear on ``tilearray_tile_errors`` / ``fetch_summary`` (`deferred_parked` / `deferred_recovered` / `deferred_failed`). Mosaic still either completes in full or raises — no silent holes (#197)
 - Mosaic Dask graphs use a request-table + ``map_blocks`` build (stackstac-style) so HighLevelGraph **layer count stays O(1)** as tile count grows, instead of per-tile ``delayed`` / ``from_delayed`` fan-out. Fetch politeness, soft-fail, probe reuse, and mosaic pixels/metadata are unchanged (#185, #178)
 - `create_array` reuses the decoded band-count probe for the matching mosaic tile when fetch identity (URL + params) and shape/dtype match, so preserve-policy formats no longer download that tile twice (#183, #178)
 - WMS/WCS default ``chunk_size`` is now ``1024×1024`` when the caller omits it (still coupled to HTTP request size). XYZ/WMTS stay near native ``~256``. Aligns with GDAL WMS default block size; full request≠chunk decoupling is a follow-on (#181, #178)
