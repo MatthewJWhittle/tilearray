@@ -12,7 +12,7 @@ Fetching uses **synchronous HTTP** with a process-local concurrency gate:
 - Fixed ceiling + optional rate limit when adaptive mode is off (OSM preset).
 - **AIMD** when enabled: ramp under `max_concurrent`, back off on pressure (403/408/429/5xx and known OGC transient responses).
 - Optional **circuit breaker** (EA DSP preset): a burst of pressure freezes concurrency at the floor for a cooldown.
-- Retries with `Retry-After` support; hard failure raises `NetworkError` by default.
+- Retries with `Retry-After` support; exhausted **pressure** failures (429/5xx/timeout/transport) get one deferred retry pass after siblings finish (AIMD floor; park budget ~10%) before hard `NetworkError`. Permanent client errors still fail fast.
 - Timeouts: shorter **connect** vs idle **read** via `httpx.Timeout`, plus a separate wall-clock **tile deadline** per attempt (`fetch_timeout` / `fetch_connect_timeout` / `fetch_tile_deadline`). Idle-read alone is not a whole-response deadline.
 
 Host **presets** (`osm_fetch_defaults`, `ea_dsp_fetch_defaults`) set polite defaults — compose onto `from_url`. Stay at or below preset ceilings on multi-tile cold mosaics. AIMD only helps if Dask can schedule enough tile loads — use `compute_mosaic`.
@@ -29,13 +29,13 @@ Host **presets** (`osm_fetch_defaults`, `ea_dsp_fetch_defaults`) set polite defa
 
 ## Soft-fail phases
 
-Opt-in `on_tile_error` / `soft_fail=True` can soft-fill exhausted tile-local failures after retries without aborting siblings. Soft-fail is plan-time only — the default remains hard `NetworkError` + sibling abort.
+Opt-in `on_tile_error` / `soft_fail=True` can soft-fill exhausted tile-local failures after retries (and any deferred pressure pass) without aborting siblings. Soft-fail is plan-time only — the default remains hard `NetworkError` + sibling abort after recovery attempts.
 
 | Phase | When | Soft-fail? |
 |-------|------|------------|
 | Pre-graph band probe | `create_array` discovers band count for `preserve` formats (GeoTIFF / PNG / JPEG) | **Hard** — probe ignores soft-fail; pass `band_policy="first_band"` to skip the probe |
 | Post-graph tile load | Mosaic tiles after the Dask graph exists | Soft-fill exhausted tile-local 404 / 5xx / transport; record `attrs["tilearray_tile_errors"]` |
-| Auth / rate-limit | HTTP 401 or exhausted 429 | **Hard abort** (siblings stop) |
+| Auth / rate-limit | HTTP 401 or exhausted 429 (after deferred pass) | **Hard abort** (siblings stop) |
 
 Soft-fail knobs (`on_tile_error`, `soft_fail`, `soft_fill_value`, `soft_fail_max_fraction`) are **named** parameters on `create_array` / `load_array`, not keys in the ``**service_options`` bag.
 

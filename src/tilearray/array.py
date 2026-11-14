@@ -69,8 +69,10 @@ from .fetch import (
     FetchPolicy,
     FetchProgress,
     ProgressCallback,
+    is_deferred_retry_failure,
     lookup_fetch_progress,
     register_fetch_progress,
+    retry_after_seconds,
     unregister_fetch_progress,
 )
 from .placement import fit_tile_to_request
@@ -281,11 +283,17 @@ def _tile_errors_attr_summary(
         "armed": handler is not None,
         "soft_failed": 0,
         "aborted": False,
+        "deferred_parked": 0,
+        "deferred_recovered": 0,
+        "deferred_failed": 0,
         "examples": [],
     }
     if progress is not None:
         summary["soft_failed"] = progress.soft_failed_count()
         summary["aborted"] = progress.is_aborted()
+        summary["deferred_parked"] = progress.deferred_parked
+        summary["deferred_recovered"] = progress.deferred_recovered
+        summary["deferred_failed"] = progress.deferred_failed
         summary["examples"] = list(progress.errors[:5])
     return summary
 
@@ -313,6 +321,9 @@ def _refresh_tile_errors_attr_from_progress(
         "armed": existing.get("armed", False),
         "soft_failed": progress.soft_failed_count(),
         "aborted": progress.is_aborted(),
+        "deferred_parked": progress.deferred_parked,
+        "deferred_recovered": progress.deferred_recovered,
+        "deferred_failed": progress.deferred_failed,
         "examples": list(progress.errors[:5]),
     }
 
@@ -536,6 +547,7 @@ def create_array(
         total=len(tile_requests),
         on_progress=progress_callback,
         call_max_concurrent=fetch_policy.call_max_concurrent,
+        deferred_max_concurrent=fetch_policy.min_concurrent,
     )
 
     # Probe ignores soft-fail: shape discovery must stay hard. Skip
@@ -984,6 +996,7 @@ def _reuse_probed_tile_array(
 
     if progress is not None:
         progress.check_not_aborted()
+        progress.mark_primary_resolved()
         progress.tick(
             request,
             TileResponse(
@@ -996,6 +1009,34 @@ def _reuse_probed_tile_array(
             ),
         )
     return np.array(array, copy=True)
+
+
+def _maybe_deferred_retry_fetch(
+    request: TileRequest,
+    cache_dir: Path | None,
+    fetch_policy: FetchPolicy | None,
+    progress: FetchProgress,
+    response: TileResponse,
+) -> tuple[TileResponse, bool, bool]:
+    """Park pressure failures for one deferred pass.
+
+    Returns ``(response, used_deferred_pass, park_refused)``.
+    ``park_refused`` means the deferred park budget was full — primary is not
+    marked resolved yet so the caller can abort without opening the pass.
+    """
+
+    if not is_deferred_retry_failure(response):
+        progress.mark_primary_resolved()
+        return response, False, False
+    if not progress.try_park_for_deferred_retry():
+        return response, False, True
+
+    retry_after = retry_after_seconds(response)
+    progress.wait_for_deferred_pass(retry_after=retry_after)
+    progress.check_not_aborted()
+    deferred = _fetch_with_cache(request, cache_dir, fetch_policy, progress)
+    progress.record_deferred_outcome(recovered=deferred.success)
+    return deferred, True, False
 
 
 def _load_tile_array(
@@ -1015,6 +1056,7 @@ def _load_tile_array(
     # fill nodata without counting as soft-fail.
     if request.coverage_empty:
         if progress is not None:
+            progress.mark_primary_resolved()
             progress.tick(
                 request,
                 TileResponse(
@@ -1028,10 +1070,26 @@ def _load_tile_array(
             )
         return _soft_fill_array(request, dtype, float("nan"), n_bands)
     response = _fetch_with_cache(request, cache_dir, fetch_policy, progress)
+    used_deferred_pass = False
+    park_refused = False
+    if progress is not None and not response.success:
+        # Exhausted pressure (429/5xx/timeout/transport): park and retry once
+        # after siblings finish, instead of aborting the whole mosaic (#197).
+        response, used_deferred_pass, park_refused = _maybe_deferred_retry_fetch(
+            request, cache_dir, fetch_policy, progress, response
+        )
+    elif progress is not None:
+        progress.mark_primary_resolved()
     if progress is not None:
         progress.tick(request, response)
     if not response.success:
         message = response.error_message or f"HTTP {response.status_code}"
+        if used_deferred_pass:
+            attempts = (fetch_policy.retries + 1) if fetch_policy is not None else 1
+            message = (
+                f"{message} (deferred retry pass failed after "
+                f"{attempts} primary + {attempts} deferred attempts)"
+            )
         scaled = "scaleSize" in (request.params or {})
         if on_tile_error is None or progress is None:
             failure_message = tile_fetch_failure_message(
@@ -1042,8 +1100,14 @@ def _load_tile_array(
                 scaled_getcoverage=scaled,
             )
             if progress is not None:
+                # Abort first so parked waiters see the hard failure instead of
+                # starting a deferred pass on a dead host (park-cap exceeded).
                 progress.abort(failure_message)
+                if park_refused:
+                    progress.mark_primary_resolved(allow_deferred_open=False)
             raise NetworkError(failure_message)
+        if park_refused:
+            progress.mark_primary_resolved()
         action = on_tile_error(
             _tile_error_context(
                 request,

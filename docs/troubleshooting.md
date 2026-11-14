@@ -104,15 +104,17 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 
 After retries, a failed tile raises {py:exc}`tilearray.NetworkError`. Mosaics do **not** succeed with silent NaN holes; sibling in-flight tile fetches abort when the session fails hard. Capabilities / DescribeCoverage HTTP failures on the WCS/WMTS **httpx** path also raise {py:exc}`tilearray.NetworkError`.
 
+**Deferred retry for pressure.** When a tile exhausts its attempt budget on transient pressure (429, 5xx, timeout, or transport — not 401/403/404 or decode), the mosaic parks that tile (up to ~10% of the plan), lets siblings finish, then runs **one** deferred retry pass at the AIMD floor (honouring ``Retry-After``). Abort only if the deferred pass still fails, or if more tiles need parking than the budget allows. Counts show on ``attrs["tilearray_tile_errors"]`` / {py:func}`~tilearray.fetch_summary` as ``deferred_parked`` / ``deferred_recovered`` / ``deferred_failed``. Soft-fail is unchanged and still not a shortcut around 429 storms.
+
 Bad inputs and setup mistakes raise other {py:exc}`tilearray.TileArrayError` subclasses (`ValidationError`, `ParseError`, `ConfigurationError`) rather than bare `ValueError` / `RuntimeError`. Catch the hierarchy (or a subclass), not bare builtins, when handling library failures.
 
-Opt in to visible soft-fill with plan-time ``on_tile_error=soft_fail_exhausted_tiles`` (or ``soft_fail=True``). Soft-fill runs **only after** fetcher retries finish, never calls ``FetchProgress.abort``, and records failures in ``progress.errors`` / ``attrs["tilearray_tile_errors"]``. Auth (401), exhausted 429, and decode/library errors still hard-abort under the preset; a soft-fail fraction above ``soft_fail_max_fraction`` (default ``0.1``) also aborts.
+Opt in to visible soft-fill with plan-time ``on_tile_error=soft_fail_exhausted_tiles`` (or ``soft_fail=True``). Soft-fill runs **only after** fetcher retries (and any deferred pressure pass) finish, never calls ``FetchProgress.abort``, and records failures in ``progress.errors`` / ``attrs["tilearray_tile_errors"]``. Auth (401), exhausted 429 after the deferred pass, and decode/library errors still hard-abort under the preset; a soft-fail fraction above ``soft_fail_max_fraction`` (default ``0.1``) also aborts.
 
 | Phase | When | Soft-fail? |
 |-------|------|------------|
 | Pre-graph band probe | `create_array` discovers band count for `preserve` formats | **Hard** — probe ignores soft-fail; pass `band_policy="first_band"` to skip the probe |
 | Post-graph tile load | Mosaic tiles after the Dask graph exists | Soft-fill exhausted tile-local 404 / 5xx / transport |
-| Auth / rate-limit | HTTP 401 or exhausted 429 | **Hard abort** (siblings stop) |
+| Auth / rate-limit | HTTP 401 or exhausted 429 (after deferred pass) | **Hard abort** (siblings stop) |
 
 ## Format / URL / coverage mistakes
 
