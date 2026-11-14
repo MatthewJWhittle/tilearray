@@ -132,7 +132,7 @@ Import from `tilearray.fetch_presets` (not re-exported on the package root).
    ConfigurationError
 ```
 
-{py:exc}`NetworkError` means a tile failed after retries — mosaics do not leave silent NaN holes **by default**. Prefer catching {py:exc}`TileArrayError` (or a subclass) at public boundaries.
+{py:exc}`NetworkError` means a tile failed after retries (and any deferred pressure pass) — mosaics do not leave silent NaN holes **by default**. Prefer catching {py:exc}`TileArrayError` (or a subclass) at public boundaries.
 
 ## Tile errors (opt-in soft-fail)
 

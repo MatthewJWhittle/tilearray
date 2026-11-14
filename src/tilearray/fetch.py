@@ -536,6 +536,8 @@ class FetchPolicy(BaseModel):
         Excludes ``max_tile_requests`` (planning guard, not HTTP identity).
         """
 
+        classifier = self.pressure_classifier
+        classifier_key = tuple(classifier.signatures) if classifier is not None else ()
         return (
             self.max_concurrent,
             self.max_connections,
@@ -553,6 +555,7 @@ class FetchPolicy(BaseModel):
             self.forbidden_window_seconds,
             self.forbidden_threshold,
             self.forbidden_cooldown_seconds,
+            classifier_key,
         )
 
 
@@ -603,6 +606,46 @@ def unregister_fetch_progress(token: object) -> None:
         _PROGRESS_REGISTRY.pop(token, None)
 
 
+# Exhausted pressure failures eligible for one deferred mosaic retry pass.
+# Permanent client errors (401/403/404) and decode/parse stay fail-fast.
+_DEFERRED_RETRY_STATUSES = frozenset({0, 408, 429, 500, 502, 503, 504})
+DEFAULT_DEFERRED_PARK_FRACTION = 0.1
+
+
+def is_deferred_retry_failure(response: TileResponse) -> bool:
+    """Return True when an exhausted tile failure is transient host pressure."""
+
+    if response.success:
+        return False
+    return int(response.status_code) in _DEFERRED_RETRY_STATUSES
+
+
+def deferred_park_cap(
+    total_tiles: int, *, fraction: float = DEFAULT_DEFERRED_PARK_FRACTION
+) -> int:
+    """Maximum tiles that may park for the deferred retry pass."""
+
+    if total_tiles < 1:
+        return 0
+    return max(1, math.ceil(fraction * total_tiles))
+
+
+def retry_after_seconds(response: TileResponse) -> float:
+    """Parse ``Retry-After`` from a failed tile response (0 when absent/invalid)."""
+
+    header = None
+    if response.headers:
+        header = response.headers.get("Retry-After") or response.headers.get(
+            "retry-after"
+        )
+    if not header:
+        return 0.0
+    try:
+        return max(float(header), 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 @dataclass
 class FetchProgress:
     """Thread-safe progress tracker for tile acquisition.
@@ -610,6 +653,10 @@ class FetchProgress:
     Optional ``call_max_concurrent`` limits in-flight fetches for **this**
     progress session only (one mosaic / one logical call). It does not redefine
     the process-wide :class:`TileFetcher` gate.
+
+    ``deferred_max_concurrent`` caps in-flight HTTP during the one deferred
+    retry pass for parked pressure failures (AIMD floor). ``deferred_park_fraction``
+    budgets how many tiles may park before the pass (default 10%).
 
     Not meant to live on ``DataArray.attrs``: use :func:`register_fetch_progress`
     and store the returned token. Pickle / deepcopy rebuild a fresh lock and drop
@@ -619,49 +666,85 @@ class FetchProgress:
     total: int
     on_progress: ProgressCallback | None = None
     call_max_concurrent: int | None = None
+    deferred_max_concurrent: int | None = None
+    deferred_park_fraction: float = DEFAULT_DEFERRED_PARK_FRACTION
     done: int = field(default=0, init=False)
     errors: list[str] = field(default_factory=list, init=False)
     soft_failed: int = field(default=0, init=False)
     soft_failed_urls: list[str] = field(default_factory=list, init=False)
+    deferred_parked: int = field(default=0, init=False)
+    deferred_recovered: int = field(default=0, init=False)
+    deferred_failed: int = field(default=0, init=False)
     _aborted: bool = field(default=False, init=False)
     _abort_reason: str | None = field(default=None, init=False)
+    _primary_resolved: int = field(default=0, init=False)
+    _parked_waiting: int = field(default=0, init=False)
+    _deferred_pass_open: bool = field(default=False, init=False)
     _call_semaphore: threading.Semaphore | None = field(
         default=None, init=False, repr=False
     )
     _lock: threading.Lock = field(
         default_factory=threading.Lock, init=False, repr=False
     )
+    _condition: threading.Condition = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.call_max_concurrent is not None:
             if self.call_max_concurrent < 1:
                 raise ValidationError("call_max_concurrent must be >= 1")
             self._call_semaphore = threading.Semaphore(self.call_max_concurrent)
+        if (
+            self.deferred_max_concurrent is not None
+            and self.deferred_max_concurrent < 1
+        ):
+            raise ValidationError("deferred_max_concurrent must be >= 1")
+        if not 0.0 < self.deferred_park_fraction <= 1.0:
+            raise ValidationError("deferred_park_fraction must be in (0, 1]")
+        self._condition = threading.Condition(self._lock)
 
     def __getstate__(self) -> dict[str, Any]:
         return {
             "total": self.total,
             "on_progress": None,
             "call_max_concurrent": self.call_max_concurrent,
+            "deferred_max_concurrent": self.deferred_max_concurrent,
+            "deferred_park_fraction": self.deferred_park_fraction,
             "done": self.done,
             "errors": list(self.errors),
             "soft_failed": self.soft_failed,
             "soft_failed_urls": list(self.soft_failed_urls),
+            "deferred_parked": self.deferred_parked,
+            "deferred_recovered": self.deferred_recovered,
+            "deferred_failed": self.deferred_failed,
             "_aborted": self._aborted,
             "_abort_reason": self._abort_reason,
+            "_primary_resolved": self._primary_resolved,
+            "_parked_waiting": self._parked_waiting,
+            "_deferred_pass_open": self._deferred_pass_open,
         }
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.total = int(state["total"])
         self.on_progress = state.get("on_progress")
         self.call_max_concurrent = state.get("call_max_concurrent")
+        self.deferred_max_concurrent = state.get("deferred_max_concurrent")
+        self.deferred_park_fraction = float(
+            state.get("deferred_park_fraction", DEFAULT_DEFERRED_PARK_FRACTION)
+        )
         self.done = int(state.get("done", 0))
         self.errors = list(state.get("errors") or [])
         self.soft_failed = int(state.get("soft_failed", 0))
         self.soft_failed_urls = list(state.get("soft_failed_urls") or [])
+        self.deferred_parked = int(state.get("deferred_parked", 0))
+        self.deferred_recovered = int(state.get("deferred_recovered", 0))
+        self.deferred_failed = int(state.get("deferred_failed", 0))
         self._aborted = bool(state.get("_aborted", False))
         self._abort_reason = state.get("_abort_reason")
+        self._primary_resolved = int(state.get("_primary_resolved", 0))
+        self._parked_waiting = int(state.get("_parked_waiting", 0))
+        self._deferred_pass_open = bool(state.get("_deferred_pass_open", False))
         self._lock = threading.Lock()
+        self._condition = threading.Condition(self._lock)
         self._call_semaphore = None
         if self.call_max_concurrent is not None:
             if self.call_max_concurrent < 1:
@@ -671,10 +754,13 @@ class FetchProgress:
     def abort(self, reason: str) -> None:
         """Stop sibling tile fetches after a hard failure."""
 
-        with self._lock:
+        with self._condition:
             if not self._aborted:
                 self._aborted = True
                 self._abort_reason = reason
+            # Wake parked deferred waiters so they can raise.
+            self._deferred_pass_open = True
+            self._condition.notify_all()
 
     def is_aborted(self) -> bool:
         with self._lock:
@@ -711,6 +797,75 @@ class FetchProgress:
     def soft_failed_count(self) -> int:
         with self._lock:
             return self.soft_failed
+
+    def mark_primary_resolved(self, *, allow_deferred_open: bool = True) -> None:
+        """Count a tile that finished its primary attempt (success or hard-fail)."""
+
+        with self._condition:
+            self._primary_resolved += 1
+            if allow_deferred_open:
+                self._maybe_open_deferred_pass_locked()
+
+    def try_park_for_deferred_retry(self) -> bool:
+        """Park this tile for the deferred pass if under the park budget.
+
+        Returns ``False`` when the park cap is already full (caller should abort).
+        """
+
+        with self._condition:
+            cap = deferred_park_cap(self.total, fraction=self.deferred_park_fraction)
+            if self.deferred_parked >= cap:
+                return False
+            self.deferred_parked += 1
+            self._parked_waiting += 1
+            self._primary_resolved += 1
+            self._maybe_open_deferred_pass_locked()
+            return True
+
+    def _maybe_open_deferred_pass_locked(self) -> None:
+        if self._deferred_pass_open:
+            return
+        if self._primary_resolved < self.total:
+            return
+        if self._parked_waiting < 1 and not self._aborted:
+            return
+        self._install_deferred_concurrency_locked()
+        self._deferred_pass_open = True
+        self._condition.notify_all()
+
+    def _install_deferred_concurrency_locked(self) -> None:
+        """Cap call-local in-flight at the AIMD floor for the deferred pass."""
+
+        floor = self.deferred_max_concurrent
+        if floor is None:
+            floor = 1
+        if self.call_max_concurrent is not None:
+            floor = min(floor, self.call_max_concurrent)
+        floor = max(1, int(floor))
+        self._call_semaphore = threading.Semaphore(floor)
+
+    def wait_for_deferred_pass(self, *, retry_after: float = 0.0) -> None:
+        """Block until the deferred pass opens (or the mosaic aborts)."""
+
+        with self._condition:
+            while not self._deferred_pass_open and not self._aborted:
+                self._condition.wait(timeout=0.05)
+            if self._aborted:
+                raise NetworkError(
+                    self._abort_reason or "Tile fetch aborted after earlier failure"
+                )
+        cooldown = max(float(retry_after), 0.0)
+        if cooldown > 0.0:
+            time.sleep(cooldown)
+
+    def record_deferred_outcome(self, *, recovered: bool) -> None:
+        """Record whether a parked tile recovered on the deferred pass."""
+
+        with self._lock:
+            if recovered:
+                self.deferred_recovered += 1
+            else:
+                self.deferred_failed += 1
 
     def tick(self, request: TileRequest, response: TileResponse) -> None:
         with self._lock:
@@ -1040,6 +1195,9 @@ class TileFetcher:
         if request.retries == 0:
             attempts = 1
         deadline_s = tile_deadline_seconds(self._policy, request)
+        # Per-signature retry counts for PressureSignature.max_retries caps
+        # (e.g. EA preset bounded 404) within this one tile fetch.
+        signature_retry_counts: dict[str, int] = {}
 
         def _before_sleep(retry_state: RetryCallState) -> None:
             if progress is not None:
@@ -1085,6 +1243,15 @@ class TileFetcher:
 
                 classification = self._classify_response(response)
                 if classification.retryable:
+                    sig = classification.signature
+                    if sig is not None and classification.max_retries is not None:
+                        used = signature_retry_counts.get(sig.name, 0)
+                        if used >= classification.max_retries:
+                            # Bounded signature budget exhausted — treat as
+                            # final failure without another RetryableHTTPError.
+                            self._finish_success(host)
+                            return response
+                        signature_retry_counts[sig.name] = used + 1
                     self._finish_pressure(host)
                     if classification.circuit_breaker:
                         self._record_circuit_breaker_pressure(host)

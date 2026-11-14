@@ -40,6 +40,13 @@ def test_ea_dsp_fetch_defaults_use_aimd() -> None:
     assert defaults["rate_limit_per_second"] is None
     assert defaults["fetch_retries"] == 4
     assert defaults["fetch_timeout"] == 60.0
+    classifier = defaults["pressure_classifier"]
+    names = {signature.name for signature in classifier.signatures}
+    assert "ea_transient_404" in names
+    ea_404 = next(s for s in classifier.signatures if s.name == "ea_transient_404")
+    assert ea_404.retryable is True
+    assert ea_404.max_retries == 2
+    assert ea_404.status_codes == frozenset({404})
 
 
 def test_xyz_config_compose_osm_preset() -> None:
@@ -74,6 +81,7 @@ def test_wcs_config_compose_ea_dsp_preset() -> None:
     assert config.forbidden_circuit_breaker is True
     assert config.fetch_retries == 4
     assert config.rate_limit_per_second is None
+    assert config.pressure_classifier is not None
     policy = config.fetch_policy()
     assert isinstance(policy, FetchPolicy)
     assert policy.retries == 4
@@ -83,6 +91,10 @@ def test_wcs_config_compose_ea_dsp_preset() -> None:
     assert policy.multiplicative_decrease == 0.75
     assert policy.max_concurrent == 10
     assert policy.forbidden_circuit_breaker is True
+    assert policy.pressure_classifier is config.pressure_classifier
+    assert any(
+        s.name == "ea_transient_404" for s in policy.pressure_classifier.signatures
+    )
 
 
 def test_custom_osm_user_agent() -> None:
