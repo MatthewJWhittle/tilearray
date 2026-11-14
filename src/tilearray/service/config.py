@@ -23,6 +23,7 @@ from ..fetch import (
     FetchPolicy,
     HostRateLimiter,
 )
+from ..pressure import PressureClassifier
 from ..types import CRS, Format, ServiceTypeEnum
 from .base import BaseService, get_service
 
@@ -174,6 +175,14 @@ class ServiceConfig(BaseModel):
         gt=0,
         description="Cooldown at floor after the circuit breaker trips",
     )
+    pressure_classifier: PressureClassifier | None = Field(
+        default=None,
+        description=(
+            "Optional host-specific HTTP pressure/retry classifier "
+            "(e.g. EA preset bounded 404 retries); defaults to the built-in "
+            "fail-fast 404 policy"
+        ),
+    )
 
     def build_service(self) -> BaseService:
         """Create the appropriate service implementation for this configuration."""
@@ -212,6 +221,7 @@ class ServiceConfig(BaseModel):
             forbidden_window_seconds=self.forbidden_window_seconds,
             forbidden_threshold=self.forbidden_threshold,
             forbidden_cooldown_seconds=self.forbidden_cooldown_seconds,
+            pressure_classifier=self.pressure_classifier,
         )
 
     def service_kwargs(self) -> dict[str, Any]:

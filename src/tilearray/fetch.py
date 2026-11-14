@@ -536,6 +536,8 @@ class FetchPolicy(BaseModel):
         Excludes ``max_tile_requests`` (planning guard, not HTTP identity).
         """
 
+        classifier = self.pressure_classifier
+        classifier_key = tuple(classifier.signatures) if classifier is not None else ()
         return (
             self.max_concurrent,
             self.max_connections,
@@ -553,6 +555,7 @@ class FetchPolicy(BaseModel):
             self.forbidden_window_seconds,
             self.forbidden_threshold,
             self.forbidden_cooldown_seconds,
+            classifier_key,
         )
 
 
@@ -1192,6 +1195,9 @@ class TileFetcher:
         if request.retries == 0:
             attempts = 1
         deadline_s = tile_deadline_seconds(self._policy, request)
+        # Per-signature retry counts for PressureSignature.max_retries caps
+        # (e.g. EA preset bounded 404) within this one tile fetch.
+        signature_retry_counts: dict[str, int] = {}
 
         def _before_sleep(retry_state: RetryCallState) -> None:
             if progress is not None:
@@ -1237,6 +1243,15 @@ class TileFetcher:
 
                 classification = self._classify_response(response)
                 if classification.retryable:
+                    sig = classification.signature
+                    if sig is not None and classification.max_retries is not None:
+                        used = signature_retry_counts.get(sig.name, 0)
+                        if used >= classification.max_retries:
+                            # Bounded signature budget exhausted — treat as
+                            # final failure without another RetryableHTTPError.
+                            self._finish_success(host)
+                            return response
+                        signature_retry_counts[sig.name] = used + 1
                     self._finish_pressure(host)
                     if classification.circuit_breaker:
                         self._record_circuit_breaker_pressure(host)

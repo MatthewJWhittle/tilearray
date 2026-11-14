@@ -80,6 +80,7 @@ Soft-fail (`on_tile_error` / `soft_fail`) is a named plan-time argument, not a `
 | Symptom | Likely cause | What to do |
 |---------|--------------|------------|
 | Empty / invalid coverage | CoverageId ≠ URL path slug | Use the GetCapabilities id (e.g. `UUID__Lidar_Composite_Elevation_DTM_1m`), or `WCSConfig.from_url` + `**ea_dsp_fetch_defaults()` with the id from {doc}`example-sources` |
+| Mosaic dies on a single HTTP 404 that succeeds when retried | EA one-off in-extent 404 without the EA preset | Compose `**ea_dsp_fetch_defaults()` (bounded 404 retries). Without the preset, 404s stay fail-fast |
 | Many 403s / hard fail mid-mosaic | Burst above the EA ceiling | Keep AIMD ceiling at **10** (`ea_dsp_fetch_defaults`). Do not raise `max_concurrent_requests` for county-scale cold mosaics |
 | Slow multi-tile mosaic | Dask workers << fetch ceiling | Use `compute_mosaic` |
 | Native 1 m GetCoverage hangs / times out with `scaleSize` in the URL | EA advertises Scaling but does not implement it | tilearray omits `scaleSize` / `width` / `height` at native resolution; request `resolution=` matching the coverage GSD (1 m for this DTM) |
