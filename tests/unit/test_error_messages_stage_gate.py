@@ -240,10 +240,8 @@ def test_tile_html_429_hint_blames_rate_limiting_not_credentials() -> None:
     """EA-style HTML 429 must read as rate limiting, not an auth/portal page."""
 
     url = "https://example.com/wcs"
-    html = (
-        b"<html><body><p>You are making too many requests. "
-        b"Please try again later.</p></body></html>"
-    )
+    # Body avoids "too many requests" so the Hint line alone must match.
+    html = b"<html><body><p>Slow down - please try again later.</p></body></html>"
     response = httpx.Response(
         429,
         content=html,
@@ -261,7 +259,63 @@ def test_tile_html_429_hint_blames_rate_limiting_not_credentials() -> None:
     )
     lowered = message.lower()
     assert "429" in message
-    assert "rate-limiting" in lowered or "too many requests" in lowered
+    assert "Hint: the server is rate-limiting" in message
+    assert "credential" not in lowered
+    assert "auth/portal" not in lowered
+
+
+def test_tile_html_503_with_retry_after_hint_blames_rate_limiting() -> None:
+    """HTML 503 with Retry-After is status-first rate limiting, not credentials."""
+
+    url = "https://example.com/wcs"
+    html = b"<html><body><p>Service temporarily unavailable.</p></body></html>"
+    response = httpx.Response(
+        503,
+        content=html,
+        headers={"content-type": "text/html", "Retry-After": "30"},
+        request=httpx.Request("GET", url),
+    )
+    tile_response = _response_from_httpx(response, url)
+    message = tile_fetch_failure_message(
+        url,
+        tile_response.error_message or "",
+        content_type=tile_response.content_type or None,
+        body=html,
+        status_code=tile_response.status_code,
+        headers=tile_response.headers,
+    )
+    lowered = message.lower()
+    assert "503" in message
+    assert "Hint: the server is rate-limiting" in message
+    assert "credential" not in lowered
+    assert "auth/portal" not in lowered
+    assert "overloaded" not in lowered
+
+
+def test_tile_html_503_without_retry_after_hint_blames_overloaded_host() -> None:
+    """HTML 503 without Retry-After gets the >=500 overloaded hint, not auth."""
+
+    url = "https://example.com/wcs"
+    html = b"<html><body><p>Service temporarily unavailable.</p></body></html>"
+    response = httpx.Response(
+        503,
+        content=html,
+        headers={"content-type": "text/html"},
+        request=httpx.Request("GET", url),
+    )
+    tile_response = _response_from_httpx(response, url)
+    message = tile_fetch_failure_message(
+        url,
+        tile_response.error_message or "",
+        content_type=tile_response.content_type or None,
+        body=html,
+        status_code=tile_response.status_code,
+        headers=tile_response.headers,
+    )
+    lowered = message.lower()
+    assert "503" in message
+    assert "Hint: server-side error or overloaded host" in message
+    assert "rate-limiting" not in lowered
     assert "credential" not in lowered
     assert "auth/portal" not in lowered
 

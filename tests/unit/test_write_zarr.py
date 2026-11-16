@@ -12,6 +12,7 @@ from _pytest.monkeypatch import MonkeyPatch
 
 import tilearray._planning as planning_module
 import tilearray.array as array_module
+import tilearray.zarr_write as zarr_write_module
 from tilearray import NetworkError, write_zarr
 from tilearray.array import create_array
 from tilearray.errors import ValidationError
@@ -171,3 +172,52 @@ def test_write_zarr_rejects_compute_kwarg(
     da = _lazy_mosaic(monkeypatch, max_x=2560.0, max_y=2560.0)
     with pytest.raises(ValidationError, match="compute=False"):
         write_zarr(da, tmp_path / "x.zarr", name="elevation", compute=True)
+
+
+def test_write_zarr_stamps_complete_attrs_on_group(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    da = _lazy_mosaic(monkeypatch, max_x=5120.0, max_y=5120.0)
+    out = tmp_path / "grouped.zarr"
+    write_zarr(da, out, name="elevation", group="mosaic")
+
+    ds = xr.open_zarr(out, group="mosaic")
+    assert ds.attrs.get(COMPLETE_ATTR) is True
+    assert COMPLETE_AT_ATTR in ds.attrs
+    assert ds.attrs.get(TILE_COUNT_ATTR) == 4
+    assert "elevation" in ds
+
+    root = zarr.open_group(str(out), mode="r")
+    assert COMPLETE_ATTR not in root.attrs
+
+
+def test_write_zarr_preserves_tile_abort_when_meta_write_fails(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    calls = {"n": 0}
+
+    def _fail_on_tenth(request: TileRequest, **kwargs: Any) -> TileResponse:
+        calls["n"] += 1
+        if calls["n"] >= 10:
+            raise NetworkError("simulated tile abort")
+        return _fake_fetch_tile(request, **kwargs)
+
+    real_set = zarr_write_module._set_completion_attrs
+
+    def _boom_on_error_stamp(*args: Any, **kwargs: Any) -> None:
+        if kwargs.get("error") is not None:
+            raise OSError("disk full while stamping complete attrs")
+        real_set(*args, **kwargs)
+
+    da = _lazy_mosaic(monkeypatch)
+    monkeypatch.setattr(array_module, "fetch_tile", _fail_on_tenth)
+    monkeypatch.setattr(
+        zarr_write_module, "_set_completion_attrs", _boom_on_error_stamp
+    )
+    out = tmp_path / "meta-fail.zarr"
+
+    with pytest.raises(NetworkError, match="simulated tile abort") as exc_info:
+        write_zarr(da, out, name="elevation")
+
+    assert isinstance(exc_info.value.__cause__, OSError)
+    assert "disk full" in str(exc_info.value.__cause__)

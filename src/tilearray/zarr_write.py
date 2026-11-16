@@ -53,14 +53,15 @@ def write_zarr(
     leaves a full-shape store that looks finished. This helper:
 
     1. Builds the delayed write with ``compute=False``.
-    2. Sets group attr ``tilearray_complete=false`` (and planned tile count).
+    2. Sets group attr ``tilearray_complete=false`` (and planned tile count)
+       on the same Zarr group that receives the mosaic (``group=`` when set).
     3. Runs :func:`~tilearray.compute_mosaic` on the delayed graph.
     4. On success sets ``tilearray_complete=true`` plus finish time; on failure
        sets ``tilearray_complete=false`` with the error and re-raises.
 
     Readers should treat a missing or false ``tilearray_complete`` group attr
-    as incomplete. Re-run into the same path with the same ``cache_dir`` to
-    resume warm tiles.
+    as incomplete (open with the same ``group=`` you wrote). Re-run into the
+    same path with the same ``cache_dir`` to resume warm tiles.
 
     Parameters
     ----------
@@ -77,7 +78,9 @@ def write_zarr(
         from mosaic attrs when omitted).
     **to_zarr_kwargs:
         Passed to ``Dataset.to_zarr``. ``compute`` is always forced to
-        ``False``; default ``mode`` is ``"w"``.
+        ``False``; default ``mode`` is ``"w"``. When ``group=`` is set,
+        completion attrs are written on that subgroup (matching
+        ``xr.open_zarr(..., group=...)``).
 
     Returns
     -------
@@ -117,18 +120,23 @@ def write_zarr(
     tile_count = _tile_count_from_obj(obj)
     kwargs = dict(to_zarr_kwargs)
     kwargs.setdefault("mode", "w")
+    zarr_group = _normalize_zarr_group(kwargs.get("group"))
     delayed = dataset.to_zarr(path, compute=False, **kwargs)
 
-    _set_completion_attrs(path, complete=False, tile_count=tile_count)
+    _set_completion_attrs(path, complete=False, tile_count=tile_count, group=zarr_group)
     try:
         compute_mosaic(delayed, fetch_policy=policy, num_workers=workers)
     except Exception as exc:
-        _set_completion_attrs(
-            path,
-            complete=False,
-            tile_count=tile_count,
-            error=_error_text(exc),
-        )
+        try:
+            _set_completion_attrs(
+                path,
+                complete=False,
+                tile_count=tile_count,
+                error=_error_text(exc),
+                group=zarr_group,
+            )
+        except Exception as meta_exc:
+            raise exc from meta_exc
         raise
 
     _set_completion_attrs(
@@ -136,6 +144,7 @@ def write_zarr(
         complete=True,
         tile_count=tile_count,
         completed_at=datetime.now(timezone.utc).isoformat(),
+        group=zarr_group,
     )
     return path
 
@@ -167,6 +176,15 @@ def _error_text(exc: BaseException) -> str:
     return text
 
 
+def _normalize_zarr_group(group: Any) -> str | None:
+    """Return a store-relative group path, or ``None`` for the store root."""
+
+    if group is None:
+        return None
+    text = str(group).strip().strip("/")
+    return text or None
+
+
 def _set_completion_attrs(
     path: Path,
     *,
@@ -174,22 +192,23 @@ def _set_completion_attrs(
     tile_count: int | None = None,
     completed_at: str | None = None,
     error: str | None = None,
+    group: str | None = None,
 ) -> None:
     assert zarr is not None
-    group = zarr.open_group(str(path), mode="a")
-    group.attrs[COMPLETE_ATTR] = bool(complete)
+    store_group = zarr.open_group(str(path), mode="a", path=group)
+    store_group.attrs[COMPLETE_ATTR] = bool(complete)
     if tile_count is not None:
-        group.attrs[TILE_COUNT_ATTR] = int(tile_count)
+        store_group.attrs[TILE_COUNT_ATTR] = int(tile_count)
     if complete:
         if completed_at is not None:
-            group.attrs[COMPLETE_AT_ATTR] = completed_at
-        if COMPLETE_ERROR_ATTR in group.attrs:
-            del group.attrs[COMPLETE_ERROR_ATTR]
+            store_group.attrs[COMPLETE_AT_ATTR] = completed_at
+        if COMPLETE_ERROR_ATTR in store_group.attrs:
+            del store_group.attrs[COMPLETE_ERROR_ATTR]
     else:
-        if COMPLETE_AT_ATTR in group.attrs:
-            del group.attrs[COMPLETE_AT_ATTR]
+        if COMPLETE_AT_ATTR in store_group.attrs:
+            del store_group.attrs[COMPLETE_AT_ATTR]
         if error is not None:
-            group.attrs[COMPLETE_ERROR_ATTR] = error
-        elif COMPLETE_ERROR_ATTR in group.attrs:
-            del group.attrs[COMPLETE_ERROR_ATTR]
+            store_group.attrs[COMPLETE_ERROR_ATTR] = error
+        elif COMPLETE_ERROR_ATTR in store_group.attrs:
+            del store_group.attrs[COMPLETE_ERROR_ATTR]
     zarr.consolidate_metadata(str(path))
