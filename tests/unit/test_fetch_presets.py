@@ -47,6 +47,8 @@ def test_ea_dsp_fetch_defaults_use_aimd() -> None:
     assert ea_404.retryable is True
     assert ea_404.max_retries == 2
     assert ea_404.status_codes == frozenset({404})
+    assert ea_404.aimd_pressure is False
+    assert ea_404.circuit_breaker is False
 
 
 def test_xyz_config_compose_osm_preset() -> None:

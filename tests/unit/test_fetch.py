@@ -927,18 +927,25 @@ def test_ea_preset_retries_one_off_404_then_succeeds() -> None:
         coverage_id="cov",
         **ea_dsp_fetch_defaults(),
     ).fetch_policy()
+    assert policy.pressure_classifier is not None
+    ea_404 = next(
+        s for s in policy.pressure_classifier.signatures if s.name == "ea_transient_404"
+    )
+    assert ea_404.aimd_pressure is False
+    fetcher = TileFetcher.for_policy(policy)
 
-    response = fetch_tile_with_policy(
+    response = fetcher.fetch(
         _tile_request(
             url="https://environment.data.gov.uk/spatialdata/example/wcs",
             retries=policy.retries,
-        ),
-        policy,
+        )
     )
 
     assert response.success is True
     assert response.data == b"recovered"
     assert route.call_count == 2
+    # Bounded 404 is not host pressure — AIMD must not decrease on the retry.
+    assert fetcher.stats.concurrency_decreases == 0
 
 
 @respx.mock
@@ -961,13 +968,18 @@ def test_ea_preset_permanent_404_stops_within_bounded_retries() -> None:
         **ea_dsp_fetch_defaults(),
     ).fetch_policy()
     assert policy.retries == 4
+    assert policy.pressure_classifier is not None
+    ea_404 = next(
+        s for s in policy.pressure_classifier.signatures if s.name == "ea_transient_404"
+    )
+    assert ea_404.aimd_pressure is False
+    fetcher = TileFetcher.for_policy(policy)
 
-    response = fetch_tile_with_policy(
+    response = fetcher.fetch(
         _tile_request(
             url="https://environment.data.gov.uk/spatialdata/example/wcs",
             retries=policy.retries,
-        ),
-        policy,
+        )
     )
 
     assert response.success is False
@@ -975,6 +987,48 @@ def test_ea_preset_permanent_404_stops_within_bounded_retries() -> None:
     # max_retries=2 → initial attempt + 2 retries = 3 total (not retries+1=5).
     assert route.call_count == 3
     assert route.call_count <= 3
+    # Exhausted bounded 404 must not AIMD-ramp (finish_success) or decrease.
+    assert fetcher.stats.concurrency_decreases == 0
+
+
+@respx.mock
+def test_bounded_pressure_signature_exhaust_applies_pressure_not_success() -> None:
+    """max_retries exhaust must finish_pressure (AIMD decrease), not finish_success."""
+
+    from tilearray.pressure import PressureClassifier, PressureSignature
+
+    classifier = PressureClassifier(
+        signatures=(
+            PressureSignature(
+                name="bounded_503",
+                status_codes=frozenset({503}),
+                retryable=True,
+                aimd_pressure=True,
+                max_retries=1,
+            ),
+        )
+    )
+    route = respx.get("https://example.com/tile")
+    route.mock(return_value=httpx.Response(503, text="busy"))
+    policy = FetchPolicy(
+        max_concurrent=8,
+        initial_concurrent=4,
+        min_concurrent=1,
+        adaptive_concurrency=True,
+        rate_limit_per_second=None,
+        retries=4,
+        pressure_classifier=classifier,
+    )
+    fetcher = TileFetcher.for_policy(policy)
+
+    response = fetcher.fetch(_tile_request(retries=4))
+
+    assert response.success is False
+    assert response.status_code == 503
+    # initial + one retry (max_retries=1), not the full policy budget.
+    assert route.call_count == 2
+    assert fetcher.stats.concurrency_decreases >= 1
+    assert fetcher.stats.current_limit <= 4
 
 
 @respx.mock

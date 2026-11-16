@@ -257,6 +257,14 @@ class AdaptiveConcurrencyGate:
             self._increase_limit(host, state)
             state.condition.notify_all()
 
+    def finish_release(self, host: str) -> None:
+        """Release a slot without changing the AIMD limit."""
+
+        state = self._state_for(host)
+        with state.condition:
+            state.inflight -= 1
+            state.condition.notify_all()
+
     def finish_pressure(self, host: str) -> None:
         """Release a slot and apply multiplicative decrease atomically."""
 
@@ -845,7 +853,12 @@ class FetchProgress:
         self._call_semaphore = threading.Semaphore(floor)
 
     def wait_for_deferred_pass(self, *, retry_after: float = 0.0) -> None:
-        """Block until the deferred pass opens (or the mosaic aborts)."""
+        """Block until the deferred pass opens (or the mosaic aborts).
+
+        Honours ``Retry-After`` with short timed waits under the condition so an
+        abort during cool-down can wake parked tiles without waiting out the
+        full header value.
+        """
 
         with self._condition:
             while not self._deferred_pass_open and not self._aborted:
@@ -854,9 +867,18 @@ class FetchProgress:
                 raise NetworkError(
                     self._abort_reason or "Tile fetch aborted after earlier failure"
                 )
-        cooldown = max(float(retry_after), 0.0)
-        if cooldown > 0.0:
-            time.sleep(cooldown)
+            cooldown = max(float(retry_after), 0.0)
+            if cooldown <= 0.0:
+                return
+            deadline = time.monotonic() + cooldown
+            while not self._aborted:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    return
+                self._condition.wait(timeout=min(0.05, remaining))
+            raise NetworkError(
+                self._abort_reason or "Tile fetch aborted after earlier failure"
+            )
 
     def record_deferred_outcome(self, *, recovered: bool) -> None:
         """Record whether a parked tile recovered on the deferred pass."""
@@ -1100,6 +1122,16 @@ class TileFetcher:
         assert self._semaphore is not None
         self._semaphore.release()
 
+    def _finish_release(self, host: str) -> None:
+        """Release the concurrency slot without AIMD increase or decrease."""
+
+        if self._adaptive_gate is not None:
+            self._adaptive_gate.finish_release(host)
+            self.stats._sync_adaptive_stats(self._adaptive_gate, host)
+            return
+        assert self._semaphore is not None
+        self._semaphore.release()
+
     def _finish_pressure(self, host: str) -> None:
         if self._adaptive_gate is not None:
             self._adaptive_gate.finish_pressure(host)
@@ -1107,6 +1139,22 @@ class TileFetcher:
             return
         assert self._semaphore is not None
         self._semaphore.release()
+
+    def _finish_classified(
+        self, host: str, classification: ResponseClassification
+    ) -> None:
+        """Release a slot for a classified retryable response.
+
+        AIMD pressure signatures decrease the gate; non-pressure signatures
+        (for example EA bounded 404) only release the slot.
+        """
+
+        if classification.aimd_pressure:
+            self._finish_pressure(host)
+            if classification.circuit_breaker:
+                self._record_circuit_breaker_pressure(host)
+            return
+        self._finish_release(host)
 
     def _classify_response(self, response: httpx.Response) -> ResponseClassification:
         return classify_response(response, self._pressure_classifier)
@@ -1249,12 +1297,12 @@ class TileFetcher:
                         if used >= classification.max_retries:
                             # Bounded signature budget exhausted — treat as
                             # final failure without another RetryableHTTPError.
-                            self._finish_success(host)
+                            # Do not finish_success (that would AIMD-ramp after
+                            # confirming a miss); honour aimd_pressure instead.
+                            self._finish_classified(host, classification)
                             return response
                         signature_retry_counts[sig.name] = used + 1
-                    self._finish_pressure(host)
-                    if classification.circuit_breaker:
-                        self._record_circuit_breaker_pressure(host)
+                    self._finish_classified(host, classification)
                     raise RetryableHTTPError(response, _parse_retry_after(response))
 
                 self._finish_success(host)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import httpx
@@ -355,6 +356,15 @@ def test_park_cap_exceeded_aborts_without_looping(
         "tilearray._planning.get_service", lambda *a, **k: service_cls()
     )
     attempts: dict[int, int] = {}
+    progress_holder: dict[str, FetchProgress] = {}
+    real_progress = FetchProgress
+
+    def progress_factory(*args: Any, **kwargs: Any) -> FetchProgress:
+        progress = real_progress(*args, **kwargs)
+        progress_holder["progress"] = progress
+        return progress
+
+    monkeypatch.setattr("tilearray.array.FetchProgress", progress_factory)
 
     def fake_fetch(request: TileRequest, **kwargs: Any) -> TileResponse:
         idx = int(request.url.rsplit("/", 1)[-1])
@@ -398,9 +408,105 @@ def test_park_cap_exceeded_aborts_without_looping(
             rate_limit_per_second=None,
             fetch_retries=0,
         )
-    # Cap tile aborts on first exhausted answer (no deferred loop).
-    assert attempts.get(0, 0) <= 2
-    assert attempts.get(1, 0) <= 2
+    # Over-cap abort: each pressure tile gets one primary attempt only
+    # (fetch_retries=0); the deferred pass must not re-fetch either tile.
+    assert attempts.get(0, 0) == 1
+    assert attempts.get(1, 0) == 1
+    assert sum(1 for n in attempts.values() if n > 1) == 0
+    progress = progress_holder["progress"]
+    assert progress.deferred_parked == 1
+    assert progress.deferred_recovered == 0
+    assert progress.deferred_failed == 0
+    assert progress.is_aborted() is True
+
+
+@respx.mock
+def test_hard_decode_failure_aborts_before_deferred_pass() -> None:
+    """Successful HTTP then hard decode must abort so parked waiters do not fetch."""
+
+    progress = FetchProgress(total=2, deferred_max_concurrent=1)
+    policy = FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=0)
+    respx.get("https://example.com/ok-bytes").mock(
+        return_value=httpx.Response(200, content=b"not-a-tiff")
+    )
+    request = TileRequest(
+        url="https://example.com/ok-bytes",
+        params={},
+        output_format=Format.GEOTIFF,
+        width=2,
+        height=2,
+        retries=0,
+    )
+
+    def boom(_response: TileResponse, _request: TileRequest) -> np.ndarray:
+        raise ValueError("corrupt tile body")
+
+    # Simulate a sibling already parked waiting for the deferred pass.
+    assert progress.try_park_for_deferred_retry() is True
+    with pytest.raises((NetworkError, ValueError, Exception)):
+        _load_tile_array(request, None, boom, np.dtype("float32"), policy, progress)
+    assert progress.is_aborted() is True
+    # Parked sibling must see abort rather than an opened deferred HTTP pass.
+    with pytest.raises(NetworkError):
+        progress.wait_for_deferred_pass(retry_after=0.0)
+
+
+def test_deferred_cooldown_abort_is_interruptible() -> None:
+    """Abort during Retry-After cool-down must wake waiters without full sleep."""
+
+    progress = FetchProgress(total=1, deferred_max_concurrent=1)
+    started = threading.Event()
+    errors: list[BaseException] = []
+
+    def waiter() -> None:
+        started.set()
+        try:
+            progress.wait_for_deferred_pass(retry_after=30.0)
+        except BaseException as exc:  # noqa: BLE001 — capture for assertion
+            errors.append(exc)
+
+    thread = threading.Thread(target=waiter)
+    thread.start()
+    assert started.wait(timeout=1.0)
+    # Open the deferred pass so the waiter enters cool-down, then abort.
+    with progress._condition:
+        progress._deferred_pass_open = True
+        progress._condition.notify_all()
+    time.sleep(0.05)
+    progress.abort("stop during cooldown")
+    thread.join(timeout=2.0)
+    assert not thread.is_alive()
+    assert errors and isinstance(errors[0], NetworkError)
+
+
+def test_fetch_summary_deferred_fields_append_after_circuit_breaker() -> None:
+    """FetchSummary positional slots through circuit_breaker_frozen stay stable."""
+
+    from tilearray.preview import FetchSummary
+
+    summary = FetchSummary(
+        1,  # total
+        1,  # done
+        0,  # soft_failed
+        False,  # aborted
+        (),  # errors
+        None,  # request_count
+        None,  # retry_count
+        None,  # max_inflight
+        None,  # current_limit
+        None,  # pressure_event_count
+        None,  # circuit_breaker_trips
+        False,  # circuit_breaker_frozen
+        2,  # deferred_parked
+        1,  # deferred_recovered
+        0,  # deferred_failed
+        (),  # unknowns
+    )
+    assert summary.errors == ()
+    assert summary.circuit_breaker_frozen is False
+    assert summary.deferred_parked == 2
+    assert summary.deferred_recovered == 1
+    assert summary.deferred_failed == 0
 
 
 def test_deferred_pass_concurrency_at_most_aimd_floor(

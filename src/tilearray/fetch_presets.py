@@ -41,6 +41,9 @@ def _ea_dsp_pressure_classifier() -> PressureClassifier:
             name="ea_transient_404",
             status_codes=frozenset({404}),
             retryable=True,
+            # 404 is a client miss, not host pressure — do not AIMD-decrease.
+            aimd_pressure=False,
+            circuit_breaker=False,
             max_retries=_EA_TRANSIENT_404_MAX_RETRIES,
         )
     )

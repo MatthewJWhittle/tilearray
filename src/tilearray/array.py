@@ -1069,102 +1069,137 @@ def _load_tile_array(
                 ),
             )
         return _soft_fill_array(request, dtype, float("nan"), n_bands)
-    response = _fetch_with_cache(request, cache_dir, fetch_policy, progress)
-    used_deferred_pass = False
-    park_refused = False
-    if progress is not None and not response.success:
-        # Exhausted pressure (429/5xx/timeout/transport): park and retry once
-        # after siblings finish, instead of aborting the whole mosaic (#197).
-        response, used_deferred_pass, park_refused = _maybe_deferred_retry_fetch(
-            request, cache_dir, fetch_policy, progress, response
-        )
-    elif progress is not None:
-        progress.mark_primary_resolved()
-    if progress is not None:
-        progress.tick(request, response)
-    if not response.success:
-        message = response.error_message or f"HTTP {response.status_code}"
-        if used_deferred_pass:
-            attempts = (fetch_policy.retries + 1) if fetch_policy is not None else 1
-            message = (
-                f"{message} (deferred retry pass failed after "
-                f"{attempts} primary + {attempts} deferred attempts)"
-            )
-        scaled = "scaleSize" in (request.params or {})
-        if on_tile_error is None or progress is None:
-            failure_message = tile_fetch_failure_message(
-                request.url,
-                message,
-                content_type=response.content_type or None,
-                body=response.data or None,
-                scaled_getcoverage=scaled,
-            )
-            if progress is not None:
-                # Abort first so parked waiters see the hard failure instead of
-                # starting a deferred pass on a dead host (park-cap exceeded).
-                progress.abort(failure_message)
-                if park_refused:
-                    progress.mark_primary_resolved(allow_deferred_open=False)
-            raise NetworkError(failure_message)
-        if park_refused:
-            progress.mark_primary_resolved()
-        action = on_tile_error(
-            _tile_error_context(
-                request,
-                response=response,
-                exc=None,
-                progress=progress,
-                fetch_policy=fetch_policy,
-            )
-        )
-        return _apply_tile_error_action(
-            action,
-            request=request,
-            message=message,
-            progress=progress,
-            dtype=dtype,
-            soft_fill_value=soft_fill_value,
-            n_bands=n_bands,
-        )
 
+    # Every primary-attempt exit must park, mark_primary_resolved, or abort so
+    # parked deferred waiters cannot hang forever on the condition.
+    primary_accounted = False
     try:
-        array = decoder(response, request)
-        if array.ndim not in (2, 3):
-            raise ValidationError(
-                "tile_decoder must return a 2D or 3D (y, x[, band]) array"
+        response = _fetch_with_cache(request, cache_dir, fetch_policy, progress)
+        used_deferred_pass = False
+        park_refused = False
+        if progress is not None and not response.success:
+            # Exhausted pressure (429/5xx/timeout/transport): park and retry once
+            # after siblings finish, instead of aborting the whole mosaic (#197).
+            response, used_deferred_pass, park_refused = _maybe_deferred_retry_fetch(
+                request, cache_dir, fetch_policy, progress, response
+            )
+            # Park / mark inside _maybe_deferred_retry_fetch except park_refused.
+            if not park_refused:
+                primary_accounted = True
+        elif progress is not None:
+            progress.mark_primary_resolved()
+            primary_accounted = True
+        if progress is not None:
+            progress.tick(request, response)
+        if not response.success:
+            message = response.error_message or f"HTTP {response.status_code}"
+            if used_deferred_pass:
+                attempts = (fetch_policy.retries + 1) if fetch_policy is not None else 1
+                message = (
+                    f"{message} (deferred retry pass failed after "
+                    f"{attempts} primary + {attempts} deferred attempts)"
+                )
+            scaled = "scaleSize" in (request.params or {})
+            if on_tile_error is None or progress is None:
+                failure_message = tile_fetch_failure_message(
+                    request.url,
+                    message,
+                    content_type=response.content_type or None,
+                    body=response.data or None,
+                    scaled_getcoverage=scaled,
+                )
+                if progress is not None:
+                    # Abort first so parked waiters see the hard failure instead of
+                    # starting a deferred pass on a dead host (park-cap exceeded).
+                    progress.abort(failure_message)
+                    if park_refused:
+                        progress.mark_primary_resolved(allow_deferred_open=False)
+                    primary_accounted = True
+                raise NetworkError(failure_message)
+            action = on_tile_error(
+                _tile_error_context(
+                    request,
+                    response=response,
+                    exc=None,
+                    progress=progress,
+                    fetch_policy=fetch_policy,
+                )
+            )
+            if park_refused:
+                # Decide abort vs soft-fill before opening the deferred pass.
+                if action is TileErrorAction.ABORT_MOSAIC:
+                    failure_message = tile_fetch_failure_message(
+                        request.url, message, scaled_getcoverage=scaled
+                    )
+                    progress.abort(failure_message)
+                    progress.mark_primary_resolved(allow_deferred_open=False)
+                    primary_accounted = True
+                    raise NetworkError(failure_message)
+                progress.mark_primary_resolved()
+                primary_accounted = True
+            return _apply_tile_error_action(
+                action,
+                request=request,
+                message=message,
+                progress=progress,
+                dtype=dtype,
+                soft_fill_value=soft_fill_value,
+                n_bands=n_bands,
             )
 
-        array = fit_tile_to_request(array, request, response)
-        return np.asarray(array, dtype=dtype)
-    except Exception as exc:
-        if on_tile_error is None or progress is None:
-            if isinstance(exc, TileArrayError):
-                raise
-            raise ParseError(
-                f"Failed to decode tile from {request.url}: "
-                f"{type(exc).__name__}: {exc}",
-                cause=exc,
-            ) from exc
-        message = f"{type(exc).__name__}: {exc}"
-        action = on_tile_error(
-            _tile_error_context(
-                request,
-                response=response,
-                exc=exc,
-                progress=progress,
-                fetch_policy=fetch_policy,
+        try:
+            array = decoder(response, request)
+            if array.ndim not in (2, 3):
+                raise ValidationError(
+                    "tile_decoder must return a 2D or 3D (y, x[, band]) array"
+                )
+
+            array = fit_tile_to_request(array, request, response)
+            return np.asarray(array, dtype=dtype)
+        except Exception as exc:
+            if on_tile_error is None or progress is None:
+                if progress is not None:
+                    # Hard decode failure: abort so parked waiters do not open a
+                    # deferred HTTP pass against a mosaic that is already failing.
+                    decode_message = (
+                        f"Failed to decode tile from {request.url}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    progress.abort(decode_message)
+                    primary_accounted = True
+                if isinstance(exc, TileArrayError):
+                    raise
+                raise ParseError(
+                    f"Failed to decode tile from {request.url}: "
+                    f"{type(exc).__name__}: {exc}",
+                    cause=exc,
+                ) from exc
+            message = f"{type(exc).__name__}: {exc}"
+            action = on_tile_error(
+                _tile_error_context(
+                    request,
+                    response=response,
+                    exc=exc,
+                    progress=progress,
+                    fetch_policy=fetch_policy,
+                )
             )
-        )
-        return _apply_tile_error_action(
-            action,
-            request=request,
-            message=message,
-            progress=progress,
-            dtype=dtype,
-            soft_fill_value=soft_fill_value,
-            n_bands=n_bands,
-            exc=exc,
-        )
+            return _apply_tile_error_action(
+                action,
+                request=request,
+                message=message,
+                progress=progress,
+                dtype=dtype,
+                soft_fill_value=soft_fill_value,
+                n_bands=n_bands,
+                exc=exc,
+            )
+    finally:
+        if progress is not None and not primary_accounted and not progress.is_aborted():
+            progress.abort(
+                f"Tile primary attempt unresolved for {request.url}; "
+                "aborting so deferred waiters cannot hang"
+            )
 
 
 def _fetch_with_cache(

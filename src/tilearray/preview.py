@@ -185,9 +185,6 @@ class FetchSummary:
     done: int | None
     soft_failed: int | None
     aborted: bool | None
-    deferred_parked: int | None
-    deferred_recovered: int | None
-    deferred_failed: int | None
     errors: tuple[str, ...]
     request_count: int | None
     retry_count: int | None
@@ -196,6 +193,11 @@ class FetchSummary:
     pressure_event_count: int | None
     circuit_breaker_trips: int | None
     circuit_breaker_frozen: bool | None
+    # After the pre-#197 slots through ``circuit_breaker_frozen`` so positional
+    # constructors keep stable binding; deferred counters are append-only.
+    deferred_parked: int | None
+    deferred_recovered: int | None
+    deferred_failed: int | None
     unknowns: tuple[str, ...]
 
     def summary(self) -> str:
@@ -557,9 +559,6 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
         done=done,
         soft_failed=soft_failed,
         aborted=aborted,
-        deferred_parked=deferred_parked,
-        deferred_recovered=deferred_recovered,
-        deferred_failed=deferred_failed,
         errors=tuple(errors),
         request_count=request_count,
         retry_count=retry_count,
@@ -568,6 +567,9 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
         pressure_event_count=pressure_event_count,
         circuit_breaker_trips=circuit_breaker_trips,
         circuit_breaker_frozen=circuit_breaker_frozen,
+        deferred_parked=deferred_parked,
+        deferred_recovered=deferred_recovered,
+        deferred_failed=deferred_failed,
         unknowns=tuple(unknowns),
     )
 
