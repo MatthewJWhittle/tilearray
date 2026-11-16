@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `write_zarr(da, path, …)` writes a lazy mosaic with `compute=False` + `compute_mosaic`, then sets group attr `tilearray_complete` (plus tile count / finish time, or the error on failure) on the same Zarr group as the mosaic (`group=` when set). Aborted or killed runs leave the flag false or absent so `xr.open_zarr` (with the same `group=`) can tell a partial store from a finished one; a failure while stamping the incomplete attrs still re-raises the original tile abort; re-run with the same `cache_dir` to resume (#198)
+- Documented Zarr completion attrs for callers who write with plain `Dataset.to_zarr(..., compute=False)` + `compute_mosaic`: stamp group attr `tilearray_complete=false` (plus optional tile count / error) before compute and `true` only after success so `xr.open_zarr` (same `group=` when used) can tell a partial store from a finished one; re-run with the same `cache_dir` to resume. tilearray does not ship a first-party Zarr writer (#198)
 - Per-tile wall-clock deadline with modest scaling by request `width`×`height` (relative to a 256×256 reference, capped at 4×). No request hedging (#182)
 - Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
 

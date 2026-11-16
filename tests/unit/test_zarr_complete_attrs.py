@@ -1,7 +1,8 @@
-"""write_zarr marks stores complete only after a successful mosaic write."""
+"""Documented tilearray_complete attrs around plain to_zarr (#198)."""
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,10 +13,7 @@ from _pytest.monkeypatch import MonkeyPatch
 
 import tilearray._planning as planning_module
 import tilearray.array as array_module
-import tilearray.zarr_write as zarr_write_module
-from tilearray import NetworkError, write_zarr
-from tilearray.array import create_array
-from tilearray.errors import ValidationError
+from tilearray import NetworkError, compute_mosaic, create_array
 from tilearray.service.base import BaseService, TileGeometry
 from tilearray.types import (
     CRS,
@@ -25,16 +23,14 @@ from tilearray.types import (
     TileRequest,
     TileResponse,
 )
-from tilearray.zarr_write import (
-    COMPLETE_AT_ATTR,
-    COMPLETE_ATTR,
-    COMPLETE_ERROR_ATTR,
-    TILE_COUNT_ATTR,
-)
 
 pytestmark = pytest.mark.unit
 
 zarr = pytest.importorskip("zarr")
+
+COMPLETE_ATTR = "tilearray_complete"
+COMPLETE_AT_ATTR = "tilearray_complete_at"
+COMPLETE_ERROR_ATTR = "tilearray_complete_error"
 
 
 def _zeros_decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -111,23 +107,48 @@ def _lazy_mosaic(
     )
 
 
-def test_write_zarr_sets_complete_flag_on_success(
+def _stamp_complete(
+    path: Path,
+    *,
+    complete: bool,
+    error: str | None = None,
+    group: str | None = None,
+) -> None:
+    store_group = zarr.open_group(str(path), mode="a", path=group)
+    store_group.attrs[COMPLETE_ATTR] = bool(complete)
+    if complete:
+        store_group.attrs[COMPLETE_AT_ATTR] = datetime.now(timezone.utc).isoformat()
+        if COMPLETE_ERROR_ATTR in store_group.attrs:
+            del store_group.attrs[COMPLETE_ERROR_ATTR]
+    else:
+        if COMPLETE_AT_ATTR in store_group.attrs:
+            del store_group.attrs[COMPLETE_AT_ATTR]
+        if error is not None:
+            store_group.attrs[COMPLETE_ERROR_ATTR] = error
+        elif COMPLETE_ERROR_ATTR in store_group.attrs:
+            del store_group.attrs[COMPLETE_ERROR_ATTR]
+    zarr.consolidate_metadata(str(path))
+
+
+def test_plain_to_zarr_complete_flag_on_success(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    da = _lazy_mosaic(monkeypatch)
+    da = _lazy_mosaic(monkeypatch, max_x=5120.0, max_y=5120.0)
     out = tmp_path / "ok.zarr"
-    write_zarr(da, out, name="elevation")
+    delayed = da.to_dataset(name="elevation").to_zarr(out, mode="w", compute=False)
+    _stamp_complete(out, complete=False)
+    compute_mosaic(delayed)
+    _stamp_complete(out, complete=True)
 
     ds = xr.open_zarr(out)
     assert ds.attrs.get(COMPLETE_ATTR) is True
     assert COMPLETE_AT_ATTR in ds.attrs
     assert COMPLETE_ERROR_ATTR not in ds.attrs
-    assert ds.attrs.get(TILE_COUNT_ATTR) == 16
     assert "elevation" in ds
     assert ds.elevation.shape == da.shape
 
 
-def test_write_zarr_marks_incomplete_and_reraises_on_tile_failure(
+def test_plain_to_zarr_marks_incomplete_on_tile_failure(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
     calls = {"n": 0}
@@ -141,9 +162,19 @@ def test_write_zarr_marks_incomplete_and_reraises_on_tile_failure(
     da = _lazy_mosaic(monkeypatch)
     monkeypatch.setattr(array_module, "fetch_tile", _fail_on_tenth)
     out = tmp_path / "partial.zarr"
+    delayed = da.to_dataset(name="elevation").to_zarr(out, mode="w", compute=False)
+    _stamp_complete(out, complete=False)
 
-    with pytest.raises(NetworkError, match="simulated tile abort"):
-        write_zarr(da, out, name="elevation")
+    with pytest.raises(NetworkError, match="simulated tile abort") as exc_info:
+        try:
+            compute_mosaic(delayed)
+        except Exception as exc:
+            _stamp_complete(
+                out,
+                complete=False,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            raise
 
     assert out.exists()
     ds = xr.open_zarr(out)
@@ -151,73 +182,25 @@ def test_write_zarr_marks_incomplete_and_reraises_on_tile_failure(
     assert COMPLETE_AT_ATTR not in ds.attrs
     assert "simulated tile abort" in str(ds.attrs.get(COMPLETE_ERROR_ATTR, ""))
     assert ds.elevation.shape == da.shape
+    assert exc_info.value
 
 
-def test_write_zarr_complete_store_round_trips_values(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    da = _lazy_mosaic(monkeypatch, max_x=5120.0, max_y=5120.0)
-    expected = da.compute()
-    out = tmp_path / "roundtrip.zarr"
-    write_zarr(da, out, name="elevation")
-
-    loaded = xr.open_zarr(out)
-    assert loaded.attrs.get(COMPLETE_ATTR) is True
-    np.testing.assert_array_equal(loaded.elevation.values, expected.values)
-
-
-def test_write_zarr_rejects_compute_kwarg(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    da = _lazy_mosaic(monkeypatch, max_x=2560.0, max_y=2560.0)
-    with pytest.raises(ValidationError, match="compute=False"):
-        write_zarr(da, tmp_path / "x.zarr", name="elevation", compute=True)
-
-
-def test_write_zarr_stamps_complete_attrs_on_group(
+def test_plain_to_zarr_complete_attrs_on_group(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
     da = _lazy_mosaic(monkeypatch, max_x=5120.0, max_y=5120.0)
     out = tmp_path / "grouped.zarr"
-    write_zarr(da, out, name="elevation", group="mosaic")
+    delayed = da.to_dataset(name="elevation").to_zarr(
+        out, mode="w", compute=False, group="mosaic"
+    )
+    _stamp_complete(out, complete=False, group="mosaic")
+    compute_mosaic(delayed)
+    _stamp_complete(out, complete=True, group="mosaic")
 
     ds = xr.open_zarr(out, group="mosaic")
     assert ds.attrs.get(COMPLETE_ATTR) is True
     assert COMPLETE_AT_ATTR in ds.attrs
-    assert ds.attrs.get(TILE_COUNT_ATTR) == 4
     assert "elevation" in ds
 
     root = zarr.open_group(str(out), mode="r")
     assert COMPLETE_ATTR not in root.attrs
-
-
-def test_write_zarr_preserves_tile_abort_when_meta_write_fails(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    calls = {"n": 0}
-
-    def _fail_on_tenth(request: TileRequest, **kwargs: Any) -> TileResponse:
-        calls["n"] += 1
-        if calls["n"] >= 10:
-            raise NetworkError("simulated tile abort")
-        return _fake_fetch_tile(request, **kwargs)
-
-    real_set = zarr_write_module._set_completion_attrs
-
-    def _boom_on_error_stamp(*args: Any, **kwargs: Any) -> None:
-        if kwargs.get("error") is not None:
-            raise OSError("disk full while stamping complete attrs")
-        real_set(*args, **kwargs)
-
-    da = _lazy_mosaic(monkeypatch)
-    monkeypatch.setattr(array_module, "fetch_tile", _fail_on_tenth)
-    monkeypatch.setattr(
-        zarr_write_module, "_set_completion_attrs", _boom_on_error_stamp
-    )
-    out = tmp_path / "meta-fail.zarr"
-
-    with pytest.raises(NetworkError, match="simulated tile abort") as exc_info:
-        write_zarr(da, out, name="elevation")
-
-    assert isinstance(exc_info.value.__cause__, OSError)
-    assert "disk full" in str(exc_info.value.__cause__)
