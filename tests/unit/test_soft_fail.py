@@ -297,6 +297,9 @@ def test_mosaic_soft_fail_attrs_refresh_via_compute_mosaic(
     assert lazy_errors["armed"] is True
     assert "soft_failed" not in lazy_errors
     assert "aborted" not in lazy_errors
+    assert "deferred_parked" not in lazy_errors
+    assert "deferred_recovered" not in lazy_errors
+    assert "deferred_failed" not in lazy_errors
     assert "examples" not in lazy_errors
     assert lazy.attrs["tilearray_status"] == "planned"
     # Live session is registry-backed; attrs hold only a JSON-safe token.

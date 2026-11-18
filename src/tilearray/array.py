@@ -295,10 +295,10 @@ def _tile_errors_attr_summary(
     """Build ``tilearray_tile_errors``.
 
     Plan-time (``progress is None``) keeps soft-fail *policy* only — no
-    ``soft_failed`` / ``aborted`` / ``examples``. Those outcome fields are
-    filled only when a live :class:`~tilearray.fetch.FetchProgress` is
-    supplied after compute, so eager ``to_zarr`` metadata cannot look finished
-    mid-flight.
+    ``soft_failed`` / ``aborted`` / ``deferred_*`` / ``examples``. Those
+    outcome fields are filled only when a live
+    :class:`~tilearray.fetch.FetchProgress` is supplied after compute, so
+    eager ``to_zarr`` metadata cannot look finished mid-flight.
     """
 
     summary: dict[str, Any] = {

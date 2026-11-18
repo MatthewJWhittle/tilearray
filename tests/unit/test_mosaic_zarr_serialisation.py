@@ -203,6 +203,9 @@ def test_to_zarr_compute_false_metadata_is_honest_mid_flight(
     assert tile_errors["armed"] is False
     assert "soft_failed" not in tile_errors
     assert "aborted" not in tile_errors
+    assert "deferred_parked" not in tile_errors
+    assert "deferred_recovered" not in tile_errors
+    assert "deferred_failed" not in tile_errors
     assert "examples" not in tile_errors
     # Plan-time geospatial / fetch attrs remain available for handoff.
     assert "mosaic_crs" in da.attrs
@@ -220,6 +223,9 @@ def test_to_zarr_compute_false_metadata_is_honest_mid_flight(
     assert isinstance(errors, dict)
     assert "soft_failed" not in errors
     assert "aborted" not in errors
+    assert "deferred_parked" not in errors
+    assert "deferred_recovered" not in errors
+    assert "deferred_failed" not in errors
     assert "examples" not in errors
     assert errors.get("armed") is False
     assert "mosaic_crs" in stored_attrs

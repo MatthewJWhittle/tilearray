@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- Lazy `create_array` no longer stamps finished-looking outcome counters on `attrs["tilearray_tile_errors"]`. Graph-build keeps soft-fail *policy* (`armed` / `policy` / fill / max fraction) and sets `attrs["tilearray_status"]="planned"`; `soft_failed` / `aborted` / `examples` appear only after `compute_mosaic` or `compute=True`, which also set `tilearray_status="computed"`. Stops eager `to_zarr` metadata from looking healthy mid-flight (#198)
+- Lazy `create_array` no longer stamps finished-looking outcome counters on `attrs["tilearray_tile_errors"]`. Graph-build keeps soft-fail *policy* (`armed` / `policy` / fill / max fraction) and sets `attrs["tilearray_status"]="planned"`; `soft_failed` / `aborted` / `deferred_*` / `examples` appear only after `compute_mosaic` or `compute=True`, which also set `tilearray_status="computed"`. Stops eager `to_zarr` metadata from looking healthy mid-flight (#198)
 - `FetchPolicy.timeout` replaced by distinct **`connect_timeout`**, **`read_timeout`**, and **`tile_deadline`** (wall-clock per tile attempt). httpx clients use `Timeout(connect=, read=)`; the deadline is enforced separately so drip stalls cannot outlive idle-read alone. Service configs add `fetch_connect_timeout` and optional `fetch_tile_deadline` (`fetch_timeout` remains the idle-read / default deadline). Attrs summaries use the new keys; legacy `timeout` is still accepted when reconstituting a policy (#182, #178)
 
 ### Added
