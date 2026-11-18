@@ -1323,6 +1323,13 @@ class TileFetcher:
                 except httpx.TransportError:
                     self._finish_pressure(host)
                     raise
+                except BaseException:
+                    # Abort checks, rate-limiter hooks and non-transport httpx
+                    # errors (e.g. DecodingError) must still return the slot,
+                    # or the process-local gate leaks permits and later calls
+                    # to this host hang (#213).
+                    self._finish_release(host)
+                    raise
 
                 classification = self._classify_response(response)
                 if classification.retryable:
