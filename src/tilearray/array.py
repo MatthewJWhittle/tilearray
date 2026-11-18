@@ -60,8 +60,11 @@ from ._planning import (
 from .decode import (
     DEFAULT_BAND_POLICIES,
     BandPolicy,
+    NDArrayAny,
     NDArrayFloat,
     TileDecoder,
+    band_count_from_array,
+    bands_first_layout,
     sniff_effective_content_type,
 )
 from .error_messages import tile_fetch_failure_message
@@ -1059,8 +1062,11 @@ def _load_tile_array(
     progress: FetchProgress | None = None,
     on_tile_error: TileErrorHandler | None = None,
     soft_fill_value: float = float("nan"),
-    n_bands: int = 1,
+    n_bands: int | None = None,
 ) -> NDArrayFloat:
+    # ``None`` = band-count probe (count unknown yet): no reconciliation, and
+    # soft-fill falls back to one band.
+    fill_bands = 1 if n_bands is None else n_bands
     if progress is not None:
         progress.check_not_aborted()
     # Coverage pads (wholly outside DescribeCoverage envelope) skip HTTP and
@@ -1079,7 +1085,7 @@ def _load_tile_array(
                     success=True,
                 ),
             )
-        return _soft_fill_array(request, dtype, float("nan"), n_bands)
+        return _soft_fill_array(request, dtype, float("nan"), fill_bands)
 
     # Every primary-attempt exit must park, mark_primary_resolved, or abort so
     # parked deferred waiters cannot hang forever on the condition.
@@ -1163,7 +1169,7 @@ def _load_tile_array(
                 progress=progress,
                 dtype=dtype,
                 soft_fill_value=soft_fill_value,
-                n_bands=n_bands,
+                n_bands=fill_bands,
                 content_type=response.content_type or None,
                 body=response.data or None,
                 status_code=response.status_code,
@@ -1178,6 +1184,8 @@ def _load_tile_array(
                 )
 
             array = fit_tile_to_request(array, request, response)
+            if n_bands is not None:
+                array = _match_band_count(array, n_bands, request)
             return np.asarray(array, dtype=dtype)
         except Exception as exc:
             if on_tile_error is None or progress is None:
@@ -1214,7 +1222,7 @@ def _load_tile_array(
                 progress=progress,
                 dtype=dtype,
                 soft_fill_value=soft_fill_value,
-                n_bands=n_bands,
+                n_bands=fill_bands,
                 exc=exc,
                 content_type=response.content_type or None,
                 body=response.data or None,
@@ -1227,6 +1235,37 @@ def _load_tile_array(
                 f"Tile primary attempt unresolved for {request.url}; "
                 "aborting so deferred waiters cannot hang"
             )
+
+
+def _match_band_count(
+    array: NDArrayAny, n_bands: int, request: TileRequest
+) -> NDArrayAny:
+    """Reconcile a tile's band count with the mosaic's probed ``n_bands`` (#214).
+
+    Image tile servers mix opaque RGB and transparent RGBA tiles within one
+    layer. RGB in an RGBA mosaic gains an opaque alpha band; RGBA in an RGB
+    mosaic drops alpha. Any other mismatch is a decode error naming the tile.
+    """
+
+    tile_bands = band_count_from_array(array)
+    if tile_bands == n_bands:
+        return array
+    axis = 0 if bands_first_layout(array) else -1
+    if (tile_bands, n_bands) == (3, 4):
+        if np.issubdtype(array.dtype, np.integer):
+            opaque: float = float(np.iinfo(array.dtype.name).max)
+        else:
+            opaque = 1.0
+        alpha_shape = list(array.shape)
+        alpha_shape[axis] = 1
+        alpha = np.full(alpha_shape, opaque, dtype=array.dtype)
+        return np.concatenate([array, alpha], axis=axis)
+    if (tile_bands, n_bands) == (4, 3):
+        return array[:3] if axis == 0 else array[..., :3]
+    raise ParseError(
+        f"Tile from {request.url} has {tile_bands} band(s) but the mosaic expects "
+        f"{n_bands} (band count fixed by the probe tile)"
+    )
 
 
 def _fetch_with_cache(
