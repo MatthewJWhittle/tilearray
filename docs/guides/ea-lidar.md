@@ -2,7 +2,7 @@
 
 Rendered map tiles are pictures; WCS Lidar is a **numerical** elevation coverage (GeoTIFF, nodata → NaN). This guide fetches a small British National Grid window, plots elevation, and summarises the distribution.
 
-Uses `WCSConfig.from_url(..., **ea_dsp_fetch_defaults())` (AIMD under a hard ceiling, pressure circuit breaker). Keep large cold mosaics at or below the preset ceiling — higher limits can trip gateway pressure.
+Uses `WCSConfig.from_url(..., **ea_dsp_fetch_defaults())` (AIMD under a hard ceiling, pressure circuit breaker, and a couple of retries for rare one-off 404s). Keep large cold mosaics at or below the preset ceiling — higher limits can trip gateway pressure.
 
 ## Code
 

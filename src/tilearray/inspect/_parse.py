@@ -22,6 +22,7 @@ from ..service.http import (
     compose_http_headers,
     compose_http_params,
     http_get_capabilities_text,
+    resolve_retries,
     resolve_timeout,
 )
 from ..service.wms import WMSCapabilities
@@ -179,6 +180,7 @@ def _fetch_capabilities(
             headers=headers,
             timeout=resolve_timeout(config),
             client=client,
+            retries=resolve_retries(config),
             refresh=refresh,
         )
     except httpx.HTTPError as exc:

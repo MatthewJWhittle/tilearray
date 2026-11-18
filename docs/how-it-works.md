@@ -54,7 +54,7 @@ print(fetch_summary(da))
 :width: 740px
 ```
 
-Tiles fetch over **synchronous HTTP** under a process-local concurrency gate. Dask’s **thread** pool runs tile tasks; the gate caps in-flight HTTP. Prefer {py:func}`~tilearray.compute_mosaic` so workers match that ceiling. Defaults stay hard-fail after retries (no silent NaN holes). Host ceilings, AIMD, soft-fail phases, `**service_options`, and multi-process limits: {doc}`polite-fetch`.
+Tiles fetch over **synchronous HTTP** under a process-local concurrency gate. Dask’s **thread** pool runs tile tasks; the gate caps in-flight HTTP. Prefer {py:func}`~tilearray.compute_mosaic` so workers match that ceiling. Defaults stay hard-fail after retries (no silent NaN holes); exhausted pressure (429/5xx/timeout) gets one deferred retry pass before abort. Host ceilings, AIMD, soft-fail phases, `**service_options`, and multi-process limits: {doc}`polite-fetch`.
 
 ---
 

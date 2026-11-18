@@ -24,6 +24,7 @@ from .http import (
     compose_http_headers,
     compose_http_params,
     http_get_capabilities_text,
+    resolve_retries,
     resolve_timeout,
 )
 from .requests import tile_option_passthrough
@@ -353,6 +354,7 @@ class WMTSService(BaseService):
                 headers=headers,
                 timeout=resolve_timeout(self.config),
                 client=self._client,
+                retries=resolve_retries(self.config),
                 refresh=refresh,
             )
         except httpx.HTTPError as exc:

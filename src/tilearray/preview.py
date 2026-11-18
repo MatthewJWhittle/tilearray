@@ -193,6 +193,11 @@ class FetchSummary:
     pressure_event_count: int | None
     circuit_breaker_trips: int | None
     circuit_breaker_frozen: bool | None
+    # After the pre-#197 slots through ``circuit_breaker_frozen`` so positional
+    # constructors keep stable binding; deferred counters are append-only.
+    deferred_parked: int | None
+    deferred_recovered: int | None
+    deferred_failed: int | None
     unknowns: tuple[str, ...]
 
     def summary(self) -> str:
@@ -207,6 +212,13 @@ class FetchSummary:
             lines.append(f"  soft-failed: {self.soft_failed}")
         if self.aborted is not None:
             lines.append(f"  aborted: {self.aborted}")
+        if self.deferred_parked:
+            lines.append(
+                "  deferred retry: "
+                f"parked={self.deferred_parked}, "
+                f"recovered={self.deferred_recovered or 0}, "
+                f"failed={self.deferred_failed or 0}"
+            )
         if self.errors:
             lines.append(f"  recent errors ({len(self.errors)}):")
             for err in self.errors[:5]:
@@ -476,6 +488,9 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
     done: int | None = None
     soft_failed: int | None = None
     aborted: bool | None = None
+    deferred_parked: int | None = None
+    deferred_recovered: int | None = None
+    deferred_failed: int | None = None
 
     progress = lookup_fetch_progress(attrs.get(PROGRESS_REF_ATTR))
     if progress is not None:
@@ -483,6 +498,9 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
         done = progress.done
         soft_failed = progress.soft_failed_count()
         aborted = progress.is_aborted()
+        deferred_parked = progress.deferred_parked
+        deferred_recovered = progress.deferred_recovered
+        deferred_failed = progress.deferred_failed
         errors.extend(progress.errors[:5])
     else:
         tile_errors = attrs.get(TILE_ERRORS_ATTR)
@@ -491,6 +509,14 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
             soft_failed = int(soft_raw) if soft_raw is not None else None
             aborted_raw = tile_errors.get("aborted")
             aborted = bool(aborted_raw) if aborted_raw is not None else None
+            parked_raw = tile_errors.get("deferred_parked")
+            deferred_parked = int(parked_raw) if parked_raw is not None else None
+            recovered_raw = tile_errors.get("deferred_recovered")
+            deferred_recovered = (
+                int(recovered_raw) if recovered_raw is not None else None
+            )
+            failed_raw = tile_errors.get("deferred_failed")
+            deferred_failed = int(failed_raw) if failed_raw is not None else None
             examples = tile_errors.get("examples")
             if isinstance(examples, list):
                 errors.extend(str(item) for item in examples[:5])
@@ -541,6 +567,9 @@ def fetch_summary(array: xr.DataArray) -> FetchSummary:
         pressure_event_count=pressure_event_count,
         circuit_breaker_trips=circuit_breaker_trips,
         circuit_breaker_frozen=circuit_breaker_frozen,
+        deferred_parked=deferred_parked,
+        deferred_recovered=deferred_recovered,
+        deferred_failed=deferred_failed,
         unknowns=tuple(unknowns),
     )
 
