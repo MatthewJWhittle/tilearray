@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import warnings
+from collections.abc import Mapping
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -960,10 +961,20 @@ def _apply_tile_error_action(
     soft_fill_value: float,
     n_bands: int,
     exc: BaseException | None = None,
+    content_type: str | None = None,
+    body: bytes | str | None = None,
+    status_code: int | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> NDArrayFloat:
     scaled = "scaleSize" in (request.params or {})
     failure_message = tile_fetch_failure_message(
-        request.url, message, scaled_getcoverage=scaled
+        request.url,
+        message,
+        content_type=content_type,
+        body=body,
+        status_code=status_code,
+        headers=headers,
+        scaled_getcoverage=scaled,
     )
     if action is TileErrorAction.SOFT_FAIL:
         if progress is not None:
@@ -1106,6 +1117,8 @@ def _load_tile_array(
                     message,
                     content_type=response.content_type or None,
                     body=response.data or None,
+                    status_code=response.status_code,
+                    headers=response.headers or None,
                     scaled_getcoverage=scaled,
                 )
                 if progress is not None:
@@ -1129,7 +1142,13 @@ def _load_tile_array(
                 # Decide abort vs soft-fill before opening the deferred pass.
                 if action is TileErrorAction.ABORT_MOSAIC:
                     failure_message = tile_fetch_failure_message(
-                        request.url, message, scaled_getcoverage=scaled
+                        request.url,
+                        message,
+                        content_type=response.content_type or None,
+                        body=response.data or None,
+                        status_code=response.status_code,
+                        headers=response.headers or None,
+                        scaled_getcoverage=scaled,
                     )
                     progress.abort(failure_message)
                     progress.mark_primary_resolved(allow_deferred_open=False)
@@ -1145,6 +1164,10 @@ def _load_tile_array(
                 dtype=dtype,
                 soft_fill_value=soft_fill_value,
                 n_bands=n_bands,
+                content_type=response.content_type or None,
+                body=response.data or None,
+                status_code=response.status_code,
+                headers=response.headers or None,
             )
 
         try:
@@ -1193,6 +1216,10 @@ def _load_tile_array(
                 soft_fill_value=soft_fill_value,
                 n_bands=n_bands,
                 exc=exc,
+                content_type=response.content_type or None,
+                body=response.data or None,
+                status_code=response.status_code,
+                headers=response.headers or None,
             )
     finally:
         if progress is not None and not primary_accounted and not progress.is_aborted():

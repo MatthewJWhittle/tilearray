@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Documented that plain `Dataset.to_zarr` can leave a full-shape store after abort/kill that still opens (metadata is eager; unread chunks look like fill/NaN). Persistence stays with xarray/dask — no first-party Zarr writer. A `staging` lifecycle (temp → atomic publish) is the planned incomplete→complete handoff; do not treat hand-stamped `tilearray_complete*` attrs as the durable happy path. Re-run with the same `cache_dir` to resume (#198)
 - Per-tile wall-clock deadline with modest scaling by request `width`×`height` (relative to a 256×256 reference, capped at 4×). No request hedging (#182)
 - Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
 
@@ -27,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Live large-AOI fetch resilience on busy hosts (e.g. EA LiDAR): plan-time GetCapabilities / DescribeCoverage GETs retry transient failures (transport errors, 408 / 429 / 5xx) with `Retry-After` or exponential backoff using the same `fetch_retries` budget as tile fetches (client errors still fail on the first response; exhausted errors name the attempt count) (#196); exhausted pressure tiles park and get one deferred mosaic-wide retry pass before abort (#197); `ea_dsp_fetch_defaults()` registers a host-specific bounded 404 retry (up to three attempts) without changing the global fail-fast 404 default for other hosts (#199)
+- Failed-tile ``NetworkError`` text parses OGC ``ExceptionReport`` / ``ServiceExceptionReport`` bodies so ``exceptionCode``, ``locator``, and ``ExceptionText`` appear even when the XML preamble is longer than 200 characters; HTML error pages (e.g. 429) show visible text after tag stripping. ``TileResponse.ogc_exception_code`` carries the parsed code for soft-fail / pressure matching (#200)
+- Tile fetch failures with an HTML **429** body (and HTML **503** with `Retry-After`) hint at rate limiting / too many requests instead of blaming credentials or an auth portal page; other **>=500** statuses (including 503 without `Retry-After`) get a server-side / overloaded-host hint, and HTML 5xx no longer suggests credentials (#150)
 
 ## [0.3.2] - 2026-11-13
 

@@ -6,7 +6,11 @@ and what to check next. No new public exception types.
 
 from __future__ import annotations
 
+import html
+import re
+import xml.etree.ElementTree as ET
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
@@ -14,6 +18,10 @@ import httpx
 
 from .errors import ParseError, TileArrayError
 from .types import Format
+
+# Bound cleaned body snippets in failed-tile error_message text.
+FAILED_TILE_BODY_SNIP_CHARS = 200
+_HTTP_STATUS_IN_MESSAGE = re.compile(r"(?i)\bHTTP\s+(\d{3})\b")
 
 # Query keys that must never appear in exception text.
 _SECRET_QUERY_KEYS = frozenset(
@@ -125,6 +133,105 @@ def looks_like_ogc_exception_report(body: str | bytes | None) -> bool:
     )
 
 
+def _xml_local_name(tag: str) -> str:
+    if "}" in tag:
+        return tag.rsplit("}", 1)[-1]
+    return tag
+
+
+@dataclass(frozen=True)
+class OgcExceptionInfo:
+    """Parsed fields from an OGC ExceptionReport / ServiceExceptionReport."""
+
+    code: str | None = None
+    locator: str | None = None
+    text: str | None = None
+
+
+def parse_ogc_exception(body: str | bytes) -> OgcExceptionInfo | None:
+    """Parse ``exceptionCode`` / ``locator`` / ExceptionText from an OGC body.
+
+    Supports OWS 1.1/2.0 ``ExceptionReport`` and WCS 1.x ``ServiceExceptionReport``.
+    Returns ``None`` when the XML is malformed or no exception element is found.
+    """
+
+    if isinstance(body, bytes):
+        text = body.decode("utf-8", errors="replace")
+    else:
+        text = body
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError:
+        return None
+
+    exception_el: ET.Element | None = None
+    for el in root.iter():
+        local = _xml_local_name(el.tag).lower()
+        if local in {"exception", "serviceexception"}:
+            exception_el = el
+            break
+    if exception_el is None:
+        return None
+
+    code = (
+        exception_el.attrib.get("exceptionCode")
+        or exception_el.attrib.get("code")
+        or None
+    )
+    locator = exception_el.attrib.get("locator") or None
+    detail: str | None = None
+    for child in exception_el:
+        if _xml_local_name(child.tag).lower() == "exceptiontext":
+            detail = (child.text or "").strip() or None
+            break
+    if detail is None:
+        # WCS 1.x ServiceException puts the message in the element body.
+        detail = (exception_el.text or "").strip() or None
+    if not code and not locator and not detail:
+        return None
+    return OgcExceptionInfo(code=code, locator=locator, text=detail)
+
+
+def html_visible_text(
+    body: str | bytes,
+    *,
+    max_chars: int = FAILED_TILE_BODY_SNIP_CHARS,
+) -> str:
+    """Strip tags / scripts and collapse whitespace for HTML error snippets."""
+
+    if isinstance(body, bytes):
+        text = body.decode("utf-8", errors="replace")
+    else:
+        text = body
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:max_chars]
+
+
+def format_ogc_tile_error_message(
+    status_code: int,
+    info: OgcExceptionInfo,
+    *,
+    not_tile_bytes: bool = False,
+) -> str:
+    """Build failed-tile ``error_message`` from a parsed OGC exception."""
+
+    if info.code:
+        head = f"OGC {info.code}"
+    else:
+        head = "OGC ExceptionReport"
+    if info.locator:
+        head = f"{head}, locator={info.locator}"
+    if not_tile_bytes:
+        head = f"{head}, not tile bytes"
+    detail = (info.text or "").strip()
+    if detail:
+        return f"HTTP {status_code} ({head}): {detail[:FAILED_TILE_BODY_SNIP_CHARS]}"
+    return f"HTTP {status_code} ({head})"
+
+
 def ogc_exception_report_message(
     body: str | bytes,
     *,
@@ -133,26 +240,28 @@ def ogc_exception_report_message(
 ) -> str:
     """Human-readable ParseError / ServiceError text for an OGC exception body."""
 
-    if isinstance(body, bytes):
-        text = body.decode("utf-8", errors="replace")
-    else:
-        text = body
-    detail: str | None = None
-    # Prefer ExceptionText / ServiceException body content when present.
-    for marker in ("ExceptionText", "ServiceException"):
-        start = text.find(f"<{marker}")
-        if start < 0:
-            start = text.find(f"<{marker.lower()}")
-        if start < 0:
-            continue
-        gt = text.find(">", start)
-        end = text.find(f"</{marker}", gt)
-        if end < 0:
-            end = text.find(f"</{marker.lower()}", gt)
-        if gt >= 0 and end > gt:
-            detail = text[gt + 1 : end].strip()
-            if detail:
-                break
+    parsed = parse_ogc_exception(body)
+    detail = parsed.text if parsed is not None else None
+    if detail is None:
+        if isinstance(body, bytes):
+            text = body.decode("utf-8", errors="replace")
+        else:
+            text = body
+        # Prefer ExceptionText / ServiceException body content when present.
+        for marker in ("ExceptionText", "ServiceException"):
+            start = text.find(f"<{marker}")
+            if start < 0:
+                start = text.find(f"<{marker.lower()}")
+            if start < 0:
+                continue
+            gt = text.find(">", start)
+            end = text.find(f"</{marker}", gt)
+            if end < 0:
+                end = text.find(f"</{marker.lower()}", gt)
+            if gt >= 0 and end > gt:
+                detail = text[gt + 1 : end].strip()
+                if detail:
+                    break
     safe = redact_url(url)
     lines = [
         f"{protocol} GetCapabilities returned an OGC ExceptionReport for {safe}, "
@@ -405,18 +514,51 @@ def coverage_build_service_config_message(
     )
 
 
+def _status_from_tile_message(message: str) -> int | None:
+    """Parse ``HTTP NNN`` from a tile error message when status was not passed."""
+
+    match = _HTTP_STATUS_IN_MESSAGE.search(message)
+    if match is None:
+        return None
+    return int(match.group(1))
+
+
+def _header_has_retry_after(headers: Mapping[str, str] | None) -> bool:
+    if not headers:
+        return False
+    return any(key.lower() == "retry-after" for key in headers)
+
+
+def _is_rate_limit_status(
+    status: int | None, headers: Mapping[str, str] | None
+) -> bool:
+    """True for 429, or 503 with ``Retry-After`` (common throttle signal)."""
+
+    if status == 429:
+        return True
+    return status == 503 and _header_has_retry_after(headers)
+
+
 def tile_fetch_failure_message(
     url: str,
     message: str,
     *,
     content_type: str | None = None,
     body: bytes | str | None = None,
+    status_code: int | None = None,
+    headers: Mapping[str, str] | None = None,
     scaled_getcoverage: bool = False,
 ) -> str:
     """NetworkError text for a failed tile GET."""
 
     safe_url = redact_url(url)
     lines = [f"Tile fetch failed for {safe_url}: {message}"]
+    status = (
+        status_code if status_code is not None else _status_from_tile_message(message)
+    )
+    htmlish = looks_like_html(body, content_type=content_type) or looks_like_html(
+        message
+    )
     if scaled_getcoverage:
         lines.append(
             "  Hint: this GetCoverage requested WCS Scaling (scaleSize). The server "
@@ -424,12 +566,23 @@ def tile_fetch_failure_message(
             "Scaling but not implement it. Request native resolution (omit scaleSize) "
             "or resample on the client."
         )
-    elif looks_like_html(body, content_type=content_type) or looks_like_html(message):
+    elif _is_rate_limit_status(status, headers):
+        # HTML 429 bodies (e.g. EA LiDAR) must not look like auth/portal pages.
+        lines.append(
+            "  Hint: the server is rate-limiting (too many requests); retry later, "
+            "lower max_concurrent_requests, or use cache_dir and rerun."
+        )
+    elif status is not None and status >= 500:
+        lines.append(
+            "  Hint: server-side error or overloaded host; retry later or lower "
+            "max_concurrent_requests."
+        )
+    elif htmlish and (status is None or status in {200, 401, 403}):
         lines.append(
             "  Hint: response looks like HTML (auth/portal page), not tile bytes; "
             "check credentials via params=/headers= and base_url."
         )
-    elif "401" in message or "403" in message:
+    elif status in {401, 403} or "401" in message or "403" in message:
         lines.append(
             "  Hint: auth/forbidden — pass credentials via params=/headers=; "
             "soft-fail does not paper over 401."

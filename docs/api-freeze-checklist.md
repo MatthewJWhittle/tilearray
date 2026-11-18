@@ -52,6 +52,7 @@ Also part of the taught contract (module import, not always re-exported on the p
 |---------|------|
 | `tilearray.fetch_presets` (`ea_dsp_fetch_defaults`, `osm_fetch_defaults`, host URL/coverage constants) | Host politeness — compose with `from_url`, no new `for_*` |
 | Mosaic attrs documented in how-it-works / API (`crs`, `transform`, `transform_source`, `band_policy`, `palette_mode`, `dtype_policy`, soft-fail / fetch-policy attrs, …) | Analysis handoff; treat documented keys as public behaviour |
+| `staging` persist lifecycle (planned) | Provisional: temp path → atomic publish; callers keep plain `to_zarr` / `rio.to_raster`. Optional on-disk completion attrs are vocabulary produced by the lifecycle — not a hand-stamp recipe (#198) |
 
 ### Types & registry (provisional toward 1.0)
 
@@ -90,6 +91,7 @@ These landed on `main` during the post-0.2.0 uniqueness / DX queue. They are **A
 | [#113](https://github.com/MatthewJWhittle/tilearray/pull/113) | [#59](https://github.com/MatthewJWhittle/tilearray/issues/59) | Process-local fetch-gate docs; warn on non-`threads` scheduler — **no** distributed coordinator |
 | [#116](https://github.com/MatthewJWhittle/tilearray/pull/116) / [#103](https://github.com/MatthewJWhittle/tilearray/pull/103) | [#97](https://github.com/MatthewJWhittle/tilearray/issues/97) | Worked examples notebook + guide — **no** new library exports |
 | [#104](https://github.com/MatthewJWhittle/tilearray/pull/104) | docs filter | Maintainer docs-writing principles / leakage seatbelt — **no** runtime API |
+| [#207](https://github.com/MatthewJWhittle/tilearray/pull/207) | [#200](https://github.com/MatthewJWhittle/tilearray/issues/200) / [#150](https://github.com/MatthewJWhittle/tilearray/issues/150) / [#198](https://github.com/MatthewJWhittle/tilearray/issues/198) | OGC exception text in failed-tile errors; status-first HTML 429 / 503+`Retry-After` / >=500 hints; Zarr incomplete-store warning (attrs hand-stamp parked — `staging` lifecycle is the durable path) |
 
 **Still not a public orchestration API:** multi-AOI remains a documented loop ([multi-aoi-ml-patches.md](multi-aoi-ml-patches.md)); fetch gates remain process-local. Design before inventing `map_aois` or a cross-process coordinator.
 
