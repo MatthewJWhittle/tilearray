@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Documented Zarr completion attrs for callers who write with plain `Dataset.to_zarr(..., compute=False)` + `compute_mosaic`: stamp group attr `tilearray_complete=false` (plus optional tile count / error) before compute and `true` only after success so `xr.open_zarr` (same `group=` when used) can tell a partial store from a finished one; re-run with the same `cache_dir` to resume. tilearray does not ship a first-party Zarr writer (#198)
+- Documented that plain `Dataset.to_zarr` can leave a full-shape store after abort/kill that still opens (metadata is eager; unread chunks look like fill/NaN). Persistence stays with xarray/dask — no first-party Zarr writer. A `staging` lifecycle (temp → atomic publish) is the planned incomplete→complete handoff; do not treat hand-stamped `tilearray_complete*` attrs as the durable happy path. Re-run with the same `cache_dir` to resume (#198)
 - Per-tile wall-clock deadline with modest scaling by request `width`×`height` (relative to a 256×256 reference, capped at 4×). No request hedging (#182)
 - Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
 

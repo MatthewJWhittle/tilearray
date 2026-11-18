@@ -137,44 +137,11 @@ Pass `cache_dir=` to `create_array` / `load_array` (and the same path to `previe
 
 ## Large mosaics to Zarr
 
-Plain `to_zarr` writes mosaic attrs when the store is created — before tiles finish. An aborted or killed run can leave a full-shape store that looks finished while unread chunks are fill/NaN. tilearray does not write Zarr for you; stamp a group attr around xarray/dask so the **store alone** can tell incomplete from finished. Use `tilearray_complete=false` before `compute_mosaic`, and `true` only after success (`false` / missing means incomplete). When you pass `group=`, put the flag on that subgroup and open with the same `group=`:
+Plain `Dataset.to_zarr` writes mosaic metadata when the store is created — before tiles finish. An aborted or killed run can leave a full-shape store that opens cleanly while unread chunks are fill/NaN. Path presence alone is not a finish signal, and NaNs are not either (soft-fail holes and real nodata look the same).
 
-```python
-from datetime import datetime, timezone
+tilearray does **not** ship a Zarr writer. Persist with xarray/dask as usual (`create_array` → `to_zarr` / `compute_mosaic`). Treat an interrupted destination as untrusted until you rewrite it.
 
-import xarray as xr
-import zarr
-from tilearray import compute_mosaic, create_array
-
-da = create_array(cfg, bbox, bbox_crs=..., cache_dir="./tiles")
-path = "out.zarr"
-delayed = da.to_dataset(name="elevation").to_zarr(path, mode="w", compute=False)
-
-group = zarr.open_group(path, mode="a")
-group.attrs["tilearray_complete"] = False
-zarr.consolidate_metadata(path)
-
-try:
-    compute_mosaic(delayed)
-except Exception as exc:
-    group = zarr.open_group(path, mode="a")
-    group.attrs["tilearray_complete"] = False
-    group.attrs["tilearray_complete_error"] = f"{type(exc).__name__}: {exc}"
-    zarr.consolidate_metadata(path)
-    raise
-
-group = zarr.open_group(path, mode="a")
-group.attrs["tilearray_complete"] = True
-group.attrs["tilearray_complete_at"] = datetime.now(timezone.utc).isoformat()
-group.attrs.pop("tilearray_complete_error", None)
-zarr.consolidate_metadata(path)
-
-ds = xr.open_zarr(path)
-if not ds.attrs.get("tilearray_complete"):
-    raise RuntimeError("incomplete Zarr write — re-run with the same cache_dir")
-```
-
-Optional companions on the same group: `tilearray_tile_count`, `tilearray_complete_at`, `tilearray_complete_error`. Resume: call `create_array` again with the **same** `cache_dir` and rewrite the same path (`mode="w"` replaces the store; warm cache tiles skip the network).
+**Coming soon:** a thin `staging` lifecycle (temp path → atomic publish on clean exit) so incomplete→complete is owned at the persist edge — callers still call plain `to_zarr` / `rio.to_raster`, without hand-stamping library attrs. Until that lands, prefer rewriting the same path after a failed or killed run, and reuse the **same** `cache_dir` so warm tiles skip the network (`mode="w"` replaces the store).
 
 ## Private / keyed hosts
 

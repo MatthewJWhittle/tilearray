@@ -1,8 +1,13 @@
-"""Documented tilearray_complete attrs around plain to_zarr (#198)."""
+"""Incomplete vs complete Zarr stores are a persist concern (#198).
+
+Plain ``to_zarr`` writes metadata eagerly. An aborted compute can leave a
+full-shape store that still opens — path presence alone is not a finish
+signal. Callers are not expected to hand-stamp ``tilearray_complete*``;
+a ``staging`` lifecycle (temp → atomic publish) is the planned handoff.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +32,6 @@ from tilearray.types import (
 pytestmark = pytest.mark.unit
 
 zarr = pytest.importorskip("zarr")
-
-COMPLETE_ATTR = "tilearray_complete"
-COMPLETE_AT_ATTR = "tilearray_complete_at"
-COMPLETE_ERROR_ATTR = "tilearray_complete_error"
 
 
 def _zeros_decoder(response: TileResponse, request: TileRequest) -> np.ndarray:
@@ -107,50 +108,28 @@ def _lazy_mosaic(
     )
 
 
-def _stamp_complete(
-    path: Path,
-    *,
-    complete: bool,
-    error: str | None = None,
-    group: str | None = None,
-) -> None:
-    store_group = zarr.open_group(str(path), mode="a", path=group)
-    store_group.attrs[COMPLETE_ATTR] = bool(complete)
-    if complete:
-        store_group.attrs[COMPLETE_AT_ATTR] = datetime.now(timezone.utc).isoformat()
-        if COMPLETE_ERROR_ATTR in store_group.attrs:
-            del store_group.attrs[COMPLETE_ERROR_ATTR]
-    else:
-        if COMPLETE_AT_ATTR in store_group.attrs:
-            del store_group.attrs[COMPLETE_AT_ATTR]
-        if error is not None:
-            store_group.attrs[COMPLETE_ERROR_ATTR] = error
-        elif COMPLETE_ERROR_ATTR in store_group.attrs:
-            del store_group.attrs[COMPLETE_ERROR_ATTR]
-    zarr.consolidate_metadata(str(path))
-
-
-def test_plain_to_zarr_complete_flag_on_success(
+def test_to_zarr_writes_metadata_before_compute(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Eager metadata means the store opens before any tile finishes."""
     da = _lazy_mosaic(monkeypatch, max_x=5120.0, max_y=5120.0)
-    out = tmp_path / "ok.zarr"
+    out = tmp_path / "eager.zarr"
     delayed = da.to_dataset(name="elevation").to_zarr(out, mode="w", compute=False)
-    _stamp_complete(out, complete=False)
-    compute_mosaic(delayed)
-    _stamp_complete(out, complete=True)
 
+    assert out.exists()
     ds = xr.open_zarr(out)
-    assert ds.attrs.get(COMPLETE_ATTR) is True
-    assert COMPLETE_AT_ATTR in ds.attrs
-    assert COMPLETE_ERROR_ATTR not in ds.attrs
     assert "elevation" in ds
     assert ds.elevation.shape == da.shape
+    # No library completion attr is required for open — and none is stamped.
+    assert "tilearray_complete" not in ds.attrs
+    # Keep the Delayed so the graph is not GC'd mid-assertion.
+    assert delayed is not None
 
 
-def test_plain_to_zarr_marks_incomplete_on_tile_failure(
+def test_aborted_to_zarr_leaves_openable_full_shape_store(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Abort mid-write still leaves a full-shape store that opens cleanly."""
     calls = {"n": 0}
 
     def _fail_on_tenth(request: TileRequest, **kwargs: Any) -> TileResponse:
@@ -163,44 +142,34 @@ def test_plain_to_zarr_marks_incomplete_on_tile_failure(
     monkeypatch.setattr(array_module, "fetch_tile", _fail_on_tenth)
     out = tmp_path / "partial.zarr"
     delayed = da.to_dataset(name="elevation").to_zarr(out, mode="w", compute=False)
-    _stamp_complete(out, complete=False)
 
-    with pytest.raises(NetworkError, match="simulated tile abort") as exc_info:
-        try:
-            compute_mosaic(delayed)
-        except Exception as exc:
-            _stamp_complete(
-                out,
-                complete=False,
-                error=f"{type(exc).__name__}: {exc}",
-            )
-            raise
+    with pytest.raises(NetworkError, match="simulated tile abort"):
+        compute_mosaic(delayed)
 
     assert out.exists()
     ds = xr.open_zarr(out)
-    assert ds.attrs.get(COMPLETE_ATTR) is False
-    assert COMPLETE_AT_ATTR not in ds.attrs
-    assert "simulated tile abort" in str(ds.attrs.get(COMPLETE_ERROR_ATTR, ""))
+    assert "elevation" in ds
     assert ds.elevation.shape == da.shape
-    assert exc_info.value
+    # Store alone has no finish bit — incomplete vs complete is not distinguishable
+    # from path presence or mosaic attrs written at graph-build time.
+    assert "tilearray_complete" not in ds.attrs
 
 
-def test_plain_to_zarr_complete_attrs_on_group(
+def test_to_zarr_group_placement_keeps_root_free_of_mosaic_vars(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
+    """``group=`` nests the mosaic; root group is not the array container."""
     da = _lazy_mosaic(monkeypatch, max_x=5120.0, max_y=5120.0)
     out = tmp_path / "grouped.zarr"
     delayed = da.to_dataset(name="elevation").to_zarr(
         out, mode="w", compute=False, group="mosaic"
     )
-    _stamp_complete(out, complete=False, group="mosaic")
     compute_mosaic(delayed)
-    _stamp_complete(out, complete=True, group="mosaic")
 
     ds = xr.open_zarr(out, group="mosaic")
-    assert ds.attrs.get(COMPLETE_ATTR) is True
-    assert COMPLETE_AT_ATTR in ds.attrs
     assert "elevation" in ds
+    assert ds.elevation.shape == da.shape
 
     root = zarr.open_group(str(out), mode="r")
-    assert COMPLETE_ATTR not in root.attrs
+    assert "elevation" not in root
+    assert "tilearray_complete" not in root.attrs
