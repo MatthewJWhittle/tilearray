@@ -1383,3 +1383,31 @@ def test_stalled_tile_batch_finishes_within_about_2x_healthy_wall_time() -> None
     # ~2× healthy wall under deadline behaviour (not ~60 s read-timeout tails).
     assert stall_elapsed < max(2.0 * healthy_elapsed, healthy_elapsed + 1.5)
     assert stall_elapsed < 5.0
+
+
+@respx.mock
+@pytest.mark.parametrize("encoding", ["gzip", "deflate"])
+def test_fetch_tile_decodes_content_encoded_body_once(encoding: str) -> None:
+    """Hosts that compress tile bodies (Flanders, Styria) must decode once (#212)."""
+
+    import gzip
+    import zlib
+
+    body = b"compressed tile bytes" * 50
+    payload = gzip.compress(body) if encoding == "gzip" else zlib.compress(body)
+    respx.get("https://example.com/tile").mock(
+        return_value=httpx.Response(
+            200,
+            content=payload,
+            headers={"content-type": "image/tiff", "content-encoding": encoding},
+        )
+    )
+    request = _tile_request(output_format=Format.GEOTIFF)
+
+    response = fetch_tile_with_policy(
+        request,
+        FetchPolicy(max_concurrent=2, rate_limit_per_second=None),
+    )
+
+    assert response.success is True
+    assert response.data == body
