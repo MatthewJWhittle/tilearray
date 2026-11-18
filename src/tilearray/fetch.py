@@ -1208,10 +1208,15 @@ class TileFetcher:
         response: httpx.Response,
         deadline_at: float,
     ) -> bytes:
-        """Consume a streamed body; abort if wall-clock deadline elapses (drip stalls)."""
+        """Consume a streamed body; abort if wall-clock deadline elapses (drip stalls).
+
+        Returns the raw wire bytes (still content-encoded). The caller rebuilds an
+        ``httpx.Response`` with the original headers, so httpx decodes gzip/deflate
+        exactly once (#212).
+        """
 
         chunks: list[bytes] = []
-        for chunk in response.iter_bytes():
+        for chunk in response.iter_raw():
             if time.monotonic() >= deadline_at:
                 raise httpx.ReadTimeout(
                     "Per-tile wall-clock deadline exceeded",
