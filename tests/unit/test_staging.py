@@ -159,3 +159,18 @@ def test_staging_restores_final_when_publish_replace_fails(
     assert final.is_dir()
     assert (final / "keep").read_text(encoding="utf-8") == "previous"
     assert not (final / "new").exists()
+
+
+def test_staging_exception_keeps_previous_final_store(tmp_path: Path) -> None:
+    """A failed rewrite leaves the previous published store in place (#198)."""
+
+    final = tmp_path / "out.zarr"
+    final.mkdir()
+    (final / "marker").write_text("previous")
+    with pytest.raises(RuntimeError, match="rewrite failed"):
+        with staging(final) as temp:
+            temp.mkdir()
+            (temp / "marker").write_text("new")
+            raise RuntimeError("rewrite failed")
+    assert (final / "marker").read_text() == "previous"
+    assert not (tmp_path / "out.zarr.partial").exists()

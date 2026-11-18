@@ -15,7 +15,7 @@ da = compute_mosaic(da)  # or write lazily inside staging
 with staging("out.zarr") as path:
     da.to_dataset(name="elevation").to_zarr(path, mode="w")
 # clean exit → atomically publish to out.zarr
-# exception / kill → out.zarr absent
+# exception / kill → out.zarr untouched (absent if new; previous store kept if replacing)
 ```
 
 Or keep the mosaic lazy and compute as part of the write:
@@ -28,7 +28,9 @@ with staging("out.zarr") as path:
     compute_mosaic(delayed)
 ```
 
-**Reader check for this MVP:** if `out.zarr` exists, the write finished; if it is missing, do not treat a sibling `out.zarr.partial` (if present) as complete.
+**Reader check for this MVP:** if `out.zarr` exists, a write to it finished cleanly. When you rewrite an existing path, a failed or killed run leaves the *previous* store in place, so check that your own run exited cleanly (or write to a fresh path) before treating `out.zarr` as this run's output. Never treat a sibling `out.zarr.partial` as complete.
+
+Array attrs stored by a lazy write describe the *plan*: `tilearray_status` reads `"planned"` on disk even after a clean write, because xarray writes attrs before tiles run. Path presence, not that attr, is the completion signal.
 
 ## What staging is not
 

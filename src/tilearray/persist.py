@@ -87,14 +87,17 @@ def staging(
 
     Whole-store rewrite only (``mode="w"`` story). On clean context exit the
     temp store is published onto ``path`` with ``os.replace``. On exception
-    (or process kill before exit) the final path stays absent — the temp is
-    discarded when possible, or may be left as sibling ``*.partial`` junk.
+    (or process kill before exit) the final path is left untouched — absent
+    for a new store, or still the *previous* store when replacing one. The
+    temp is discarded when possible, or may be left as sibling ``*.partial``
+    junk after a kill.
 
     Tile-fetch resume remains ``cache_dir`` on ``create_array``; it is
     orthogonal to this persist publish.
 
     Args:
-        path: Final store path (present ⇒ complete for this MVP).
+        path: Final store path (present ⇒ some complete publish; not
+            necessarily this run when replacing an existing store).
         kind: Persist format. ``"zarr"`` is supported; ``"raster"`` / COG is
             not implemented yet.
 
