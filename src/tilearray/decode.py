@@ -250,6 +250,37 @@ def _read_geotiff_file(path: str) -> NDArrayFloat:
     return _read_geotiff_source(path)
 
 
+def _sparse_segment_mask(page: tifffile.TiffPage) -> NDArrayAny | None:
+    """Return a ``page.shape`` mask of absent (zero byte count) strips/tiles.
+
+    GDAL writes all-nodata blocks as offset 0 / byte count 0 (``SPARSE_OK``).
+    Returns ``None`` when every block is present. Block geometry comes from
+    tifffile's ``chunks`` / ``chunked`` (segments are stored in C order over
+    the ``chunked`` grid).
+    """
+
+    bytecounts = np.asarray(page.databytecounts)
+    empty = bytecounts == 0
+    if not empty.any():
+        return None
+    shape = tuple(page.shape)
+    chunked = tuple(page.chunked)
+    chunks = tuple(page.chunks)
+    if len(chunks) < len(chunked):  # planar-separate: one plane per segment row
+        chunks = (1,) * (len(chunked) - len(chunks)) + chunks
+    mask = np.zeros(shape, dtype=bool)
+    if empty.all():
+        mask[...] = True
+        return mask
+    if len(chunks) > len(shape) or empty.size != int(np.prod(chunked)):
+        return None  # unexpected layout; leave tifffile's decode as-is
+    for index in np.flatnonzero(empty):
+        grid = np.unravel_index(int(index), chunked)
+        region = tuple(slice(g * c, (g + 1) * c) for g, c in zip(grid, chunks))
+        mask[region] = True
+    return mask
+
+
 def _read_geotiff_source(source: str | BytesIO) -> NDArrayFloat:
     """
     Decode TIFF/GeoTIFF pixels with ``tifffile``.
@@ -267,6 +298,15 @@ def _read_geotiff_source(source: str | BytesIO) -> NDArrayFloat:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
             with tifffile.TiffFile(source) as tif_file:
+                first = tif_file.pages.first
+                if first is not None and len(tif_file.pages) == 1:
+                    sparse = _sparse_segment_mask(first)
+                    if sparse is not None and sparse.all():
+                        # Every block absent (GDAL SPARSE_OK all-nodata tile):
+                        # nothing to read, and tifffile would read from offset 0.
+                        return np.full(first.shape, np.nan, dtype=np.float32)
+                else:
+                    sparse = None
                 try:
                     data = np.asarray(tif_file.asarray(), dtype=np.float64)
                 except ValueError as exc:
@@ -288,6 +328,9 @@ def _read_geotiff_source(source: str | BytesIO) -> NDArrayFloat:
                         nodata = None
                     if nodata is not None and np.isfinite(nodata):
                         data[data == nodata] = np.nan
+                if sparse is not None and sparse.any() and data.shape == sparse.shape:
+                    # tifffile zero-fills absent blocks; they are nodata (#215).
+                    data[sparse] = np.nan
     finally:
         tifffile_logger.setLevel(previous_level)
 
