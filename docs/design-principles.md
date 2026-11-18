@@ -69,7 +69,7 @@ Do not treat a colourful mosaic as proof of numerical fidelity, or elevation NaN
 
 **In scope:** polite concurrent fetch and assemble of WCS / WMS / WMTS / XYZ into Dask-backed xarray; plan-time bind of fetch/error/decode behaviour; accurate mosaic metadata; progressive disclosure via policies and presets.
 
-**Out of scope (through ~0.3, see {doc}`roadmap`):** STAC/COG cube builders; map SDKs / tile servers; async-first rewrite; kitchen-sink auth frameworks; full temporal cube API; provider catalogue chase; local GIS processing (warp, resample, terrain, ML training, export).
+**Out of scope (through ~0.3, see {doc}`roadmap`):** STAC/COG cube builders; map SDKs / tile servers; async-first rewrite; kitchen-sink auth frameworks; full temporal cube API; provider catalogue chase; local GIS processing (warp, resample, terrain, ML training, **first-party export writers**). Persistence stays with xarray / rioxarray; the provisional {py:func}`~tilearray.staging` lifecycle only owns incomplete→complete *close* (temp path → atomic publish), not pixel IO.
 
 ---
 

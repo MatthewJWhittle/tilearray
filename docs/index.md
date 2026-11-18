@@ -25,6 +25,7 @@ Examples use the **0.3.2** public names: `compute_mosaic`, `preview_array`, `bbo
 - {doc}`inspect-endpoint` — discover layers and build a config from an unknown URL
 - {doc}`polite-fetch` — host ceilings, soft-fail, ``**service_options``, multi-process scaling
 - {doc}`troubleshooting` — when fetches fail or shapes look wrong
+- {doc}`staging-zarr` — publish a Zarr store only after a clean write
 - {doc}`multi-aoi-ml-patches` — many sample bboxes / ML chips (one mosaic per bbox)
 - {doc}`example-sources` — public endpoints and presets
 - {doc}`guides/worked-examples` — which guide for which job
@@ -61,6 +62,7 @@ guides/index
 inspect-endpoint
 polite-fetch
 troubleshooting
+staging-zarr
 multi-aoi-ml-patches
 example-sources
 guides/worked-examples

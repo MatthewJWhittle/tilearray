@@ -111,7 +111,15 @@ Multi-tile mosaics show a tqdm-style progress bar by default (`show_progress=Fal
 :width: 720px
 ```
 
-With a DataArray you can plot, analyse with xarray/Dask, feed ML chips ({doc}`multi-aoi-ml-patches`), or hand off to rioxarray:
+With a DataArray you can plot, analyse with xarray/Dask, feed ML chips ({doc}`multi-aoi-ml-patches`), persist with xarray, or hand off to rioxarray:
+
+```python
+from tilearray import staging
+
+with staging("out.zarr") as path:
+    da.to_dataset(name="elevation").to_zarr(path, mode="w")
+# final path present only after a clean write — see {doc}`staging-zarr`
+```
 
 ```python
 # pip install rioxarray
@@ -124,4 +132,4 @@ if "nodata" in da.attrs:
     da.rio.write_nodata(da.attrs["nodata"], inplace=True)
 ```
 
-Next: {doc}`quickstart`, {doc}`guides/index`, {doc}`polite-fetch`, or {doc}`design-principles`.
+Next: {doc}`quickstart`, {doc}`guides/index`, {doc}`polite-fetch`, {doc}`staging-zarr`, or {doc}`design-principles`.

@@ -31,6 +31,7 @@ from .matrix_resolution import (
     MatrixLevelSummary,
     choose_matrix_for_resolution,
 )
+from .persist import staging
 from .preview import (
     ArrayPreview,
     FetchSummary,
@@ -77,6 +78,7 @@ __all__ = [
     "compute_mosaic",
     "create_array",
     "load_array",
+    "staging",
     "preview_array",
     "recommend_grid_shape",
     "choose_matrix_for_resolution",

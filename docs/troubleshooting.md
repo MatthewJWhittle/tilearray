@@ -131,6 +131,10 @@ These fail **before** a useful mosaic exists. Exception text names what was wron
 | `Unable to detect service type` | Ambiguous URL | Pass `service_type=` to `inspect_endpoint`, or a typed config / `{z}/{x}/{y}` for XYZ |
 | Tile `NetworkError` after plan succeeded | Host reject / politeness / transient | Keep preset ceilings; prefer `compute_mosaic`. OGC bodies include the server `exceptionCode` / text (e.g. `NoSuchCoverage`). HTML **429** (or 503 with `Retry-After`) means rate limiting — lower concurrency or retry later; other **>=500** (including 503 without `Retry-After`) means server-side / overloaded — retry later or lower concurrency; HTML **200/401/403** usually means an auth/portal URL |
 
+## Partial Zarr store after an interrupt
+
+A killed or exceptioned `Dataset.to_zarr(final_path)` can leave a store that opens but is only partly filled. Prefer {py:func}`~tilearray.staging` so the **final path is published only on clean exit** (how-to: {doc}`staging-zarr`). Reusing tile bytes across runs is still `cache_dir=` below — orthogonal to persist publish.
+
 ## Disk cache
 
 Pass `cache_dir=` to `create_array` / `load_array` (and the same path to `preview_array` when preflighting) to reuse tile bytes across runs. Each tile is `{sha256}.tile` + `{sha256}.meta` keyed by URL/params/format/bbox/size. Warm reads sniff the body when response headers lie (e.g. multipart WCS). Warm hits skip the network for that tile but cold siblings still share the host concurrency gate. Clear the directory if you change decode expectations, auth params, or suspect corrupt cache entries. `preview_array(...).summary()` reports warm/cold counts for the planned request set before you spend a cold compute.

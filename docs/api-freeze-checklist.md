@@ -54,6 +54,12 @@ Also part of the taught contract (module import, not always re-exported on the p
 | Mosaic attrs documented in how-it-works / API (`crs`, `transform`, `transform_source`, `band_policy`, `palette_mode`, `dtype_policy`, soft-fail / fetch-policy attrs, …) | Analysis handoff; treat documented keys as public behaviour |
 | `staging` persist lifecycle (planned) | Provisional: temp path → atomic publish; callers keep plain `to_zarr` / `rio.to_raster`. Optional on-disk completion attrs are vocabulary produced by the lifecycle — not a hand-stamp recipe (#198) |
 
+### Persist lifecycle (provisional)
+
+| Symbol | Note |
+|--------|------|
+| `staging` | Thin context manager: temp write path → atomic publish on clean exit. Callers still use `Dataset.to_zarr` / (later) `rio.to_raster` — **not** a first-party writer. Zarr whole-store `mode="w"` MVP; `kind="raster"` deferred. May rename or shrink before 1.0 until usage proves Core (#198) |
+
 ### Types & registry (provisional toward 1.0)
 
 Exported today; decide keep / demote / document before freeze:
