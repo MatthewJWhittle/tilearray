@@ -109,7 +109,7 @@ After retries, a failed tile raises {py:exc}`tilearray.NetworkError`. Mosaics do
 
 Bad inputs and setup mistakes raise other {py:exc}`tilearray.TileArrayError` subclasses (`ValidationError`, `ParseError`, `ConfigurationError`) rather than bare `ValueError` / `RuntimeError`. Catch the hierarchy (or a subclass), not bare builtins, when handling library failures.
 
-Opt in to visible soft-fill with plan-time ``on_tile_error=soft_fail_exhausted_tiles`` (or ``soft_fail=True``). Soft-fill runs **only after** fetcher retries (and any deferred pressure pass) finish, never calls ``FetchProgress.abort``, and records failures in ``progress.errors`` / ``attrs["tilearray_tile_errors"]``. Auth (401), exhausted 429 after the deferred pass, and decode/library errors still hard-abort under the preset; a soft-fail fraction above ``soft_fail_max_fraction`` (default ``0.1``) also aborts.
+Opt in to visible soft-fill with plan-time ``on_tile_error=soft_fail_exhausted_tiles`` (or ``soft_fail=True``). Soft-fill runs **only after** fetcher retries (and any deferred pressure pass) finish, never calls ``FetchProgress.abort``, and records failures in ``progress.errors`` / ``attrs["tilearray_tile_errors"]`` after compute (lazy graphs keep only the soft-fail *policy* and ``tilearray_status="planned"`` until ``compute_mosaic``). Auth (401), exhausted 429 after the deferred pass, and decode/library errors still hard-abort under the preset; a soft-fail fraction above ``soft_fail_max_fraction`` (default ``0.1``) also aborts.
 
 | Phase | When | Soft-fail? |
 |-------|------|------------|

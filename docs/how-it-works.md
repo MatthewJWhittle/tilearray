@@ -93,8 +93,8 @@ Each planned tile is a Dask chunk on a shared mosaic graph (request table + ``ma
 
 | Path | What happens |
 |------|----------------|
-| `create_array(...)` (default) | **Lazy** Dask graph — coords/attrs ready; pixels not all in RAM. |
-| {py:func}`tilearray.compute_mosaic` | **Preferred** compute path: thread workers aligned to the fetch ceiling. |
+| `create_array(...)` (default) | **Lazy** Dask graph — coords/attrs ready; pixels not all in RAM. Plan-time attrs (`mosaic_crs`, transform, fetch policy, soft-fail *policy*) plus `tilearray_status="planned"`; soft-fail *outcome* counters are omitted until compute. |
+| {py:func}`tilearray.compute_mosaic` | **Preferred** compute path: thread workers aligned to the fetch ceiling; refreshes `tilearray_tile_errors` outcomes and sets `tilearray_status="computed"`. |
 | `load_array(...)` | Eager sugar for `create_array(..., compute=True)`. Prefer lazy + `compute_mosaic` on primary paths. |
 | `da.compute()` | Works, but default Dask worker count can under-use a high fetch ceiling. |
 | `cache_dir=...` | Optional on-disk tile cache; warm hits skip the network. |

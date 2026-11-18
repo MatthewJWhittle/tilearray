@@ -255,6 +255,7 @@ def test_mosaic_soft_fail_every_tenth_completes(
     assert tile_errors["soft_failed"] == 2
     assert tile_errors["aborted"] is False
     assert len(tile_errors["examples"]) >= 1
+    assert result.attrs["tilearray_status"] == "computed"
 
     # Two soft-failed 4x4 blocks → 32 NaN pixels; rest finite ones.
     nan_count = int(np.isnan(result.values).sum())
@@ -291,10 +292,13 @@ def test_mosaic_soft_fail_attrs_refresh_via_compute_mosaic(
         fetch_retries=0,
     )
 
-    # Plan-time attrs are armed but counters still zero until compute.
+    # Plan-time attrs are armed; outcome counters omitted until compute.
     lazy_errors = lazy.attrs[_TILE_ERRORS_ATTR]
     assert lazy_errors["armed"] is True
-    assert lazy_errors["soft_failed"] == 0
+    assert "soft_failed" not in lazy_errors
+    assert "aborted" not in lazy_errors
+    assert "examples" not in lazy_errors
+    assert lazy.attrs["tilearray_status"] == "planned"
     # Live session is registry-backed; attrs hold only a JSON-safe token.
     assert isinstance(lazy.attrs.get(_PROGRESS_REF_ATTR), str)
     assert isinstance(
@@ -308,10 +312,12 @@ def test_mosaic_soft_fail_attrs_refresh_via_compute_mosaic(
     assert tile_errors["soft_failed"] == 2
     assert tile_errors["aborted"] is False
     assert len(tile_errors["examples"]) >= 1
+    assert result.attrs["tilearray_status"] == "computed"
     assert _PROGRESS_REF_ATTR not in result.attrs
 
     # Source lazy attrs also refreshed for post-compute inspection.
     assert lazy.attrs[_TILE_ERRORS_ATTR]["soft_failed"] == 2
+    assert lazy.attrs["tilearray_status"] == "computed"
 
     nan_count = int(np.isnan(result.values).sum())
     assert nan_count == 2 * 4 * 4
