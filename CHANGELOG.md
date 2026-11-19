@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-19
+
 ### Breaking
 
 - Lazy `create_array` no longer stamps finished-looking outcome counters on `attrs["tilearray_tile_errors"]`. Graph-build keeps soft-fail *policy* (`armed` / `policy` / fill / max fraction) and sets `attrs["tilearray_status"]="planned"`; `soft_failed` / `aborted` / `deferred_*` / `examples` appear only after `compute_mosaic` or `compute=True`, which also set `tilearray_status="computed"`. Stops eager `to_zarr` metadata from looking healthy mid-flight (#198)
@@ -247,7 +249,8 @@ Initial alpha release focused on lazy WCS- and XYZ-backed xarray arrays.
 - Package renamed from scaffold `ogc-array` to `tilearray`; README, CI, and metadata aligned with shipped API
 - EA Lidar WCS GeoTIFF decode and non-divisible tile resize for native-resolution tiles
 
-[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MatthewJWhittle/tilearray/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MatthewJWhittle/tilearray/compare/v0.2.0...v0.3.0
