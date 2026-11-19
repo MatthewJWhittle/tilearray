@@ -56,6 +56,11 @@ from .types import (
 FETCH_POLICY_ATTR = "tilearray_fetch_policy"
 RECOMMENDED_NUM_WORKERS_ATTR = "tilearray_recommended_num_workers"
 TILE_ERRORS_ATTR = "tilearray_tile_errors"
+# Graph-build vs post-compute honesty for persistence (eager to_zarr metadata).
+# "planned" = outcome counters omitted; "computed" = counters refreshed.
+MOSAIC_STATUS_ATTR = "tilearray_status"
+MOSAIC_STATUS_PLANNED = "planned"
+MOSAIC_STATUS_COMPUTED = "computed"
 # Internal handle so compute_mosaic can refresh tile_errors after lazy compute.
 # Not part of the public attrs contract; stripped from eager/computed results.
 PROGRESS_REF_ATTR = "_tilearray_fetch_progress"
@@ -65,6 +70,9 @@ _FETCH_POLICY_ATTR = FETCH_POLICY_ATTR
 _RECOMMENDED_NUM_WORKERS_ATTR = RECOMMENDED_NUM_WORKERS_ATTR
 _TILE_ERRORS_ATTR = TILE_ERRORS_ATTR
 _PROGRESS_REF_ATTR = PROGRESS_REF_ATTR
+_MOSAIC_STATUS_ATTR = MOSAIC_STATUS_ATTR
+_MOSAIC_STATUS_PLANNED = MOSAIC_STATUS_PLANNED
+_MOSAIC_STATUS_COMPUTED = MOSAIC_STATUS_COMPUTED
 
 
 def fetch_policy_summary(policy: FetchPolicy) -> dict[str, Any]:
@@ -1017,6 +1025,9 @@ _probe_tile_bands = probe_tile_bands
 
 __all__ = [
     "FETCH_POLICY_ATTR",
+    "MOSAIC_STATUS_ATTR",
+    "MOSAIC_STATUS_COMPUTED",
+    "MOSAIC_STATUS_PLANNED",
     "PROGRESS_REF_ATTR",
     "RECOMMENDED_NUM_WORKERS_ATTR",
     "TILE_ERRORS_ATTR",

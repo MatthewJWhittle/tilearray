@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import pickle
 import threading
 from pathlib import Path
@@ -172,6 +173,63 @@ def test_lazy_mosaic_to_zarr_with_uniform_trailing_remainder(
     loaded = zarr.open_group(str(out), mode="r")
     assert "elevation" in loaded
     assert loaded["elevation"].shape == (513, 513)
+
+
+def _decode_zarr_attr(value: Any) -> Any:
+    """xarray may JSON-encode nested attrs when writing Zarr."""
+    if isinstance(value, (bytes, bytearray)):
+        value = value.decode()
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
+def test_to_zarr_compute_false_metadata_is_honest_mid_flight(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eager metadata must not serialise finished-looking outcome counters.
+
+    xarray writes attrs immediately on ``to_zarr(compute=False)`` even though
+    mosaic pixels have not run. Plan-time attrs keep soft-fail *policy* and
+    ``tilearray_status="planned"``; outcome counters stay absent until
+    ``compute_mosaic`` refreshes them on the DataArray.
+    """
+    da = _lazy_mosaic(monkeypatch, max_x=2560.0, max_y=2560.0)
+    assert da.attrs["tilearray_status"] == "planned"
+    tile_errors = da.attrs["tilearray_tile_errors"]
+    assert tile_errors["armed"] is False
+    assert "soft_failed" not in tile_errors
+    assert "aborted" not in tile_errors
+    assert "deferred_parked" not in tile_errors
+    assert "deferred_recovered" not in tile_errors
+    assert "deferred_failed" not in tile_errors
+    assert "examples" not in tile_errors
+    # Plan-time geospatial / fetch attrs remain available for handoff.
+    assert "mosaic_crs" in da.attrs
+    assert "transform" in da.attrs
+    assert "tilearray_fetch_policy" in da.attrs
+    assert "tilearray_recommended_num_workers" in da.attrs
+
+    out = tmp_path / "mid_flight.zarr"
+    da.to_dataset(name="elevation").to_zarr(out, compute=False)
+    # Metadata is already on disk before any tile compute — must look planned.
+    stored = zarr.open_array(str(out / "elevation"), mode="r")
+    stored_attrs = {key: _decode_zarr_attr(val) for key, val in stored.attrs.items()}
+    assert stored_attrs.get("tilearray_status") == "planned"
+    errors = stored_attrs.get("tilearray_tile_errors")
+    assert isinstance(errors, dict)
+    assert "soft_failed" not in errors
+    assert "aborted" not in errors
+    assert "deferred_parked" not in errors
+    assert "deferred_recovered" not in errors
+    assert "deferred_failed" not in errors
+    assert "examples" not in errors
+    assert errors.get("armed") is False
+    assert "mosaic_crs" in stored_attrs
+    assert "tilearray_fetch_policy" in stored_attrs
 
 
 def test_lazy_mosaic_remainder_like_large_grid_is_final_chunk(

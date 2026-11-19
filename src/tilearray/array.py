@@ -25,6 +25,15 @@ from ._planning import (
     FETCH_POLICY_ATTR as _FETCH_POLICY_ATTR,
 )
 from ._planning import (
+    MOSAIC_STATUS_ATTR as _MOSAIC_STATUS_ATTR,
+)
+from ._planning import (
+    MOSAIC_STATUS_COMPUTED as _MOSAIC_STATUS_COMPUTED,
+)
+from ._planning import (
+    MOSAIC_STATUS_PLANNED as _MOSAIC_STATUS_PLANNED,
+)
+from ._planning import (
     PROGRESS_REF_ATTR as _PROGRESS_REF_ATTR,
 )
 from ._planning import (
@@ -177,9 +186,12 @@ def compute_mosaic(
     fixed at :func:`create_array` time — pass ``num_workers=`` only to size
     Dask threads, not to change the fetch gate.
 
-    After compute, refreshes ``attrs["tilearray_tile_errors"]`` from the mosaic's
-    :class:`~tilearray.fetch.FetchProgress` when present (same counters as the
-    ``create_array(..., compute=True)`` path).
+    After compute, refreshes ``attrs["tilearray_tile_errors"]`` outcome counters
+    (``soft_failed`` / ``aborted`` / ``examples``) from the mosaic's
+    :class:`~tilearray.fetch.FetchProgress` when present, and sets
+    ``attrs["tilearray_status"]`` to ``"computed"`` (same honesty as the
+    ``create_array(..., compute=True)`` path). Lazy graph-build attrs omit those
+    counters so eager ``to_zarr`` metadata cannot look finished mid-flight.
     """
 
     if "max_concurrent" in compute_kwargs:
@@ -280,17 +292,20 @@ def _tile_errors_attr_summary(
     soft_fail_max_fraction: float | None,
     progress: FetchProgress | None = None,
 ) -> dict[str, Any]:
+    """Build ``tilearray_tile_errors``.
+
+    Plan-time (``progress is None``) keeps soft-fail *policy* only — no
+    ``soft_failed`` / ``aborted`` / ``deferred_*`` / ``examples``. Those
+    outcome fields are filled only when a live
+    :class:`~tilearray.fetch.FetchProgress` is supplied after compute, so
+    eager ``to_zarr`` metadata cannot look finished mid-flight.
+    """
+
     summary: dict[str, Any] = {
         "policy": _tile_error_policy_name(handler),
         "soft_fill_value": soft_fill_value,
         "soft_fail_max_fraction": soft_fail_max_fraction,
         "armed": handler is not None,
-        "soft_failed": 0,
-        "aborted": False,
-        "deferred_parked": 0,
-        "deferred_recovered": 0,
-        "deferred_failed": 0,
-        "examples": [],
     }
     if progress is not None:
         summary["soft_failed"] = progress.soft_failed_count()
@@ -313,7 +328,7 @@ def _refresh_tile_errors_attr_from_progress(
     attrs: dict[str, Any],
     progress: FetchProgress,
 ) -> None:
-    """Update public ``tilearray_tile_errors`` counters from a live FetchProgress."""
+    """Stamp outcome counters + ``tilearray_status="computed"`` from FetchProgress."""
 
     existing = attrs.get(_TILE_ERRORS_ATTR)
     if not isinstance(existing, dict):
@@ -330,6 +345,7 @@ def _refresh_tile_errors_attr_from_progress(
         "deferred_failed": progress.deferred_failed,
         "examples": list(progress.errors[:5]),
     }
+    attrs[_MOSAIC_STATUS_ATTR] = _MOSAIC_STATUS_COMPUTED
 
 
 def create_array(
@@ -593,6 +609,8 @@ def create_array(
     attrs = request.array_attrs(service, tile_options, effective_format)
     attrs[_FETCH_POLICY_ATTR] = _fetch_policy_summary(fetch_policy)
     attrs[_RECOMMENDED_NUM_WORKERS_ATTR] = compute_thread_pool_size(fetch_policy)
+    # Plan-time only: soft-fail policy, not outcome counters (those land after
+    # compute_mosaic / compute=True so to_zarr metadata stays honest mid-flight).
     attrs[_TILE_ERRORS_ATTR] = _tile_errors_attr_summary(
         handler=tile_error_handler,
         soft_fill_value=soft_fill_value,
@@ -601,6 +619,7 @@ def create_array(
         else None,
         progress=None,
     )
+    attrs[_MOSAIC_STATUS_ATTR] = _MOSAIC_STATUS_PLANNED
     # Token only on attrs (JSON-/pickle-safe); live session stays in the registry
     # and in map_blocks closures. compute_mosaic resolves the token to refresh
     # tilearray_tile_errors.
@@ -652,6 +671,7 @@ def create_array(
             else None,
             progress=progress,
         )
+        computed.attrs[_MOSAIC_STATUS_ATTR] = _MOSAIC_STATUS_COMPUTED
         token = computed.attrs.pop(_PROGRESS_REF_ATTR, None)
         unregister_fetch_progress(token)
         return computed
