@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Documented that plain `Dataset.to_zarr` can leave a full-shape store after abort/kill that still opens (metadata is eager; unread chunks look like fill/NaN). Persistence stays with xarray/dask — no first-party Zarr writer. A `staging` lifecycle (temp → atomic publish) is the planned incomplete→complete handoff; do not treat hand-stamped `tilearray_complete*` attrs as the durable happy path. Re-run with the same `cache_dir` to resume (#198)
+- Provisional `staging(path)` context manager for whole-store Zarr writes: yields a temp path for `Dataset.to_zarr(..., mode="w")`, then atomically publishes to the final path on clean exit (exception / kill → the final path is left untouched: absent for a new store, the previous store kept when replacing). Not a pixel writer; `kind="raster"` deferred; region resume out of scope (#198)
 - Per-tile wall-clock deadline with modest scaling by request `width`×`height` (relative to a 256×256 reference, capped at 4×). No request hedging (#182)
 - Process-local GetCapabilities / DescribeCoverage memo (~1 hour TTL) keyed by URL + params + auth identity, with `refresh=` bypass on `get_capabilities` / `describe_coverage` / `inspect_endpoint`. Shares one in-process fetch across inspect → preview → create; disk / `cache_dir` persistence remains out of scope (#184, #178)
 

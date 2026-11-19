@@ -14,6 +14,7 @@ Public entry points for building lazy mosaics, configuring services, and handlin
    create_array
    load_array
    compute_mosaic
+   staging
    preview_array
    recommend_grid_shape
    choose_matrix_for_resolution
@@ -26,6 +27,8 @@ Public entry points for building lazy mosaics, configuring services, and handlin
 ```
 
 `create_array` builds a lazy Dask-backed `xarray.DataArray`. {py:func}`~tilearray.load_array` is eager sugar (`create_array(..., compute=True)`). Pass a service **config** (or URL where supported) as the first argument.
+
+{py:func}`~tilearray.staging` is a **provisional** persist lifecycle (not a writer): yield a temp path, call `Dataset.to_zarr(..., mode="w")`, and on clean exit atomically publish to the final path. How-to: {doc}`../staging-zarr`.
 
 Before a large fetch, {py:func}`~tilearray.preview_array` returns a read-only {py:class}`~tilearray.ArrayPreview` (request count, planned bbox, `bbox_crs` / `mosaic_crs`, `matrix_id`, concurrency ceiling, cache warm/cold). {py:func}`~tilearray.recommend_grid_shape` sizes `(rows, cols)` from bbox × chunk × resolution. WMTS happy path: {py:func}`~tilearray.inspect_endpoint` → `build_config(..., target_resolution=...)`. After preview or compute, {py:func}`~tilearray.fetch_summary` reports progress / pressure counters.
 
