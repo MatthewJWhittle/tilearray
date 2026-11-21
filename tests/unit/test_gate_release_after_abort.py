@@ -99,7 +99,13 @@ def test_second_mosaic_after_hard_tile_failure_completes(tile_server: Any) -> No
 
     def mosaic() -> Any:
         return compute_mosaic(
-            create_array(config, bbox, bbox_crs="EPSG:4326", show_progress=False)
+            create_array(
+                config,
+                bbox,
+                bbox_crs="EPSG:4326",
+                show_progress=False,
+                rate_limit_per_second=None,
+            )
         )
 
     first = _run_with_timeout(mosaic, 30)
