@@ -37,6 +37,25 @@ def clear_capabilities_memo_between_tests():
 
 
 @pytest.fixture
+def retry_waits(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Record tenacity retry back-off waits instead of sleeping.
+
+    Replaces ``tenacity.nap.time`` rather than ``time.sleep``, because
+    tenacity binds the stdlib ``time`` module; patching ``sleep`` on it
+    would also skip real waits in test servers and deadline checks.
+    """
+    import types
+
+    waits: list[float] = []
+
+    def _sleep(seconds: float) -> None:
+        waits.append(float(seconds))
+
+    monkeypatch.setattr("tenacity.nap.time", types.SimpleNamespace(sleep=_sleep))
+    return waits
+
+
+@pytest.fixture
 def tmp_cache_dir():
     """Isolated cache directory for tests."""
     cache_dir = tempfile.mkdtemp()

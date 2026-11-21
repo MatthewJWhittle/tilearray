@@ -63,7 +63,13 @@ def _mosaic(server: Any) -> Any:
         max_concurrent_requests=1,
     )
     return compute_mosaic(
-        create_array(config, BBOX, bbox_crs="EPSG:4326", show_progress=False)
+        create_array(
+            config,
+            BBOX,
+            bbox_crs="EPSG:4326",
+            show_progress=False,
+            rate_limit_per_second=None,
+        )
     )
 
 
