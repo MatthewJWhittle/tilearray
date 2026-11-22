@@ -65,6 +65,23 @@ _DEFAULT_TILE_DEADLINE = DEFAULT_HTTP_TIMEOUT
 _REF_TILE_PIXELS = 256 * 256
 _MAX_DEADLINE_SCALE = 4.0
 
+# Monotonic clock for the forbidden/pressure circuit breaker. Tests may replace
+# this with an injectable clock so window and cooldown behaviour can be checked
+# without real waiting (Condition.wait still uses real timeouts for waiters).
+_CLOCK: Callable[[], float] = time.monotonic
+
+
+def set_fetch_clock(clock: Callable[[], float] | None = None) -> Callable[[], float]:
+    """Set the monotonic clock used by the fetch circuit breaker.
+
+    Pass ``None`` to restore :func:`time.monotonic`. Returns the active clock.
+    Intended for tests; production callers should leave the default.
+    """
+
+    global _CLOCK
+    _CLOCK = time.monotonic if clock is None else clock
+    return _CLOCK
+
 
 @runtime_checkable
 class HostRateLimiter(Protocol):
@@ -218,15 +235,17 @@ class AdaptiveConcurrencyGate:
 
     def _is_frozen(self, host: str) -> bool:
         frozen_until = self._frozen_until.get(host, 0.0)
-        return frozen_until > time.monotonic()
+        return frozen_until > _CLOCK()
 
     def _wait_for_freeze(self, host: str, state: _HostConcurrencyState) -> None:
         while True:
             frozen_until = self._frozen_until.get(host, 0.0)
-            now = time.monotonic()
+            now = _CLOCK()
             if frozen_until <= now:
                 return
-            state.condition.wait(timeout=min(0.05, frozen_until - now))
+            # Cap real wait slices so an injectable clock can release the freeze
+            # without blocking for the full remaining cooldown.
+            state.condition.wait(timeout=min(0.05, max(0.0, frozen_until - now)))
 
     def acquire(self, host: str) -> None:
         state = self._state_for(host)
@@ -310,7 +329,7 @@ class AdaptiveConcurrencyGate:
         if self._forbidden_window_seconds is None:
             return False
 
-        now = time.monotonic()
+        now = _CLOCK()
         with self._map_lock:
             events = self._pressure_events.setdefault(host, deque())
             events.append(now)
@@ -392,6 +411,7 @@ def reset_adaptive_gates() -> None:
     with _ADAPTIVE_GATES_LOCK:
         _ADAPTIVE_GATES.clear()
         _HOST_REMEMBERED_LIMITS.clear()
+    set_fetch_clock(None)
 
 
 class RetryableHTTPError(Exception):
