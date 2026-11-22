@@ -25,7 +25,7 @@ from tilearray.fetch import (
 from tilearray.service.config import WCSConfig
 from tilearray.types import Format, TileRequest, TileResponse
 
-pytestmark = pytest.mark.unit
+pytestmark = [pytest.mark.unit, pytest.mark.usefixtures("retry_waits")]
 
 
 @pytest.fixture(autouse=True)
@@ -111,10 +111,10 @@ def test_fetch_tile_retries_transient_403() -> None:
 
 
 @respx.mock
-def test_fetch_tile_honours_retry_after_on_403() -> None:
+def test_fetch_tile_honours_retry_after_on_403(retry_waits: list[float]) -> None:
     route = respx.get("https://example.com/tile")
     route.side_effect = [
-        httpx.Response(403, headers={"Retry-After": "0"}),
+        httpx.Response(403, headers={"Retry-After": "2"}),
         httpx.Response(200, content=b"ok"),
     ]
 
@@ -125,6 +125,7 @@ def test_fetch_tile_honours_retry_after_on_403() -> None:
 
     assert response.success is True
     assert route.call_count == 2
+    assert retry_waits == pytest.approx([2.0])
 
 
 @respx.mock
@@ -178,23 +179,21 @@ def test_fetch_tile_retries_transient_500_with_aimd_pressure() -> None:
 
 
 @respx.mock
-def test_fetch_tile_honours_retry_after_on_429() -> None:
+def test_fetch_tile_honours_retry_after_on_429(retry_waits: list[float]) -> None:
     route = respx.get("https://example.com/tile")
     route.side_effect = [
-        httpx.Response(429, headers={"Retry-After": "0"}),
+        httpx.Response(429, headers={"Retry-After": "2"}),
         httpx.Response(200, content=b"ok"),
     ]
 
-    started = time.monotonic()
     response = fetch_tile_with_policy(
         _tile_request(retries=1),
         FetchPolicy(max_concurrent=1, rate_limit_per_second=None, retries=1),
     )
-    elapsed = time.monotonic() - started
 
     assert response.success is True
     assert route.call_count == 2
-    assert elapsed >= 0.0
+    assert retry_waits == pytest.approx([2.0])
 
 
 @respx.mock
@@ -641,7 +640,9 @@ def test_forbidden_circuit_breaker_trips_on_clustered_403s() -> None:
         forbidden_circuit_breaker=True,
         forbidden_window_seconds=5.0,
         forbidden_threshold=6,
-        forbidden_cooldown_seconds=15.0,
+        # No injectable clock: freeze wait uses Condition.wait, not sleep.
+        # Shrink so sibling acquires after a trip do not block for 15s.
+        forbidden_cooldown_seconds=0.5,
         rate_limit_per_second=None,
         retries=0,
     )
@@ -820,10 +821,10 @@ def test_fetch_does_not_retry_plain_404() -> None:
 
 
 @respx.mock
-def test_fetch_retries_429_and_503() -> None:
+def test_fetch_retries_429_and_503(retry_waits: list[float]) -> None:
     route = respx.get("https://example.com/tile")
     route.side_effect = [
-        httpx.Response(429, text="slow", headers={"Retry-After": "0"}),
+        httpx.Response(429, text="slow", headers={"Retry-After": "2"}),
         httpx.Response(503, text="busy"),
         httpx.Response(200, content=b"recovered"),
     ]
@@ -836,6 +837,8 @@ def test_fetch_retries_429_and_503() -> None:
     assert response.success is True
     assert response.data == b"recovered"
     assert route.call_count == 3
+    assert retry_waits[0] == pytest.approx(2.0)
+    assert len(retry_waits) == 2
 
 
 @respx.mock
@@ -1043,7 +1046,9 @@ def test_circuit_breaker_trips_on_clustered_429s() -> None:
         forbidden_circuit_breaker=True,
         forbidden_window_seconds=5.0,
         forbidden_threshold=6,
-        forbidden_cooldown_seconds=15.0,
+        # No injectable clock: freeze wait uses Condition.wait, not sleep.
+        # Shrink so sibling acquires after a trip do not block for 15s.
+        forbidden_cooldown_seconds=0.5,
         rate_limit_per_second=None,
         retries=0,
     )
