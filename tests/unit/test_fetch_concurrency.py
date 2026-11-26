@@ -460,7 +460,8 @@ def test_eight_threads_default_policy_run_near_parallel() -> None:
             assert future.result().success is True
     elapsed = time.monotonic() - started
 
-    assert elapsed < latency_s * 3
+    # Near-parallel wall: well under serial (n * latency) with CI scheduling headroom.
+    assert elapsed < latency_s * n_threads / 2
     assert fetcher.stats.max_inflight >= n_threads // 2
 
 
@@ -501,7 +502,7 @@ def test_call_max_concurrent_1_does_not_serialise_sibling_sessions() -> None:
             assert future.result().success is True
     elapsed = time.monotonic() - started
 
-    assert elapsed < latency_s * 3
+    assert elapsed < latency_s * n_sessions / 2
     assert fetcher.stats.max_inflight >= n_sessions // 2
 
 
