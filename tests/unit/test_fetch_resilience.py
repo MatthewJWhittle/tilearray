@@ -23,7 +23,13 @@ from tilearray.fetch import (
     tile_deadline_seconds,
 )
 from tilearray.fetch_presets import ea_dsp_fetch_defaults
-from tilearray.pressure import PressureClassifier, PressureSignature
+from tilearray.pressure import (
+    BUILTIN_PRESSURE_SIGNATURES,
+    PressureClassifier,
+    PressureSignature,
+    classify_response,
+    reset_pressure_classifier,
+)
 from tilearray.service.config import WCSConfig
 from tilearray.types import Format, TileRequest, TileResponse
 
@@ -34,9 +40,11 @@ pytestmark = [pytest.mark.unit, pytest.mark.usefixtures("retry_waits")]
 def reset_fetcher_instances() -> Any:
     TileFetcher.reset_instances()
     set_fetch_clock(None)
+    reset_pressure_classifier()
     yield
     TileFetcher.reset_instances()
     set_fetch_clock(None)
+    reset_pressure_classifier()
 
 
 def _tile_request(**overrides: Any) -> TileRequest:
@@ -75,6 +83,133 @@ _OGC_NO_SUCH_COVERAGE_BODY = b"""<?xml version="1.0" encoding="UTF-8"?>
   <ows:Exception exceptionCode="NoSuchCoverage" locator="coverage"/>
 </ows:ExceptionReport>
 """
+
+
+# --- Pressure classifier (drives retry / AIMD / breaker decisions) ---
+
+
+@pytest.mark.parametrize(
+    ("status_code", "expected_name", "circuit_breaker"),
+    [
+        (403, "gateway_forbidden", True),
+        (408, "gateway_timeout", False),
+        (429, "rate_limit", True),
+        (500, "upstream_error", False),
+        (503, "upstream_error", False),
+    ],
+)
+def test_classify_gateway_status_codes(
+    status_code: int, expected_name: str, circuit_breaker: bool
+) -> None:
+    result = classify_response(httpx.Response(status_code, text="pressure"))
+
+    assert result.retryable is True
+    assert result.aimd_pressure is True
+    assert result.circuit_breaker is circuit_breaker
+    assert result.signature is not None
+    assert result.signature.name == expected_name
+
+
+@pytest.mark.parametrize(
+    ("body", "headers"),
+    [
+        pytest.param(
+            _OGC_INVALID_SUBSETTING_BODY,
+            {"content-type": "application/vnd.ogc.se_xml"},
+            id="invalid_subsetting",
+        ),
+        pytest.param(
+            _OGC_INVALID_PARAMETER_BODY,
+            {"content-type": "application/vnd.ogc.se_xml"},
+            id="invalid_parameter_value",
+        ),
+        pytest.param(
+            _OGC_NO_SUCH_COVERAGE_BODY,
+            {"content-type": "application/vnd.ogc.se_xml"},
+            id="no_such_coverage",
+        ),
+        pytest.param(
+            b"", {"content-type": "application/vnd.ogc.se_xml"}, id="empty_body"
+        ),
+        pytest.param(b"Not Found", {}, id="plain_text"),
+    ],
+)
+def test_classify_404_not_retryable(body: bytes, headers: dict[str, str]) -> None:
+    response = httpx.Response(
+        404,
+        content=body,
+        headers=headers,
+        request=httpx.Request("GET", "https://example.com/wcs"),
+    )
+    result = classify_response(response)
+
+    assert result.retryable is False
+    assert result.aimd_pressure is False
+    assert result.circuit_breaker is False
+    assert result.signature is None
+
+
+def test_custom_signature_is_pluggable() -> None:
+    classifier = PressureClassifier()
+    classifier.register(
+        PressureSignature(
+            name="custom_soft_418",
+            status_codes=frozenset({418}),
+            circuit_breaker=True,
+        )
+    )
+
+    result = classifier.classify(httpx.Response(418, text="teapot"))
+
+    assert result.retryable is True
+    assert result.circuit_breaker is True
+    assert result.signature is not None
+    assert result.signature.name == "custom_soft_418"
+
+
+def test_host_signature_can_bound_404_retries() -> None:
+    classifier = PressureClassifier()
+    classifier.register(
+        PressureSignature(
+            name="host_transient_404",
+            status_codes=frozenset({404}),
+            max_retries=2,
+        )
+    )
+
+    result = classifier.classify(httpx.Response(404, text="missing"))
+
+    assert result.retryable is True
+    assert result.max_retries == 2
+    assert result.signature is not None
+    assert result.signature.name == "host_transient_404"
+
+
+def test_body_substrings_require_any_match() -> None:
+    classifier = PressureClassifier(
+        signatures=(
+            PressureSignature(
+                name="xml_fault",
+                status_codes=frozenset({502}),
+                body_substrings=(b"<fault>", b"exceptionreport"),
+            ),
+        )
+    )
+
+    match = classifier.classify(httpx.Response(502, content=b"<fault>upstream</fault>"))
+    miss = classifier.classify(httpx.Response(502, content=b"plain error"))
+
+    assert match.retryable is True
+    assert miss.retryable is False
+
+
+def test_builtin_signatures_cover_known_dialects() -> None:
+    names = {signature.name for signature in BUILTIN_PRESSURE_SIGNATURES}
+    assert "gateway_forbidden" in names
+    assert "rate_limit" in names
+    assert "upstream_error" in names
+    # Permanent 404 (incl. OGC ExceptionReport) is not a built-in retry dialect.
+    assert "ogc_transient_404" not in names
 
 
 def test_fetch_policy_rejects_invalid_bounds() -> None:
