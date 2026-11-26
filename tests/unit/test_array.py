@@ -194,36 +194,92 @@ def test_array_request_rejects_invalid_origin() -> None:
         )
 
 
-def test_array_request_rejects_nonpositive_sizes() -> None:
+@pytest.mark.parametrize(
+    ("field", "kwargs"),
+    [
+        pytest.param(
+            "chunk_size",
+            {"chunk_size": (0, 8), "grid_shape": (1, 1)},
+            id="chunk_width_0",
+        ),
+        pytest.param(
+            "chunk_size",
+            {"chunk_size": (0, 256), "grid_shape": (1, 1)},
+            id="chunk_size_0_256",
+        ),
+        pytest.param(
+            "grid_shape",
+            {"chunk_size": (8, 8), "grid_shape": (1, 0)},
+            id="grid_cols_0",
+        ),
+        pytest.param(
+            "grid_shape",
+            {"chunk_size": (8, 8), "grid_shape": (0, 1)},
+            id="grid_rows_0",
+        ),
+        pytest.param(
+            "resolution",
+            {
+                "chunk_size": (8, 8),
+                "grid_shape": (1, 1),
+                "resolution": (-1.0, 1.0),
+            },
+            id="resolution_negative",
+        ),
+    ],
+)
+def test_array_request_rejects_nonpositive_sizes(
+    field: str, kwargs: dict[str, Any]
+) -> None:
+    """Size table: non-positive chunk/grid/resolution must raise ValidationError.
+
+    Includes grid_shape rows=0 (P6) which older suites only covered as cols=0.
+    """
+
     bbox = BoundingBox(min_x=0.0, min_y=0.0, max_x=10.0, max_y=10.0, crs=CRS.EPSG_4326)
-    with pytest.raises(ValidationError, match="chunk_size"):
+    with pytest.raises(ValidationError, match=field):
         ArrayRequest(
             service_url="http://example.com/wcs",
             bbox=bbox,
             target_crs=CRS.EPSG_4326,
             bbox_crs=CRS.EPSG_4326,
-            chunk_size=(0, 8),
-            grid_shape=(1, 1),
+            **kwargs,
         )
+
+
+@pytest.mark.parametrize(
+    "grid",
+    [
+        pytest.param((0, 1), id="rows_0"),
+        pytest.param((1, 0), id="cols_0"),
+        pytest.param((0, 0), id="both_0"),
+    ],
+)
+def test_validate_grid_shape_rejects_nonpositive(grid: tuple[int, int]) -> None:
+    """P6: validate_grid_shape must reject rows=0 (not only cols=0)."""
+
+    from tilearray._planning import validate_grid_shape
+
     with pytest.raises(ValidationError, match="grid_shape"):
-        ArrayRequest(
-            service_url="http://example.com/wcs",
-            bbox=bbox,
-            target_crs=CRS.EPSG_4326,
-            bbox_crs=CRS.EPSG_4326,
-            chunk_size=(8, 8),
-            grid_shape=(1, 0),
-        )
-    with pytest.raises(ValidationError, match="resolution"):
-        ArrayRequest(
-            service_url="http://example.com/wcs",
-            bbox=bbox,
-            target_crs=CRS.EPSG_4326,
-            bbox_crs=CRS.EPSG_4326,
-            chunk_size=(8, 8),
-            grid_shape=(1, 1),
-            resolution=(-1.0, 1.0),
-        )
+        validate_grid_shape(grid)
+
+
+def test_tile_cache_key_includes_height() -> None:
+    """P2: TileRequests that differ only in height must not share a cache key."""
+
+    from tilearray._planning import cache_key
+
+    shared = {
+        "url": "https://example.com/tile",
+        "params": {"layer": "a"},
+        "bbox": BoundingBox(
+            min_x=0.0, min_y=0.0, max_x=1.0, max_y=1.0, crs=CRS.EPSG_4326
+        ),
+        "width": 256,
+    }
+    short = TileRequest(**shared, height=128)
+    tall = TileRequest(**shared, height=256)
+    assert cache_key(short) != cache_key(tall)
 
 
 def test_create_array_with_custom_decoder(
