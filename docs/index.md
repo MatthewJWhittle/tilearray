@@ -4,6 +4,8 @@ tilearray turns remote tile services into **Dask**-backed **xarray** arrays — 
 
 **Why it exists.** Assembling a large area of interest (AOI) — the window you ask for — from OGC or XYZ tiles by hand means wiring capabilities, planning a grid, polite concurrent HTTP, decode, and a correctly labelled mosaic. That glue is brittle and easy to get wrong on CRS, extent, and host limits. tilearray owns **plan → fetch → decode → assemble** so the array you get is analysis-ready.
 
+For more background, read [the write-up on why tilearray was built](https://matthewjwhittle.github.io/work/tilearray/).
+
 **Who it is for.** Geo data engineers who need a big window (or many small ones) from a public or private tile host into xarray/Dask — for plotting, analysis, or ML chips — without building a custom client per protocol.
 
 **Fit.** tilearray is a **data-access** library. Use [rioxarray](https://corteva.github.io/rioxarray/) / GDAL / rasterio for local files, warping, and GIS processing; use tilearray when the source is still remote tiles. It is not a map SDK, STAC/COG cube builder, or general GIS suite — see {doc}`design-principles`.
