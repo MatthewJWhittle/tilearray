@@ -1,0 +1,136 @@
+# Reusable .cursorignore — copy to a repo root as `.cursorignore`
+# Applies to local Agent/Tab/@ and to Cloud Agents (when committed).
+#
+# Cursor already ignores a lot by default (node_modules, .env*, lockfiles,
+# images, common build dirs). This file adds the extras that still burn
+# context in data/ML and app repos. Trim lines you need Agent to see.
+#
+# Re-include a small fixture with:  !path/to/small-fixture.csv
+
+# --- Secrets (belt + suspenders; many already default-ignored) ---
+**/.env
+**/.env.*
+!**/.env.example
+**/credentials.json
+**/credentials.*.json
+**/secrets.json
+**/secret.json
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/id_rsa
+**/id_dsa
+**/.ssh/
+**/.aws/
+**/.gcloud/
+
+# --- Agent / local scratch (never useful as code context) ---
+**/.scratch/
+**/scratch/
+**/tmp/
+**/.tmp/
+**/.cache/
+**/agent-tools/
+**/recordings/
+
+# --- Dependencies & virtualenvs ---
+**/node_modules/
+**/.venv/
+**/venv/
+**/env/
+**/.tox/
+**/.direnv/
+
+# --- Build / generated ---
+**/dist/
+**/build/
+**/out/
+**/.next/
+**/.nuxt/
+**/.turbo/
+**/.vercel/
+**/coverage/
+**/htmlcov/
+**/*.egg-info/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.ipynb_checkpoints/
+
+# --- Logs ---
+**/*.log
+**/logs/
+**/npm-debug.log*
+
+# --- Large data (common in DS / GIS / ML repos) ---
+**/*.csv
+**/*.tsv
+**/*.parquet
+**/*.feather
+**/*.arrow
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/*.geojson
+**/*.gpkg
+**/*.shp
+**/*.shx
+**/*.dbf
+**/*.tif
+**/*.tiff
+**/*.hdf5
+**/*.h5
+**/*.nc
+**/*.zip
+**/*.tar
+**/*.tar.gz
+**/*.tgz
+**/*.7z
+**/*.gz
+**/*.bz2
+
+# --- Models / weights / pickles ---
+**/*.pkl
+**/*.pickle
+**/*.joblib
+**/*.pt
+**/*.pth
+**/*.onnx
+**/*.safetensors
+**/*.gguf
+**/checkpoints/
+**/wandb/
+**/mlruns/
+**/lightning_logs/
+
+# --- Bulky docs / office (prefer links; negate if Agent must edit) ---
+**/*.pdf
+**/*.pptx
+**/*.ppt
+**/*.docx
+**/*.xlsx
+**/*.xls
+
+# --- Media (photos, video, design) ---
+**/*.mp4
+**/*.mov
+**/*.mkv
+**/*.mp3
+**/*.wav
+**/*.psd
+**/*.ai
+**/*.raw
+**/*.raf
+**/*.dng
+**/*.heic
+**/*.CR2
+**/*.NEF
+
+# --- Optional: lockfiles (already often default-ignored; uncomment if needed) ---
+# **/package-lock.json
+# **/pnpm-lock.yaml
+# **/yarn.lock
+# **/uv.lock
+# **/poetry.lock
